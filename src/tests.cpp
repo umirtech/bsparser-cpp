@@ -1,4 +1,4 @@
-#include "bsparser/bsparser.hpp"
+#include "bsparser.hpp"
 #include <cassert>
 #include <iostream>
 using namespace bsparser;
