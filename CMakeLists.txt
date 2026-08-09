@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.16)
+project(bsparser_cpp VERSION 0.1.0 LANGUAGES CXX)
+
+# ---------------------------------------------------------------------------
+# Output directories (everything stays inside the build folder)
+# ---------------------------------------------------------------------------
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)   # Executables
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)   # Shared libraries
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)   # Static libraries
+
+# Multi-config generators (Visual Studio, Xcode)
+foreach(CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    string(TOUPPER ${CONFIG} CONFIG_UPPER)
+
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER}
+        ${CMAKE_BINARY_DIR}/bin/${CONFIG})
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER}
+        ${CMAKE_BINARY_DIR}/lib/${CONFIG})
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG_UPPER}
+        ${CMAKE_BINARY_DIR}/lib/${CONFIG})
+endforeach()
+
+# ---------------------------------------------------------------------------
+# Library
+# ---------------------------------------------------------------------------
+add_library(bsparser src/bsparser.cpp)
+
+target_include_directories(bsparser
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_features(bsparser PUBLIC cxx_std_17)
+
+# armeabi-v7a does not guarantee NEON, so compile it separately
+if(ANDROID AND ANDROID_ABI STREQUAL "armeabi-v7a")
+    target_sources(bsparser PRIVATE src/simd_neon_armv7.cpp)
+
+    set_source_files_properties(
+        src/simd_neon_armv7.cpp
+        PROPERTIES COMPILE_OPTIONS "-mfpu=neon"
+    )
+
+    target_compile_definitions(
+        bsparser PRIVATE BSPARSER_ARMV7_NEON_DISPATCH=1
+    )
+endif()
+
+if(MSVC)
+    target_compile_options(bsparser PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(bsparser PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# ---------------------------------------------------------------------------
+# Example executable
+# ---------------------------------------------------------------------------
+add_executable(bsparse src/main.cpp)
+target_link_libraries(bsparse PRIVATE bsparser)
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+enable_testing()
+
+add_executable(bsparser_tests src/tests.cpp)
+target_link_libraries(bsparser_tests PRIVATE bsparser)
+
+add_test(
+    NAME bsparser_tests
+    COMMAND bsparser_tests
+)
