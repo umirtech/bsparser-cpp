@@ -126,16 +126,3 @@ Replace `NDK_CLANG` with the NDK `clang++.exe` path.
   cpp\bsparser.cpp cpp\simd_neon_armv7.cpp cpp\tests.cpp -o bsparser_tests_armv7
 ```
 
-The produced files are Android executables, not Windows executables. Push one
-to a device/emulator and run it with `adb shell` to execute assertions.
-
-## Parser coverage vs. JavaScript reference
-
-The original browser parser is `java-script/parser.js` (~223 KB) and has more
-complete syntax coverage. The C++ port focuses on practical timeline data:
-unit boundaries, NAL/OBU type, keyframe classification, profile/IDs, and
-dimensions where inexpensive to read.
-
-When porting behavior, use the JavaScript file as the syntax reference but do
-not copy its global-header state or browser-specific UI behavior. Preserve the
-C++ API’s safe exceptions and streaming semantics.
