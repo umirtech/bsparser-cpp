@@ -12,8 +12,8 @@ Supported inputs:
 - AVC/H.264, HEVC/H.265, and VVC/H.266 Annex-B streams
 - IVF containers containing VP8, VP9, AV1, AVC, HEVC, or VVC frames
 
-The parser reports NAL/OBU/frame boundaries and core syntax metadata (types,
-keyframe status, IDs, dimensions where present, profiles, and timestamps).
+The parser reports NAL/OBU/frame boundaries and comprehensive syntax metadata (types,
+keyframe status, IDs, dimensions, profiles, levels, aspect ratios, frame rates, color configurations, bit depths, slice details, and timestamps).
 It deliberately stops before entropy-coded slice/tile payloads: this is a
 bitstream inspector, not a decoder.
 
@@ -28,14 +28,18 @@ ctest --test-dir build --output-on-failure
 ## Command line
 
 ```sh
-./build/bsparse avc clip.264
-./build/bsparse hevc clip.265
-./build/bsparse av1 clip.obu
-./build/bsparse ivf clip.ivf
+# Print JSON lines to stdout
+./build/bin/bsparse avc test-files/h264.h264
+./build/bin/bsparse hevc test-files/h265.h265
+./build/bin/bsparse av1 test-files/av1.ivf
+./build/bin/bsparse ivf test-files/vp9.ivf
+
+# Generate a self-contained interactive HTML inspection report
+./build/bin/bsparse ivf test-files/av1.ivf --html report.html
 ```
 
 Each output line is a JSON object, so it is easy to pipe into `jq` or ingest
-from another tool.
+from another tool. The `--html` option generates a rich, interactive web UI report for visual bitstream analysis.
 
 ## Library API
 

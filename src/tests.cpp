@@ -7,6 +7,7 @@ int main() {
     std::vector<uint8_t> d{0x10, 0, 0, 0x9d, 0x01, 0x2a, 0x80, 0x02, 0x68, 0x01};
     auto h = parse_unit(Codec::VP8, d).at(0);
     assert(h.keyframe && h.fields.at("width") == "640" && h.fields.at("height") == "360");
+    assert(h.fields.at("frame_type_name") == "KEY_FRAME");
   }
   {
     std::vector<uint8_t> d{0,    0,    1,    0x67, 0x42, 0, 0x1e, 0xf4,
@@ -16,6 +17,8 @@ int main() {
     auto tail = p.finish();
     h.insert(h.end(), tail.begin(), tail.end());
     assert(h.size() == 2 && h[0].fields.at("nal_unit_type") == "7" && h[1].keyframe);
+    assert(h[0].fields.at("profile_idc") == "66");
+    assert(h[0].fields.at("profile_name") == "Baseline");
   }
   {
     // NAL start codes can be split across network reads.
@@ -46,6 +49,24 @@ int main() {
     const std::vector<uint8_t> d{0xff, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x68};
     const auto offsets = find_annexb_start_codes(d.data(), d.size());
     assert(offsets.size() == 2 && offsets[0] == 1 && offsets[1] == 5);
+  }
+  {
+    // HEVC VPS NAL parsing test
+    std::vector<uint8_t> d{0x40, 0x01, 0x0c, 0x01, 0xff, 0xff, 0x01, 0x60, 0x00, 0x00, 0x03,
+                           0x00, 0x00, 0x03, 0x00, 0x00, 0x03, 0x00, 0x00, 0x99, 0xac, 0x09};
+    auto h = parse_unit(Codec::HEVC, d).at(0);
+    assert(h.fields.at("nal_unit_type") == "32");
+    assert(h.type == "VPS");
+    assert(h.fields.at("vps_video_parameter_set_id") == "0");
+  }
+  {
+    // VP9 header test
+    std::vector<uint8_t> d{0x82, 0x49, 0x83, 0x42, 0x00, 0x02, 0x7f, 0x01, 0xdf, 0x00};
+    auto h = parse_unit(Codec::VP9, d).at(0);
+    assert(h.keyframe);
+    assert(h.fields.at("frame_type_name") == "KEY_FRAME");
+    assert(h.fields.at("width") == "160");
+    assert(h.fields.at("height") == "120");
   }
   std::cout << "ok\n";
 }

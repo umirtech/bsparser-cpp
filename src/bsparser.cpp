@@ -208,6 +208,7 @@ Header parse_vp8(const Bytes& d, uint64_t off) {
   uint32_t tag = uint32_t(d[0]) | uint32_t(d[1]) << 8 | uint32_t(d[2]) << 16;
   Header h{off, d.size(), (tag & 1) ? "P" : "I", !(tag & 1), {}};
   field(h, "frame_type", tag & 1);
+  field(h, "frame_type_name", (tag & 1) ? "INTER_FRAME" : "KEY_FRAME");
   field(h, "version", (tag >> 1) & 7);
   field(h, "show_frame", (tag >> 4) & 1);
   field(h, "partition_length", tag >> 5);
@@ -220,131 +221,327 @@ Header parse_vp8(const Bytes& d, uint64_t off) {
             << (uint32_t(d[3]) << 16 | uint32_t(d[4]) << 8 | d[5]);
           return s.str();
         }());
-    field(h, "width", (uint16_t(d[6]) | uint16_t(d[7]) << 8) & 0x3fff);
-    field(h, "height", (uint16_t(d[8]) | uint16_t(d[9]) << 8) & 0x3fff);
+    auto w_raw = uint16_t(d[6]) | uint16_t(d[7]) << 8;
+    auto h_raw = uint16_t(d[8]) | uint16_t(d[9]) << 8;
+    field(h, "width", w_raw & 0x3fff);
+    field(h, "horizontal_scale", w_raw >> 14);
+    field(h, "height", h_raw & 0x3fff);
+    field(h, "vertical_scale", h_raw >> 14);
   }
   return h;
 }
+
 Header parse_vp9(const Bytes& d, uint64_t off) {
   BitReader b(d);
   Header h{off, d.size(), "VP9 frame", false, {}};
-  auto marker = b.u(2), profile = b.u(1) | (b.u(1) << 1);
-  field(h, "frame_marker", marker);
-  field(h, "profile", profile);
-  if (profile == 3) field(h, "reserved_zero", b.u(1));
-  auto existing = b.u(1);
-  field(h, "show_existing_frame", existing);
-  if (existing) {
-    field(h, "frame_to_show_map_idx", b.u(3));
-    return h;
-  }
-  auto type = b.u(1);
-  auto show = b.u(1);
-  auto resilient = b.u(1);
-  h.type = type ? "P" : "I";
-  h.keyframe = !type;
-  field(h, "frame_type", type);
-  field(h, "show_frame", show);
-  field(h, "error_resilient_mode", resilient);
-  if (!type) {
-    field(h, "frame_sync_code", number(b.u(24)));
-    if (profile >= 2) field(h, "bit_depth", b.u(1) ? 12 : 10);
-    field(h, "color_space", b.u(3));
-    field(h, "color_range", b.u(1));
-    auto w = b.u(16) + 1, ht = b.u(16) + 1;
-    field(h, "width", w);
-    field(h, "height", ht);
+  try {
+    auto marker = b.u(2);
+    auto profile = b.u(1) | (b.u(1) << 1);
+    field(h, "frame_marker", marker);
+    field(h, "profile", profile);
+    if (profile == 3) field(h, "reserved_zero", b.u(1));
+    auto existing = b.u(1);
+    field(h, "show_existing_frame", existing);
+    if (existing) {
+      field(h, "frame_to_show_map_idx", b.u(3));
+      return h;
+    }
+    auto type = b.u(1);
+    auto show = b.u(1);
+    auto resilient = b.u(1);
+    h.type = type ? "P" : "I";
+    h.keyframe = !type;
+    field(h, "frame_type", type);
+    field(h, "frame_type_name", type ? "INTER_FRAME" : "KEY_FRAME");
+    field(h, "show_frame", show);
+    field(h, "error_resilient_mode", resilient);
+    if (!type) {
+      field(
+          h, "frame_sync_code", "0x" + [&] {
+            std::ostringstream s;
+            s << std::hex << std::setw(6) << std::setfill('0') << b.u(24);
+            return s.str();
+          }());
+      unsigned bit_depth = 8;
+      if (profile >= 2) {
+        bit_depth = b.u(1) ? 12 : 10;
+      }
+      field(h, "bit_depth", bit_depth);
+      auto cs = b.u(3);
+      field(h, "color_space", cs);
+      if (cs != 7) {
+        field(h, "color_range", b.u(1));
+      }
+      auto w = b.u(16) + 1, ht = b.u(16) + 1;
+      field(h, "width", w);
+      field(h, "height", ht);
+      if (b.u(1)) {
+        field(h, "render_width", b.u(16) + 1);
+        field(h, "render_height", b.u(16) + 1);
+      } else {
+        field(h, "render_width", w);
+        field(h, "render_height", ht);
+      }
+    } else {
+      auto intra_only = show ? 0 : b.u(1);
+      field(h, "intra_only", intra_only);
+      if (!resilient) {
+        field(h, "reset_frame_context", b.u(2));
+      }
+    }
+  } catch (const std::exception&) {
   }
   return h;
 }
+
 Header parse_avc(const Bytes& d, uint64_t off) {
   if (d.empty()) throw std::out_of_range("empty AVC NAL");
   uint8_t t = d[0] & 0x1f;
+  uint8_t ref = (d[0] >> 5) & 3;
   static const char* names[] = {"Unspecified",  "Slice",         "Slice data A", "Slice data B",
                                 "Slice data C", "IDR slice",     "SEI",          "SPS",
                                 "PPS",          "AUD",           "End sequence", "End stream",
                                 "Filler",       "SPS extension", "Prefix NAL",   "Subset SPS"};
   Header h{off, d.size(), t < 16 ? names[t] : "AVC NAL", t == 5, {}};
   field(h, "nal_unit_type", t);
-  field(h, "nal_ref_idc", (d[0] >> 5) & 3);
+  field(h, "nal_ref_idc", ref);
+
   Bytes r = rbsp(d, 1);
   BitReader b(r);
-  if (t == 7) {
-    auto profile = b.u(8);
-    b.skip(8);
-    auto level = b.u(8);
-    auto id = b.ue();
-    field(h, "profile_idc", profile);
-    field(h, "level_idc", level);
-    field(h, "seq_parameter_set_id", id);
-    unsigned chroma = 1;
-    if (profile == 100 || profile == 110 || profile == 122 || profile == 244 || profile == 44 ||
-        profile == 83 || profile == 86 || profile == 118 || profile == 128 || profile == 138 ||
-        profile == 139 || profile == 134) {
-      chroma = b.ue();
-      if (chroma == 3) b.u(1);
-      b.ue();
-      b.ue();
-      b.u(1);
-      if (b.u(1)) {
-        unsigned n = chroma != 3 ? 8 : 12;
-        for (unsigned i = 0; i < n; ++i)
-          if (b.u(1)) {
-            int last = 8, next = 8;
-            for (unsigned j = 0; j < (i < 6 ? 16 : 64); ++j) {
-              if (next) next = (last + b.se() + 256) % 256;
-              last = next ? next : last;
+  try {
+    if (t == 7) {
+      auto profile = b.u(8);
+      field(h, "profile_idc", profile);
+      static const char* prof_names[] = {
+          "Baseline", "Main", "Extended", "High", "High 10", "High 4:2:2", "High 4:4:4 Predictive"};
+      if (profile == 66)
+        field(h, "profile_name", prof_names[0]);
+      else if (profile == 77)
+        field(h, "profile_name", prof_names[1]);
+      else if (profile == 88)
+        field(h, "profile_name", prof_names[2]);
+      else if (profile == 100)
+        field(h, "profile_name", prof_names[3]);
+      else if (profile == 110)
+        field(h, "profile_name", prof_names[4]);
+      else if (profile == 122)
+        field(h, "profile_name", prof_names[5]);
+      else if (profile == 244)
+        field(h, "profile_name", prof_names[6]);
+
+      auto constraints = b.u(8);
+      field(h, "constraint_set_flags", constraints);
+      auto level = b.u(8);
+      field(h, "level_idc", level);
+      std::ostringstream lvl_s;
+      lvl_s << (level / 10) << "." << (level % 10);
+      field(h, "level", lvl_s.str());
+      field(h, "seq_parameter_set_id", b.ue());
+
+      unsigned chroma = 1;
+      unsigned bit_depth_luma = 8;
+      unsigned bit_depth_chroma = 8;
+      if (profile == 100 || profile == 110 || profile == 122 || profile == 244 || profile == 44 ||
+          profile == 83 || profile == 86 || profile == 118 || profile == 128 || profile == 138 ||
+          profile == 139 || profile == 134) {
+        chroma = b.ue();
+        field(h, "chroma_format_idc", chroma);
+        if (chroma == 3) {
+          field(h, "separate_colour_plane_flag", b.u(1));
+        }
+        bit_depth_luma = b.ue() + 8;
+        bit_depth_chroma = b.ue() + 8;
+        field(h, "bit_depth_luma_minus8", bit_depth_luma - 8);
+        field(h, "bit_depth_chroma_minus8", bit_depth_chroma - 8);
+        field(h, "bit_depth", bit_depth_luma);
+        b.u(1);
+        if (b.u(1)) {
+          unsigned n = chroma != 3 ? 8 : 12;
+          for (unsigned i = 0; i < n; ++i) {
+            if (b.u(1)) {
+              int last = 8, next = 8;
+              unsigned size = i < 6 ? 16 : 64;
+              for (unsigned j = 0; j < size; ++j) {
+                if (next) next = (last + b.se() + 256) % 256;
+                last = next ? next : last;
+              }
             }
           }
+        }
+      } else {
+        field(h, "chroma_format_idc", chroma);
+        field(h, "bit_depth", 8);
       }
+
+      auto log2_max_frame_num = b.ue() + 4;
+      field(h, "log2_max_frame_num_minus4", log2_max_frame_num - 4);
+      auto poc_type = b.ue();
+      field(h, "pic_order_cnt_type", poc_type);
+      if (poc_type == 0) {
+        field(h, "log2_max_pic_order_cnt_lsb_minus4", b.ue());
+      } else if (poc_type == 1) {
+        b.u(1);
+        b.se();
+        b.se();
+        auto num_ref_frames_in_poc_cycle = b.ue();
+        for (uint32_t i = 0; i < num_ref_frames_in_poc_cycle; ++i) b.se();
+      }
+      auto max_num_ref_frames = b.ue();
+      field(h, "num_ref_frames", max_num_ref_frames);
+      field(h, "gaps_in_frame_num_value_allowed_flag", b.u(1));
+
+      auto pic_width_in_mbs = b.ue() + 1;
+      auto pic_height_in_map_units = b.ue() + 1;
+      field(h, "pic_width_in_mbs_minus1", pic_width_in_mbs - 1);
+      field(h, "pic_height_in_map_units_minus1", pic_height_in_map_units - 1);
+
+      auto frame_mbs_only = b.u(1);
+      field(h, "frame_mbs_only_flag", frame_mbs_only);
+      if (!frame_mbs_only) {
+        field(h, "mb_adaptive_frame_field_flag", b.u(1));
+      }
+      field(h, "direct_8x8_inference_flag", b.u(1));
+
+      auto crop = b.u(1);
+      field(h, "frame_cropping_flag", crop);
+      uint32_t l = 0, rgt = 0, tp = 0, bt = 0;
+      if (crop) {
+        l = b.ue();
+        rgt = b.ue();
+        tp = b.ue();
+        bt = b.ue();
+        field(h, "frame_crop_left_offset", l);
+        field(h, "frame_crop_right_offset", rgt);
+        field(h, "frame_crop_top_offset", tp);
+        field(h, "frame_crop_bottom_offset", bt);
+      }
+      const uint32_t crop_x = (chroma == 1 || chroma == 2) ? 2 : 1;
+      const uint32_t crop_y = (2 - frame_mbs_only) * (chroma == 1 ? 2 : 1);
+      uint32_t w = pic_width_in_mbs * 16 - (l + rgt) * crop_x;
+      uint32_t ht = pic_height_in_map_units * 16 * (2 - frame_mbs_only) - (tp + bt) * crop_y;
+      field(h, "width", w);
+      field(h, "height", ht);
+
+      if (b.u(1)) {
+        field(h, "vui_parameters_present_flag", 1);
+        if (b.u(1)) {
+          auto aspect_ratio_idc = b.u(8);
+          field(h, "aspect_ratio_idc", aspect_ratio_idc);
+          if (aspect_ratio_idc == 255) {
+            field(h, "sar_width", b.u(16));
+            field(h, "sar_height", b.u(16));
+          }
+        }
+        if (b.u(1)) b.u(1);
+        if (b.u(1)) {
+          b.u(3);
+          field(h, "video_full_range_flag", b.u(1));
+          if (b.u(1)) {
+            field(h, "colour_primaries", b.u(8));
+            field(h, "transfer_characteristics", b.u(8));
+            field(h, "matrix_coefficients", b.u(8));
+          }
+        }
+        if (b.u(1)) {
+          b.ue();
+          b.ue();
+        }
+        if (b.u(1)) {
+          auto num_units = b.u(32);
+          auto time_scale = b.u(32);
+          auto fixed_fps = b.u(1);
+          field(h, "num_units_in_tick", num_units);
+          field(h, "time_scale", time_scale);
+          field(h, "fixed_frame_rate_flag", fixed_fps);
+          if (num_units > 0) {
+            double fps = double(time_scale) / (2.0 * num_units);
+            std::ostringstream fps_s;
+            fps_s << std::fixed << std::setprecision(2) << fps;
+            field(h, "fps", fps_s.str());
+          }
+        }
+      }
+    } else if (t == 8) {
+      auto pps_id = b.ue();
+      auto sps_id = b.ue();
+      field(h, "pic_parameter_set_id", pps_id);
+      field(h, "seq_parameter_set_id", sps_id);
+      auto entropy_coding = b.u(1);
+      field(h, "entropy_coding_mode_flag", entropy_coding);
+      field(h, "entropy_coding_mode", entropy_coding ? "CABAC" : "CAVLC");
+      field(h, "bottom_field_pic_order_in_frame_present_flag", b.u(1));
+      auto num_sg = b.ue();
+      field(h, "num_slice_groups_minus1", num_sg);
+      if (num_sg > 0) {
+        auto sg_map_type = b.ue();
+        if (sg_map_type == 0) {
+          for (uint32_t i = 0; i <= num_sg; ++i) b.ue();
+        } else if (sg_map_type == 2) {
+          for (uint32_t i = 0; i < num_sg; ++i) {
+            b.ue();
+            b.ue();
+          }
+        } else if (sg_map_type == 3 || sg_map_type == 4 || sg_map_type == 5) {
+          b.u(1);
+          b.ue();
+        } else if (sg_map_type == 6) {
+          auto pic_size_in_map_units = b.ue() + 1;
+          for (uint32_t i = 0; i < pic_size_in_map_units; ++i) b.u(1);
+        }
+      }
+      field(h, "num_ref_idx_l0_default_active_minus1", b.ue());
+      field(h, "num_ref_idx_l1_default_active_minus1", b.ue());
+      field(h, "weighted_pred_flag", b.u(1));
+      field(h, "weighted_bipred_idc", b.u(2));
+      field(h, "pic_init_qp_minus26", b.se());
+      field(h, "pic_init_qs_minus26", b.se());
+      field(h, "chroma_qp_index_offset", b.se());
+      field(h, "deblocking_filter_control_present_flag", b.u(1));
+      field(h, "constrained_intra_pred_flag", b.u(1));
+      field(h, "redundant_pic_cnt_present_flag", b.u(1));
+      if (b.bits_left() > 0) {
+        field(h, "transform_8x8_mode_flag", b.u(1));
+      }
+    } else if (t == 1 || t == 5 || t == 2 || t == 3 || t == 4) {
+      auto first_mb = b.ue();
+      auto slice_type = b.ue();
+      auto pps_id = b.ue();
+      field(h, "first_mb_in_slice", first_mb);
+      field(h, "slice_type", slice_type);
+      static const char* st_names[] = {"P", "B", "I", "SP", "SI", "P", "B", "I", "SP", "SI"};
+      field(h, "slice_type_name", slice_type < 10 ? st_names[slice_type] : "Unknown");
+      field(h, "pic_parameter_set_id", pps_id);
+      if (b.bits_left() >= 4) {
+        auto frame_num = b.u(4);
+        field(h, "frame_num", frame_num);
+      }
+      if (t == 5 && b.bits_left() > 0) {
+        auto idr_pic_id = b.ue();
+        field(h, "idr_pic_id", idr_pic_id);
+        field(h, "poc", 0);
+      } else if (b.bits_left() >= 4) {
+        auto poc_lsb = b.u(4);
+        field(h, "pic_order_cnt_lsb", poc_lsb);
+        field(h, "poc", poc_lsb);
+      }
+    } else if (t == 9) {
+      field(h, "primary_pic_type", b.u(3));
     }
-    b.ue();
-    auto poc = b.ue();
-    if (poc == 0)
-      b.ue();
-    else if (poc == 1) {
-      b.u(1);
-      b.se();
-      b.se();
-      auto n = b.ue();
-      for (uint32_t i = 0; i < n; ++i) b.se();
-    }
-    b.ue();
-    b.u(1);
-    auto w = b.ue() + 1, ht = b.ue() + 1;
-    auto frame_only = b.u(1);
-    if (!frame_only) b.u(1);
-    b.u(1);
-    auto crop = b.u(1);
-    uint32_t l = 0, rgt = 0, tp = 0, bt = 0;
-    if (crop) {
-      l = b.ue();
-      rgt = b.ue();
-      tp = b.ue();
-      bt = b.ue();
-    }
-    const uint32_t crop_x = (chroma == 1 || chroma == 2) ? 2 : 1,
-                   crop_y = (2 - frame_only) * (chroma == 1 ? 2 : 1);
-    field(h, "width", w * 16 - (l + rgt) * crop_x);
-    field(h, "height", ht * 16 * (2 - frame_only) - (tp + bt) * crop_y);
-  } else if (t == 8) {
-    field(h, "pic_parameter_set_id", b.ue());
-    field(h, "seq_parameter_set_id", b.ue());
-  } else if (t == 1 || t == 5) {
-    field(h, "first_mb_in_slice", b.ue());
-    auto st = b.ue();
-    field(h, "slice_type", st);
-    field(h, "pic_parameter_set_id", b.ue());
+  } catch (const std::exception&) {
   }
   return h;
 }
+
 Header parse_hevc(const Bytes& d, uint64_t off, bool vvc = false) {
   if (d.size() < 2) throw std::out_of_range("truncated NAL header");
   uint8_t type = (d[0] >> 1) & 0x3f;
+  uint8_t layer_id = ((d[0] & 1) << 5) | (d[1] >> 3);
+  uint8_t tid = d[1] & 7;
   Header h{off, d.size(), vvc ? "VVC NAL" : "HEVC NAL", false, {}};
   field(h, "nal_unit_type", type);
-  field(h, "nuh_layer_id", ((d[0] & 1) << 5) | (d[1] >> 3));
-  field(h, "nuh_temporal_id_plus1", d[1] & 7);
+  field(h, "nuh_layer_id", layer_id);
+  field(h, "nuh_temporal_id_plus1", tid);
+
   if (vvc) {
     static const char* types[] = {
         "TRAIL",      "STSA",       "RADL",     "RASL", "RSV_VCL_4", "RSV_VCL_5",
@@ -354,8 +551,94 @@ Header parse_hevc(const Bytes& d, uint64_t off, bool vvc = false) {
         "SUFFIX_SEI", "FD"};
     h.type = type < 26 ? types[type] : "VVC NAL";
     h.keyframe = type >= 7 && type <= 10;
+
+    Bytes r = rbsp(d, 2);
+    BitReader b(r);
+    try {
+      if (type == 14) {
+        field(h, "vps_video_parameter_set_id", b.u(4));
+        field(h, "vps_max_layers_minus1", b.u(6));
+        field(h, "vps_max_sublayers_minus1", b.u(3));
+      } else if (type == 15) {
+        auto sps_id = b.u(4);
+        auto vps_id = b.u(4);
+        auto max_sublayers = b.u(3);
+        auto chroma = b.u(2);
+        auto ctu_log2 = b.u(2) + 5;
+        field(h, "sps_seq_parameter_set_id", sps_id);
+        field(h, "sps_video_parameter_set_id", vps_id);
+        field(h, "sps_max_sublayers_minus1", max_sublayers);
+        field(h, "sps_chroma_format_idc", chroma);
+        field(h, "sps_log2_ctu_size_minus5", ctu_log2 - 5);
+        field(h, "ctu_size", 1u << ctu_log2);
+        b.u(1);
+        if (max_sublayers > 0) b.u(1);
+        b.u(1);
+        auto rpr = b.u(1);
+        field(h, "sps_ref_pic_resampling_enabled_flag", rpr);
+        if (rpr) b.u(1);
+        auto max_w = b.ue();
+        auto max_h = b.ue();
+        field(h, "sps_pic_width_max_in_luma_samples", max_w);
+        field(h, "sps_pic_height_max_in_luma_samples", max_h);
+        auto conf = b.u(1);
+        field(h, "sps_conformance_window_flag", conf);
+        uint32_t l = 0, rgt = 0, tp = 0, bt = 0;
+        if (conf) {
+          l = b.ue();
+          rgt = b.ue();
+          tp = b.ue();
+          bt = b.ue();
+          field(h, "sps_conf_win_left_offset", l);
+          field(h, "sps_conf_win_right_offset", rgt);
+          field(h, "sps_conf_win_top_offset", tp);
+          field(h, "sps_conf_win_bottom_offset", bt);
+        }
+        uint32_t sx = chroma == 1 || chroma == 2 ? 2 : 1, sy = chroma == 1 ? 2 : 1;
+        field(h, "width", max_w - (l + rgt) * sx);
+        field(h, "height", max_h - (tp + bt) * sy);
+        auto subpic = b.u(1);
+        if (subpic) {
+          auto num_subpics = b.ue() + 1;
+          field(h, "sps_num_subpics_minus1", num_subpics - 1);
+        }
+        auto bitdepth = b.ue() + 8;
+        field(h, "sps_bitdepth_minus8", bitdepth - 8);
+        field(h, "bit_depth", bitdepth);
+      } else if (type == 16) {
+        auto pps_id = b.u(6);
+        auto sps_id = b.u(4);
+        field(h, "pps_pic_parameter_set_id", pps_id);
+        field(h, "pps_seq_parameter_set_id", sps_id);
+        b.u(1);
+        auto w = b.ue();
+        auto ht = b.ue();
+        field(h, "pps_pic_width_in_luma_samples", w);
+        field(h, "pps_pic_height_in_luma_samples", ht);
+        field(h, "width", w);
+        field(h, "height", ht);
+      } else if (type == 19) {
+        field(h, "ph_gdr_or_irap_pic_flag", b.u(1));
+        field(h, "ph_non_ref_pic_flag", b.u(1));
+        auto gdr = b.u(1);
+        field(h, "ph_gdr_pic_flag", gdr);
+        field(h, "ph_inter_slice_allowed_flag", b.u(1));
+        field(h, "ph_intra_slice_allowed_flag", b.u(1));
+        field(h, "ph_pic_parameter_set_id", b.ue());
+        if (b.bits_left() >= 8) {
+          auto poc = b.u(8);
+          field(h, "ph_pic_order_cnt_lsb", poc);
+          field(h, "poc", poc);
+        }
+      } else if (type <= 11) {
+        auto ph_in_sh = b.u(1);
+        field(h, "sh_picture_header_in_slice_header_flag", ph_in_sh);
+      }
+    } catch (const std::exception&) {
+    }
     return h;
   }
+
   static const char* types[] = {"TRAIL_N",
                                 "TRAIL_R",
                                 "TSA_N",
@@ -391,31 +674,102 @@ Header parse_hevc(const Bytes& d, uint64_t off, bool vvc = false) {
                                 "SUFFIX_SEI"};
   h.type = type < 33 ? types[type] : "HEVC NAL";
   h.keyframe = type >= 16 && type <= 21;
-  if (type == 33) {
-    Bytes r = rbsp(d, 2);
-    BitReader b(r);
-    field(h, "sps_video_parameter_set_id", b.u(4));
-    auto layers = b.u(3);
-    field(h, "sps_max_sub_layers_minus1", layers);
-    b.u(1);
-    skip_profile_tier_level(b, layers);
-    field(h, "sps_seq_parameter_set_id", b.ue());
-    auto chroma = b.ue();
-    field(h, "chroma_format_idc", chroma);
-    if (chroma == 3) b.u(1);
-    auto w = b.ue(), ht = b.ue();
-    auto conf = b.u(1);
-    if (conf) {
-      auto l = b.ue(), rgt = b.ue(), tp = b.ue(), bt = b.ue();
-      unsigned sx = chroma == 1 || chroma == 2 ? 2 : 1, sy = chroma == 1 ? 2 : 1;
-      w -= (l + rgt) * sx;
-      ht -= (tp + bt) * sy;
+
+  Bytes r = rbsp(d, 2);
+  BitReader b(r);
+  try {
+    if (type == 32) {
+      field(h, "vps_video_parameter_set_id", b.u(4));
+      field(h, "vps_base_layer_internal_flag", b.u(1));
+      field(h, "vps_base_layer_available_flag", b.u(1));
+      field(h, "vps_max_layers_minus1", b.u(6));
+      field(h, "vps_max_sub_layers_minus1", b.u(3));
+      field(h, "vps_temporal_id_nesting_flag", b.u(1));
+    } else if (type == 33) {
+      auto vps_id = b.u(4);
+      auto sub_layers = b.u(3);
+      field(h, "sps_video_parameter_set_id", vps_id);
+      field(h, "sps_max_sub_layers_minus1", sub_layers);
+      field(h, "sps_temporal_id_nesting_flag", b.u(1));
+      skip_profile_tier_level(b, sub_layers);
+      field(h, "sps_seq_parameter_set_id", b.ue());
+      auto chroma = b.ue();
+      field(h, "chroma_format_idc", chroma);
+      if (chroma == 3) field(h, "separate_colour_plane_flag", b.u(1));
+      auto w = b.ue();
+      auto ht = b.ue();
+      field(h, "pic_width_in_luma_samples", w);
+      field(h, "pic_height_in_luma_samples", ht);
+      auto conf = b.u(1);
+      field(h, "conformance_window_flag", conf);
+      if (conf) {
+        auto l = b.ue(), rgt = b.ue(), tp = b.ue(), bt = b.ue();
+        field(h, "conf_win_left_offset", l);
+        field(h, "conf_win_right_offset", rgt);
+        field(h, "conf_win_top_offset", tp);
+        field(h, "conf_win_bottom_offset", bt);
+        unsigned sx = chroma == 1 || chroma == 2 ? 2 : 1, sy = chroma == 1 ? 2 : 1;
+        w -= (l + rgt) * sx;
+        ht -= (tp + bt) * sy;
+      }
+      field(h, "width", w);
+      field(h, "height", ht);
+      auto bit_depth_luma = b.ue() + 8;
+      auto bit_depth_chroma = b.ue() + 8;
+      field(h, "bit_depth_luma_minus8", bit_depth_luma - 8);
+      field(h, "bit_depth_chroma_minus8", bit_depth_chroma - 8);
+      field(h, "bit_depth", bit_depth_luma);
+      field(h, "log2_max_pic_order_cnt_lsb_minus4", b.ue());
+      auto sub_layer_ordering = b.u(1);
+      for (unsigned i = (sub_layer_ordering ? 0 : sub_layers); i <= sub_layers; ++i) {
+        b.ue();
+        b.ue();
+        b.ue();
+      }
+    } else if (type == 34) {
+      field(h, "pps_pic_parameter_set_id", b.ue());
+      field(h, "pps_seq_parameter_set_id", b.ue());
+      field(h, "dependent_slice_segments_enabled_flag", b.u(1));
+      field(h, "output_flag_present_flag", b.u(1));
+      field(h, "num_extra_slice_header_bits", b.u(3));
+      field(h, "sign_data_hiding_enabled_flag", b.u(1));
+      field(h, "cabac_init_present_flag", b.u(1));
+      field(h, "num_ref_idx_l0_default_active_minus1", b.ue());
+      field(h, "num_ref_idx_l1_default_active_minus1", b.ue());
+      field(h, "init_qp_minus26", b.se());
+      field(h, "constrained_intra_pred_flag", b.u(1));
+      field(h, "transform_skip_enabled_flag", b.u(1));
+      field(h, "cu_qp_delta_enabled_flag", b.u(1));
+      if (b.bits_left() > 0) field(h, "pps_cb_qp_offset", b.se());
+      if (b.bits_left() > 0) field(h, "pps_cr_qp_offset", b.se());
+      if (b.bits_left() > 0) field(h, "tiles_enabled_flag", b.u(1));
+      if (b.bits_left() > 0) field(h, "entropy_coding_sync_enabled_flag", b.u(1));
+    } else if (type <= 31) {
+      auto first_slice = b.u(1);
+      field(h, "first_slice_segment_in_pic_flag", first_slice);
+      if (type >= 16 && type <= 21) {
+        field(h, "no_output_of_prior_pics_flag", b.u(1));
+        field(h, "poc", 0);
+      }
+      auto pps_id = b.ue();
+      field(h, "slice_pic_parameter_set_id", pps_id);
+      auto slice_type = b.ue();
+      field(h, "slice_type", slice_type);
+      static const char* st_names[] = {"B", "P", "I"};
+      field(h, "slice_type_name", slice_type < 3 ? st_names[slice_type] : "Unknown");
+      if (b.bits_left() >= 8) {
+        auto poc_lsb = b.u(8);
+        field(h, "slice_pic_order_cnt_lsb", poc_lsb);
+        field(h, "poc", poc_lsb);
+      }
+    } else if (type == 35) {
+      field(h, "pic_type", b.u(3));
     }
-    field(h, "width", w);
-    field(h, "height", ht);
+  } catch (const std::exception&) {
   }
   return h;
 }
+
 std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
   std::vector<Header> out;
   size_t p = 0;
@@ -425,9 +779,12 @@ std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
     if (x & 0x80) throw std::runtime_error("invalid AV1 OBU forbidden bit");
     uint8_t type = (x >> 3) & 15;
     bool ext = x & 4, has = x & 2;
+    uint8_t temporal_id = 0, spatial_id = 0;
     if (ext) {
       if (p >= d.size()) throw std::out_of_range("truncated AV1 extension");
-      ++p;
+      uint8_t ext_byte = d.at(p++);
+      temporal_id = (ext_byte >> 5) & 7;
+      spatial_id = (ext_byte >> 3) & 3;
     }
     uint64_t size = d.size() - p;
     if (has) {
@@ -461,19 +818,97 @@ std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
     Header h{off + begin, p + size - begin, names[type], false, {}};
     field(h, "obu_type", type);
     field(h, "obu_has_size_field", has);
+    if (ext) {
+      field(h, "obu_extension_flag", 1);
+      field(h, "obu_temporal_id", temporal_id);
+      field(h, "obu_spatial_id", spatial_id);
+    }
     if (type == 1 && size >= 1) {
       Bytes payload(d.begin() + p, d.begin() + p + size);
       BitReader b(payload);
-      auto profile = b.u(3);
-      field(h, "seq_profile", profile);
-      auto still = b.u(1);
-      auto reduced = b.u(1);
-      field(h, "still_picture", still);
-      if (reduced) {
-        b.u(5);
-        auto wb = b.u(4) + 1, hb = b.u(4) + 1;
-        field(h, "max_frame_width", b.u(wb) + 1);
-        field(h, "max_frame_height", b.u(hb) + 1);
+      try {
+        auto profile = b.u(3);
+        field(h, "seq_profile", profile);
+        auto still = b.u(1);
+        auto reduced = b.u(1);
+        field(h, "still_picture", still);
+        field(h, "reduced_still_picture_header", reduced);
+        if (reduced) {
+          b.u(5);
+          auto wb = b.u(4) + 1, hb = b.u(4) + 1;
+          auto mw = b.u(wb) + 1, mh = b.u(hb) + 1;
+          field(h, "max_frame_width", mw);
+          field(h, "max_frame_height", mh);
+          field(h, "width", mw);
+          field(h, "height", mh);
+        } else {
+          auto timing_info = b.u(1);
+          field(h, "timing_info_present_flag", timing_info);
+          if (timing_info) {
+            auto num_units = b.u(32);
+            auto time_scale = b.u(32);
+            field(h, "num_units_in_display_tick", num_units);
+            field(h, "time_scale", time_scale);
+            if (num_units > 0) {
+              double fps = double(time_scale) / double(num_units);
+              std::ostringstream fps_s;
+              fps_s << std::fixed << std::setprecision(2) << fps;
+              field(h, "fps", fps_s.str());
+            }
+            if (b.u(1)) b.leb128();
+          }
+          auto decoder_model = b.u(1);
+          if (decoder_model) field(h, "decoder_model_info_present_flag", 1);
+          auto operating_points = b.u(5) + 1;
+          field(h, "operating_points_cnt", operating_points);
+          for (unsigned i = 0; i < operating_points; ++i) {
+            b.u(12);
+            b.u(5);
+            if (b.u(1)) b.u(1);
+          }
+          auto wb = b.u(4) + 1, hb = b.u(4) + 1;
+          auto mw = b.u(wb) + 1, mh = b.u(hb) + 1;
+          field(h, "max_frame_width", mw);
+          field(h, "max_frame_height", mh);
+          field(h, "width", mw);
+          field(h, "height", mh);
+
+          auto frame_id_numbers = b.u(1);
+          field(h, "frame_id_numbers_present_flag", frame_id_numbers);
+          if (frame_id_numbers) {
+            b.u(4);
+            b.u(3);
+          }
+          b.u(1);
+          b.u(1);
+          b.u(1);
+          b.u(1);
+          b.u(1);
+          b.u(1);
+          b.u(1);
+
+          auto high_bd = b.u(1);
+          field(h, "high_bitdepth", high_bd);
+          unsigned bit_depth = 8;
+          if (profile == 2 && high_bd) {
+            auto twelve_bit = b.u(1);
+            bit_depth = twelve_bit ? 12 : 10;
+          } else if (profile <= 2) {
+            bit_depth = high_bd ? 10 : 8;
+          }
+          field(h, "bit_depth", bit_depth);
+          if (profile != 1) {
+            field(h, "mono_chrome", b.u(1));
+          }
+          auto color_desc = b.u(1);
+          field(h, "color_description_present_flag", color_desc);
+          if (color_desc) {
+            field(h, "color_primaries", b.u(8));
+            field(h, "transfer_characteristics", b.u(8));
+            field(h, "matrix_coefficients", b.u(8));
+          }
+        }
+      } catch (const std::exception&) {
       }
     }
     if ((type == 3 || type == 6) && size) {
@@ -485,9 +920,14 @@ std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
         if (!show_existing) {
           auto ft = b.u(2);
           field(h, "frame_type", ft);
+          static const char* ft_names[] = {"KEY_FRAME", "INTER_FRAME", "INTRA_ONLY_FRAME",
+                                           "SWITCH_FRAME"};
+          field(h, "frame_type_name", ft_names[ft]);
           h.keyframe = ft == 0;
+          auto show_frame = b.u(1);
+          field(h, "show_frame", show_frame);
         }
-      } catch (const std::out_of_range&) {
+      } catch (const std::exception&) {
       }
     }
     out.push_back(std::move(h));
