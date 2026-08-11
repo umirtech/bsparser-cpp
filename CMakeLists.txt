@@ -65,6 +65,10 @@ enable_testing()
 
 add_executable(bsparser_tests src/tests.cpp)
 target_link_libraries(bsparser_tests PRIVATE bsparser)
+target_compile_definitions(
+    bsparser_tests
+    PRIVATE BSPARSER_TEST_FILES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test-files"
+)
 
 add_test(
     NAME bsparser_tests
