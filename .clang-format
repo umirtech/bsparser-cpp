@@ -1,5 +1,30 @@
 BasedOnStyle: Google
-IndentWidth: 2
-ColumnLimit: 100
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+BreakBeforeBraces: Allman
+
+AlignAfterOpenBracket: BlockIndent
+BinPackParameters: false
+BinPackArguments: false
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty
+
+ColumnLimit: 120
+
+IndentCaseLabels: true
+
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeCatch: false
+
 SortIncludes: Never
