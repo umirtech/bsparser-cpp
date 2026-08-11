@@ -1,5 +1,4 @@
 ﻿#include "bsparser.h"
-#include "bsparser/include/bsparser.h"
 
 #include <fstream>
 #include <iostream>
