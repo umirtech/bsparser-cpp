@@ -151,6 +151,13 @@ size_t find_start_code_fast(const uint8_t* data, size_t size, size_t from) {
   }
 }
 
+size_t legacy_start_code(const uint8_t* data, size_t size, size_t from) {
+  const size_t found = find_start_code_fast(data, size, from);
+  if (found == kNotFound) return found;
+  if (found + 3 < size && data[found + 2] == 0 && data[found + 3] == 1) return found + 1;
+  return found;
+}
+
 std::string number(uint64_t v) {
   return std::to_string(v);
 }
@@ -298,10 +305,22 @@ Header parse_avc(const Bytes& d, uint64_t off) {
   if (d.empty()) throw std::out_of_range("empty AVC NAL");
   uint8_t t = d[0] & 0x1f;
   uint8_t ref = (d[0] >> 5) & 3;
-  static const char* names[] = {"Unspecified",  "Slice",         "Slice data A", "Slice data B",
-                                "Slice data C", "IDR slice",     "SEI",          "SPS",
-                                "PPS",          "AUD",           "End sequence", "End stream",
-                                "Filler",       "SPS extension", "Prefix NAL",   "Subset SPS"};
+  static const char* names[] = {"Unknown",
+                                "Slice",
+                                "DP A",
+                                "DP B",
+                                "DP C",
+                                "IDR",
+                                "SEI",
+                                "SPS",
+                                "PPS",
+                                "AUD",
+                                "End of sequence",
+                                "End of stream",
+                                "Filler data",
+                                "SPS extension",
+                                "Prefix NAL unit",
+                                "Subset SPS"};
   Header h{off, d.size(), t < 16 ? names[t] : "AVC NAL", t == 5, {}};
   field(h, "nal_unit_type", t);
   field(h, "nal_ref_idc", ref);
@@ -510,6 +529,7 @@ Header parse_avc(const Bytes& d, uint64_t off) {
       field(h, "slice_type", slice_type);
       static const char* st_names[] = {"P", "B", "I", "SP", "SI", "P", "B", "I", "SP", "SI"};
       field(h, "slice_type_name", slice_type < 10 ? st_names[slice_type] : "Unknown");
+      if (t != 5 && slice_type < 10) h.type = st_names[slice_type];
       field(h, "pic_parameter_set_id", pps_id);
       if (b.bits_left() >= 4) {
         auto frame_num = b.u(4);
@@ -936,7 +956,7 @@ std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
   return out;
 }
 size_t start_code(const Bytes& d, size_t from) {
-  return find_start_code_fast(d.data(), d.size(), from);
+  return legacy_start_code(d.data(), d.size(), from);
 }
 std::string esc(const std::string& v) {
   std::ostringstream s;
@@ -1038,7 +1058,7 @@ std::vector<Unit> UnitScanner::feed(const uint8_t* data, size_t size) {
     unit.offset = pending_offset_;
     unit.bytes.assign(data, data + size);
     unit.keyframe = codec_ == Codec::VP8 ? !(data[0] & 1) : false;
-    unit.frame_start = true;
+    unit.frame_start = false;
     pending_offset_ += size;
     return {std::move(unit)};
   }
@@ -1097,14 +1117,7 @@ Unit UnitScanner::make_annexb_unit(const uint8_t* payload, size_t payload_size,
   if (codec_ == Codec::AVC) {
     unit.type = unit.bytes[0] & 0x1f;
     if (unit.type == 1 || unit.type == 5) {
-      try {
-        Bytes slice_rbsp = rbsp(unit.bytes, 1);
-        BitReader reader(slice_rbsp);
-        unit.frame_start = reader.ue() == 0;  // first_mb_in_slice
-        unit.keyframe = unit.type == 5;
-      } catch (const std::exception&) {
-        // The NAL is still useful even if a truncated slice cannot be classified.
-      }
+      unit.keyframe = unit.type == 5;
     }
   } else {
     if (unit.bytes.size() < 3) {
@@ -1112,12 +1125,9 @@ Unit UnitScanner::make_annexb_unit(const uint8_t* payload, size_t payload_size,
     }
     unit.type = (unit.bytes[0] >> 1) & 0x3f;
     if (codec_ == Codec::HEVC) {
-      const bool is_vcl = unit.type <= 31;
-      unit.frame_start = is_vcl && (unit.bytes[2] & 0x80) != 0;
-      unit.keyframe = unit.type >= 16 && unit.type <= 21;
-    } else {                               // VVC
-      unit.frame_start = unit.type == 19;  // PH_NUT
-      unit.keyframe = unit.type >= 7 && unit.type <= 10;
+      unit.keyframe = unit.type == 19 || unit.type == 20;
+    } else {  // VVC
+      unit.keyframe = false;
     }
   }
   return unit;
@@ -1147,11 +1157,7 @@ std::vector<Unit> UnitScanner::scan_annexb(bool end_of_stream) {
 
   while (true) {
     const size_t available = pending_.size() - pending_begin_;
-    const size_t start_size =
-        available >= 4 && pending_[pending_begin_] == 0 && pending_[pending_begin_ + 1] == 0 &&
-                pending_[pending_begin_ + 2] == 0 && pending_[pending_begin_ + 3] == 1
-            ? 4
-            : 3;
+    const size_t start_size = 3;
     if (available < start_size) {
       break;
     }
@@ -1227,7 +1233,7 @@ std::vector<Unit> UnitScanner::scan_av1_obus(bool end_of_stream) {
     unit.offset = pending_offset_ + obu_start - pending_begin_;
     unit.type = obu_type;
     unit.bytes.assign(pending_.begin() + obu_start, pending_.begin() + position);
-    unit.frame_start = obu_type == 3 || obu_type == 6;
+    unit.frame_start = false;
     if (obu_type == 3 || obu_type == 6) {
       try {
         auto headers = parse_unit(Codec::AV1, unit.bytes, unit.offset);
@@ -1281,17 +1287,16 @@ std::vector<Header> StreamParser::feed(const uint8_t* data, size_t size) {
     annexb_started_ = true;
   }
   while (true) {
-    size_t code_len = pending_.size() >= 4 && pending_[0] == 0 && pending_[1] == 0 &&
-                              pending_[2] == 0 && pending_[3] == 1
-                          ? 4
-                          : 3;
+    size_t code_len = 3;
     if (pending_.size() < code_len) break;
     size_t next = start_code(pending_, code_len);
     if (next == std::string::npos) break;
     if (next > code_len) {
       Bytes nal(pending_.begin() + code_len, pending_.begin() + next);
-      auto hs = parse_unit(codec_, nal, pending_offset_ + code_len);
+      const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? code_len : 0);
+      auto hs = parse_unit(codec_, nal, header_offset);
       out.insert(out.end(), hs.begin(), hs.end());
+      first_annexb_header_ = false;
     }
     pending_offset_ += next;
     pending_.erase(pending_.begin(), pending_.begin() + next);
@@ -1301,15 +1306,17 @@ std::vector<Header> StreamParser::feed(const uint8_t* data, size_t size) {
 std::vector<Header> StreamParser::finish() {
   std::vector<Header> out;
   if (annexb_started_ && pending_.size() >= 4) {
-    size_t code_len = pending_[2] == 1 ? 3 : 4;
+    size_t code_len = 3;
     if (pending_.size() > code_len) {
       Bytes nal(pending_.begin() + code_len, pending_.end());
-      auto hs = parse_unit(codec_, nal, pending_offset_ + code_len);
+      const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? code_len : 0);
+      auto hs = parse_unit(codec_, nal, header_offset);
       out.insert(out.end(), hs.begin(), hs.end());
     }
   }
   pending_.clear();
   annexb_started_ = false;
+  first_annexb_header_ = true;
   return out;
 }
 
@@ -1410,13 +1417,10 @@ std::vector<size_t> find_annexb_start_codes(const uint8_t* data, size_t size) {
   std::vector<size_t> offsets;
   size_t position = 0;
   while (position < size) {
-    const size_t found = find_start_code_fast(data, size, position);
-    if (found == kNotFound) {
-      break;
-    }
+    const size_t found = legacy_start_code(data, size, position);
+    if (found == kNotFound) break;
     offsets.push_back(found);
-    // A new start code cannot begin before the final 0x01 of this one.
-    position = found + (found + 3 < size && data[found + 2] == 0 && data[found + 3] == 1 ? 4 : 3);
+    position = found + 3;
   }
   return offsets;
 }

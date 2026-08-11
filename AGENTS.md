@@ -56,3 +56,28 @@ Android ELF executables and require an emulator/device plus `adb` to run.
 Prefer small, explicit syntax readers with named fields. Before porting a
 large JavaScript syntax section, confirm it is useful for boundary detection,
 timeline metadata, or keyframe indexing.
+
+## Active migration: JavaScript-reference compatibility
+
+The user has requested that the public `UnitScanner` and `Header` behavior
+match `reference/bsparser-web/parser.js`, including its legacy edge cases.
+This supersedes the earlier frame-boundary and strict Annex-B semantics above.
+
+- Annex-B uses only the `00 00 01` marker. A four-byte prefix is treated as a
+  marker beginning at its second zero, matching the reference's retained-zero
+  behavior.
+- `Unit.frame_start` is always `false`; do not add access-unit detection.
+- Use JavaScript keyframe rules: AVC type 5; HEVC types 19/20; no VVC
+  keyframe classification.
+- Keep `tests/compare-reference.js` as the compatibility test. It currently
+  compares header count and codec-level unit kinds for H.264, H.265, VP8, and
+  VP9 fixture files.
+- Continue porting metadata readers from `reference/bsparser-web/parser.js`
+  into `src/bsparser.cpp` before strengthening comparison to exact fields.
+  Match JavaScript field names and type labels rather than inventing C++-only
+  names or inferred fields.
+- The bundled JavaScript AV1 parser currently crashes on `test-files/av1.ivf`
+  because `frame_width_bits_minus_1` is unbound. Decide with the user whether
+  to reproduce that failure or repair the JavaScript reference before adding
+  AV1 exact-parity assertions.
+- Run `ctest --test-dir build -C Debug --output-on-failure` after each change.

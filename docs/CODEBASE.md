@@ -35,7 +35,7 @@ enum class UnitKind { Frame, Obu, NalUnit };
 struct Unit {
   UnitKind kind;
   uint64_t offset;       // source byte position of bytes[0]
-  size_t start_code_size; // 0 for AV1/VP; 3 or 4 for Annex-B
+  size_t start_code_size; // 0 for AV1/VP; always 3 for legacy Annex-B
   uint8_t type;          // NAL or OBU type
   bool frame_start;
   bool keyframe;
@@ -51,16 +51,18 @@ index them.
 
 | Codec | Unit | `frame_start` | `keyframe` |
 | --- | --- | --- | --- |
-| AVC | Annex-B NAL | VCL with `first_mb_in_slice == 0` | IDR NAL (type 5) |
+| AVC | Annex-B NAL | Never | IDR NAL (type 5) |
 | HEVC | Annex-B NAL | VCL with `first_slice_segment_in_pic_flag` | NAL types 16–21 |
 | VVC | Annex-B NAL | Picture header NAL (type 19) | NAL types 7–10 |
-| AV1 | OBU with size field | Frame/header OBU (3/6) | Parsed frame type when present |
-| VP8 | Caller-provided frame | Always | Frame tag |
-| VP9 | Caller-provided frame | Always | Parsed frame type |
+| AV1 | OBU with size field | Never | Parsed frame type when present |
+| VP8 | Caller-provided frame | Never | Frame tag |
+| VP9 | Caller-provided frame | Never | Parsed frame type |
 
-These are indexing hints, not a full decoder-level access-unit implementation.
-Do not claim exact display-order or decode-order semantics without adding the
-required codec state.
+HEVC uses the JavaScript reference rule of treating only NAL types 19 and 20
+as keyframes; VVC never reports a keyframe.
+
+These follow the bundled JavaScript parser and intentionally do not expose
+access-unit/frame-start detection.
 
 ## Scanner internals and invariants
 
@@ -73,7 +75,8 @@ When editing this code:
 
 - Advance `pending_offset_` by exactly the bytes advanced in `pending_begin_`.
 - Preserve up to 3 trailing bytes when searching a chunk without a start code;
-  `00 00 01` can cross chunk boundaries.
+  `00 00 01` can cross chunk boundaries. Treat a 4-byte prefix as a 3-byte
+  marker beginning at its second zero, matching the JavaScript parser.
 - AV1 may have an extension byte and a variable-length LEB128 size. Do not
   emit until both header and payload are complete.
 - `finish()` must flush only a complete final Annex-B NAL and must reject a
@@ -125,4 +128,3 @@ Replace `NDK_CLANG` with the NDK `clang++.exe` path.
   -DBSPARSER_ARMV7_NEON_DISPATCH=1 -mfpu=neon -I cpp\include `
   cpp\bsparser.cpp cpp\simd_neon_armv7.cpp cpp\tests.cpp -o bsparser_tests_armv7
 ```
-

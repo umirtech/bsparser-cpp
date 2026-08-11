@@ -39,7 +39,11 @@ ctest --test-dir build --output-on-failure
 ```
 
 Each output line is a JSON object, so it is easy to pipe into `jq` or ingest
-from another tool. The `--html` option generates a rich, interactive web UI report for visual bitstream analysis.
+from another tool. The `--html` option generates a self-contained interactive
+report with filtering, full parsed-field inspection, stream-position markers,
+and a hex/ASCII source-byte preview for every header. Because it embeds the
+input bytes, the report is larger than the source file but can be opened
+without the original input alongside it.
 
 ## Library API
 
