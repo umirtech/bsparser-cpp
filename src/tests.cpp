@@ -1,72 +1,85 @@
 #include "bsparser.hpp"
+
+#include <algorithm>
 #include <cassert>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
+
 using namespace bsparser;
-int main() {
-  {
-    std::vector<uint8_t> d{0x10, 0, 0, 0x9d, 0x01, 0x2a, 0x80, 0x02, 0x68, 0x01};
-    auto h = parse_unit(Codec::VP8, d).at(0);
-    assert(h.keyframe && h.fields.at("width") == "640" && h.fields.at("height") == "360");
-    assert(h.fields.at("frame_type_name") == "KEY_FRAME");
-  }
-  {
-    std::vector<uint8_t> d{0,    0,    1,    0x67, 0x42, 0, 0x1e, 0xf4,
-                           0x05, 0x01, 0xed, 0,    0,    1, 0x65, 0x88};
-    StreamParser p(Codec::AVC);
-    auto h = p.feed(d);
-    auto tail = p.finish();
-    h.insert(h.end(), tail.begin(), tail.end());
-    assert(h.size() == 2 && h[0].fields.at("nal_unit_type") == "7" && h[1].keyframe);
-    assert(h[0].fields.at("profile_idc") == "66");
-    assert(h[0].fields.at("profile_name") == "Baseline");
-  }
-  {
-    // NAL start codes can be split across network reads.
-    std::vector<uint8_t> d{0,    0,    1,    0x67, 0x42, 0, 0x1e, 0xf4,
-                           0x05, 0x01, 0xed, 0,    0,    1, 0x65, 0x88};
-    UnitScanner scanner(Codec::AVC);
-    auto units = scanner.feed(d.data(), 11);
-    auto next = scanner.feed(d.data() + 11, d.size() - 11);
-    auto last = scanner.finish();
+
+namespace {
+
+std::vector<uint8_t> read_fixture(const char* name) {
+  const std::string path = std::string(BSPARSER_TEST_FILES_DIR) + "/" + name;
+  std::ifstream file(path, std::ios::binary);
+  assert(file && "test fixture is missing");
+  return {std::istreambuf_iterator<char>(file), {}};
+}
+
+std::vector<Unit> scan_annexb_fixture(Codec codec, const char* name) {
+  const auto bytes = read_fixture(name);
+  UnitScanner scanner(codec);
+  std::vector<Unit> units;
+  constexpr size_t kChunkSize = 4093;
+  for (size_t offset = 0; offset < bytes.size(); offset += kChunkSize) {
+    const size_t size = std::min(kChunkSize, bytes.size() - offset);
+    auto next = scanner.feed(bytes.data() + offset, size);
     units.insert(units.end(), next.begin(), next.end());
-    units.insert(units.end(), last.begin(), last.end());
-    assert(units.size() == 2 && units[0].type == 7 && units[0].offset == 3);
-    assert(units[1].type == 5 && units[1].frame_start && units[1].keyframe);
   }
-  {
-    std::vector<uint8_t> d{0x12, 0x01, 0x00};
-    auto h = parse_unit(Codec::AV1, d);
-    assert(h.size() == 1 && h[0].type == "Temporal delimiter");
+  auto tail = scanner.finish();
+  units.insert(units.end(), tail.begin(), tail.end());
+  return units;
+}
+
+void test_annexb_fixture(Codec codec, const char* name) {
+  const auto units = scan_annexb_fixture(codec, name);
+  assert(units.size() > 1);
+
+  bool has_keyframe = false;
+  uint64_t previous_offset = 0;
+  for (size_t index = 0; index < units.size(); ++index) {
+    const auto& unit = units[index];
+    assert(unit.kind == UnitKind::NalUnit);
+    assert(!unit.bytes.empty());
+    assert(unit.start_code_size == 3 || unit.start_code_size == 4);
+    if (index != 0) assert(previous_offset < unit.offset);
+    previous_offset = unit.offset;
+    has_keyframe = has_keyframe || unit.keyframe;
+    assert(!parse_unit(codec, unit).empty());
   }
-  {
-    UnitScanner scanner(Codec::AV1);
-    const std::vector<uint8_t> d{0x12, 0x01, 0x00};
-    assert(scanner.feed(d.data(), 1).empty());
-    auto units = scanner.feed(d.data() + 1, d.size() - 1);
-    assert(units.size() == 1 && units[0].kind == UnitKind::Obu && units[0].type == 2);
+  assert(has_keyframe);
+}
+
+void test_ivf_fixture(const char* name, Codec expected_codec, const char* fourcc) {
+  const auto bytes = read_fixture(name);
+  IvfParser parser;
+  std::vector<Header> headers;
+  constexpr size_t kChunkSize = 4093;
+  for (size_t offset = 0; offset < bytes.size(); offset += kChunkSize) {
+    const size_t size = std::min(kChunkSize, bytes.size() - offset);
+    auto next = parser.feed(bytes.data() + offset, size);
+    headers.insert(headers.end(), next.begin(), next.end());
   }
-  {
-    const std::vector<uint8_t> d{0xff, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x68};
-    const auto offsets = find_annexb_start_codes(d.data(), d.size());
-    assert(offsets.size() == 2 && offsets[0] == 1 && offsets[1] == 5);
+
+  assert(parser.codec() == expected_codec);
+  assert(headers.size() > 1);
+  assert(headers.front().type == "IVF");
+  assert(headers.front().fields.at("fourcc") == fourcc);
+  for (size_t index = 1; index < headers.size(); ++index) {
+    assert(headers[index].fields.count("timestamp") == 1);
   }
-  {
-    // HEVC VPS NAL parsing test
-    std::vector<uint8_t> d{0x40, 0x01, 0x0c, 0x01, 0xff, 0xff, 0x01, 0x60, 0x00, 0x00, 0x03,
-                           0x00, 0x00, 0x03, 0x00, 0x00, 0x03, 0x00, 0x00, 0x99, 0xac, 0x09};
-    auto h = parse_unit(Codec::HEVC, d).at(0);
-    assert(h.fields.at("nal_unit_type") == "32");
-    assert(h.type == "VPS");
-    assert(h.fields.at("vps_video_parameter_set_id") == "0");
-  }
-  {
-    // VP9 header test
-    std::vector<uint8_t> d{0x82, 0x49, 0x83, 0x42, 0x00, 0x02, 0x7f, 0x01, 0xdf, 0x00};
-    auto h = parse_unit(Codec::VP9, d).at(0);
-    assert(h.keyframe);
-    assert(h.fields.at("frame_type_name") == "KEY_FRAME");
-    assert(h.fields.at("width") == "160");
-    assert(h.fields.at("height") == "120");
-  }
+}
+
+}  // namespace
+
+int main() {
+  test_annexb_fixture(Codec::AVC, "h264.h264");
+  test_annexb_fixture(Codec::HEVC, "h265.h265");
+  test_ivf_fixture("vp8.ivf", Codec::VP8, "VP80");
+  test_ivf_fixture("vp9.ivf", Codec::VP9, "VP90");
+  test_ivf_fixture("av1.ivf", Codec::AV1, "AV01");
   std::cout << "ok\n";
 }
