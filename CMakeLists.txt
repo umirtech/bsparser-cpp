@@ -63,7 +63,7 @@ target_link_libraries(bsparse PRIVATE bsparser)
 # ---------------------------------------------------------------------------
 enable_testing()
 
-add_executable(bsparser_tests src/tests.cpp)
+add_executable(bsparser_tests tests/tests.cpp)
 target_link_libraries(bsparser_tests PRIVATE bsparser)
 target_compile_definitions(
     bsparser_tests
