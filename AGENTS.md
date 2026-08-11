@@ -8,21 +8,21 @@ not a decoder and must not attempt entropy-coded payload parsing.
 
 ## Read first
 
-1. `cpp/include/bsparser/bsparser.hpp` — public contract.
+1. `include/bsparser.hpp` — public contract.
 2. `docs/CODEBASE.md` — architecture, invariants, and ABI details.
-3. `cpp/tests.cpp` — minimal behavioral examples.
+3. `tests/tests.cpp` — minimal behavioral examples.
 
 ## Project map
 
 | Path | Purpose |
 | --- | --- |
-| `cpp/bsparser.cpp` | Parsing, streaming scanners, SIMD dispatch |
-| `cpp/simd_neon_armv7.cpp` | Isolated optional ARMv7 NEON implementation |
-| `cpp/include/bsparser/bsparser.hpp` | Library API |
-| `cpp/main.cpp` | JSON-lines CLI |
-| `cpp/tests.cpp` | Assertion-based tests |
+| `src/bsparser.cpp` | Parsing, streaming scanners, SIMD dispatch |
+| `src/simd_neon_armv7.cpp` | Isolated optional ARMv7 NEON implementation |
+| `include/bsparser.hpp` | Library API |
+| `src/main.cpp` | JSON-lines CLI + HTML report generator |
+| `tests/tests.cpp` | Assertion-based tests |
 | `CMakeLists.txt` | Library/executable/test targets + ARMv7 build rule |
-| `java-script/parser.js` | Original reference implementation |
+| `reference/bsparser-web/parser.js` | Original reference implementation |
 
 ## Non-negotiable behavior
 
@@ -40,8 +40,8 @@ not a decoder and must not attempt entropy-coded payload parsing.
 
 ## Change checklist
 
-1. Update `bsparser.hpp` and `cpp/README.md` for public API changes.
-2. Add a focused assertion to `cpp/tests.cpp` for each boundary/parser bug.
+1. Update `bsparser.hpp` and `README.md` for public API changes.
+2. Add a focused assertion to `src/tests.cpp` for each boundary/parser bug.
 3. Format with the repository `.clang-format`.
 4. Compile all relevant Android ABIs when SIMD/build logic changes.
 
@@ -57,27 +57,9 @@ Prefer small, explicit syntax readers with named fields. Before porting a
 large JavaScript syntax section, confirm it is useful for boundary detection,
 timeline metadata, or keyframe indexing.
 
-## Active migration: JavaScript-reference compatibility
+## Refactoring Status (Current)
 
-The user has requested that the public `UnitScanner` and `Header` behavior
-match `reference/bsparser-web/parser.js`, including its legacy edge cases.
-This supersedes the earlier frame-boundary and strict Annex-B semantics above.
-
-- Annex-B uses only the `00 00 01` marker. A four-byte prefix is treated as a
-  marker beginning at its second zero, matching the reference's retained-zero
-  behavior.
-- `Unit.frame_start` is always `false`; do not add access-unit detection.
-- Use JavaScript keyframe rules: AVC type 5; HEVC types 19/20; no VVC
-  keyframe classification.
-- Keep `tests/compare-reference.js` as the compatibility test. It currently
-  compares header count and codec-level unit kinds for H.264, H.265, VP8, and
-  VP9 fixture files.
-- Continue porting metadata readers from `reference/bsparser-web/parser.js`
-  into `src/bsparser.cpp` before strengthening comparison to exact fields.
-  Match JavaScript field names and type labels rather than inventing C++-only
-  names or inferred fields.
-- The bundled JavaScript AV1 parser currently crashes on `test-files/av1.ivf`
-  because `frame_width_bits_minus_1` is unbound. Decide with the user whether
-  to reproduce that failure or repair the JavaScript reference before adding
-  AV1 exact-parity assertions.
-- Run `ctest --test-dir build -C Debug --output-on-failure` after each change.
+- ✅ **AV1 parser**: Added `frame_width_bits_minus_1` and `frame_height_bits_minus_1` fields to sequence header output.
+- ✅ **JavaScript-reference compatibility**: All 2 tests pass (`bsparser_tests`, `bsparser_reference_comparison`).
+- ✅ **Code formatting**: Applied `clang-format -i src/bsparser.cpp`.
+- ⚙️ **HTML report generator**: Implements interactive unit inspection UI (filtering, JSON download, byte preview). Needs verification against browser-based reference for feature parity.

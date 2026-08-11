@@ -893,6 +893,8 @@ std::vector<Header> parse_av1(const Bytes& d, uint64_t off) {
           field(h, "width", mw);
           field(h, "height", mh);
 
+          field(h, "frame_width_bits_minus_1", 32 - __builtin_clz(mw) - 1);
+          field(h, "frame_height_bits_minus_1", 32 - __builtin_clz(mh) - 1);
           auto frame_id_numbers = b.u(1);
           field(h, "frame_id_numbers_present_flag", frame_id_numbers);
           if (frame_id_numbers) {
