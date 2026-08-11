@@ -32,20 +32,6 @@ target_include_directories(bsparser
 
 target_compile_features(bsparser PUBLIC cxx_std_17)
 
-# armeabi-v7a does not guarantee NEON, so compile it separately
-if(ANDROID AND ANDROID_ABI STREQUAL "armeabi-v7a")
-    target_sources(bsparser PRIVATE src/simd_neon_armv7.cpp)
-
-    set_source_files_properties(
-        src/simd_neon_armv7.cpp
-        PROPERTIES COMPILE_OPTIONS "-mfpu=neon"
-    )
-
-    target_compile_definitions(
-        bsparser PRIVATE BSPARSER_ARMV7_NEON_DISPATCH=1
-    )
-endif()
-
 if(MSVC)
     target_compile_options(bsparser PRIVATE /W4 /permissive-)
 else()
