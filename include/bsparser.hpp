@@ -14,9 +14,11 @@ enum class ScanBackend { Scalar, Sse2, Neon, Avx2 };
 // The kind of elementary unit found in a raw stream.
 enum class UnitKind { Frame, Obu, NalUnit };
 
-// A complete, self-contained unit extracted from a stream. `bytes` excludes
-// the Annex-B start code for NAL units and includes the full OBU for AV1.
-// `offset` always identifies the first byte in `bytes` in the source stream.
+// A complete unit extracted using the bundled JavaScript reference semantics.
+// Annex-B scanning recognizes only the 3-byte 00 00 01 marker. Consequently,
+// a leading zero from a 4-byte prefix is retained at the end of the preceding
+// unit. `frame_start` is always false because the reference has no access-unit
+// detection. AV1 units include their complete OBU header and payload.
 struct Unit {
   UnitKind kind = UnitKind::Frame;
   uint64_t offset = 0;
@@ -61,14 +63,11 @@ std::vector<Header> parse_unit(Codec codec, const std::vector<uint8_t>& bytes, u
 // Convenience overload for a unit returned by UnitScanner.
 std::vector<Header> parse_unit(Codec codec, const Unit& unit);
 
-// Finds complete elementary-unit boundaries while accepting arbitrary network
-// chunks. For AVC/HEVC/VVC it scans Annex-B start codes. For AV1 it scans OBUs
-// with a size field. VP8/VP9 have no delimiter in a raw concatenated stream,
-// therefore each call to feed() is treated as one complete frame.
-//
-// `frame_start` identifies AVC/HEVC access-unit starts when the information is
-// present in the slice header. For VVC, picture-header NALs are marked. It is
-// intentionally false for non-picture parameter-set, SEI, and delimiter units.
+// Finds complete elementary-unit boundaries while accepting arbitrary chunks.
+// Its boundaries and flags reproduce the bundled JavaScript reference parser:
+// Annex-B uses the 3-byte marker only, AV1 depends on its OBU size field, and
+// no access-unit/frame-start detection is performed. VP8/VP9 treat each feed
+// call as a complete frame because raw concatenated streams have no delimiter.
 class UnitScanner {
  public:
   explicit UnitScanner(Codec codec);
@@ -107,6 +106,7 @@ class StreamParser {
   uint64_t pending_offset_ = 0;
   uint64_t input_offset_ = 0;
   bool annexb_started_ = false;
+  bool first_annexb_header_ = true;
 };
 
 // Incremental IVF parser. It detects the codec from FourCC and emits the IVF
@@ -130,7 +130,7 @@ const char* codec_name(Codec codec);
 ScanBackend active_scan_backend() noexcept;
 const char* scan_backend_name(ScanBackend backend) noexcept;
 // Stateless, zero-copy Annex-B scanner. Returned values are byte positions of
-// 3- or 4-byte start codes in `data`; use this for an already contiguous clip.
+// 3-byte 00 00 01 markers in `data`, matching the JavaScript reference parser.
 std::vector<size_t> find_annexb_start_codes(const uint8_t* data, size_t size);
 std::string to_json(const Header& header);
 

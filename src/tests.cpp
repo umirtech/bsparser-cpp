@@ -44,7 +44,8 @@ void test_annexb_fixture(Codec codec, const char* name) {
     const auto& unit = units[index];
     assert(unit.kind == UnitKind::NalUnit);
     assert(!unit.bytes.empty());
-    assert(unit.start_code_size == 3 || unit.start_code_size == 4);
+    assert(unit.start_code_size == 3);
+    assert(!unit.frame_start);
     if (index != 0) assert(previous_offset < unit.offset);
     previous_offset = unit.offset;
     has_keyframe = has_keyframe || unit.keyframe;
