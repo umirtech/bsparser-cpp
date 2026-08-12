@@ -2,59 +2,13 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
+#include <bitreader.h>
 
 namespace bsparser {
 
-enum class Codec { VP8, VP9, AV1, AVC, HEVC, VVC, Unknown };
-enum class ScanBackend { Scalar, Sse2, Neon, Avx2 };
 
-// The kind of elementary unit found in a raw stream.
-enum class UnitKind { Frame, Obu, NalUnit };
-
-// A complete unit extracted using the bundled JavaScript reference semantics.
-// Annex-B scanning recognizes only the 3-byte 00 00 01 marker. Consequently,
-// a leading zero from a 4-byte prefix is retained at the end of the preceding
-// unit. `frame_start` is always false because the reference has no access-unit
-// detection. AV1 units include their complete OBU header and payload.
-struct Unit {
-  UnitKind kind = UnitKind::Frame;
-  uint64_t offset = 0;
-  size_t start_code_size = 0;
-  uint8_t type = 0;
-  bool frame_start = false;
-  bool keyframe = false;
-  std::vector<uint8_t> bytes;
-};
-
-struct Header {
-  uint64_t offset = 0;
-  uint64_t length = 0;
-  std::string type;
-  bool keyframe = false;
-  std::map<std::string, std::string> fields;
-};
-
-// A safe, MSB-first reader for video syntax elements. All methods throw
-// std::out_of_range when the input is truncated.
-class BitReader {
- public:
-  explicit BitReader(const std::vector<uint8_t>& data);
-  uint32_t u(unsigned bits);
-  int32_t s(unsigned bits);
-  uint32_t ue();
-  int32_t se();
-  uint64_t leb128();
-  [[nodiscard]] size_t bit_position() const noexcept;
-  [[nodiscard]] size_t bits_left() const noexcept;
-  void skip(size_t bits);
-
- private:
-  const std::vector<uint8_t>& data_;
-  size_t bitpos_ = 0;
-};
 
 // Parses one complete elementary unit: a VP frame, an AV1 OBU sequence, or a
 // single Annex-B NAL payload (without its start code).
