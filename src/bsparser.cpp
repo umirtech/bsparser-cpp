@@ -1,16 +1,22 @@
 #include "bsparser.h"
 
-#include <avc_parse.h>
-#include <hevc_parse.h>
-#include <vvc_parse.h>
-#include <av1_parse.h>
-#include <vp9_parse.h>
-#include <vp8_parse.h>
-
 namespace bsparser
 {
+
+    struct ParserState{
+        HevcParseState hevcParseState;
+    };
+
+
+    ParserState* create_state(){
+        return new ParserState;
+    }
+
+    void destroy_state(ParserState* state){
+        delete state;
+    }
     
-    std::vector<Header> parse_unit(Codec c, const Bytes& b, uint64_t off)
+    std::vector<Header> parse_unit(Codec c, const Bytes& b, uint64_t off,ParserState* parserState)
     {
         switch (c)
         {
@@ -23,7 +29,7 @@ namespace bsparser
             case Codec::AVC:
                 return {parse_avc(b, off)};
             case Codec::HEVC:
-                return {parse_hevc(b, off)};
+                return {parse_hevc(b, off,parserState->hevcParseState)};
             case Codec::VVC:
                 return {parse_vvc(b, off)};
             default:
@@ -31,12 +37,13 @@ namespace bsparser
         }
     }
 
-    std::vector<Header> parse_unit(Codec codec, const Unit& unit)
+    std::vector<Header> parse_unit(Codec codec, const Unit& unit,ParserState* parserState)
     {
-        return parse_unit(codec, unit.bytes, unit.offset);
+        return parse_unit(codec, unit.bytes, unit.offset,parserState);
     }
 
-    UnitScanner::UnitScanner(Codec codec) : codec_(codec)
+    UnitScanner::UnitScanner(Codec codec,ParserState* parserState) 
+        : codec_(codec),parserState_(parserState)
     {
         if (codec == Codec::Unknown)
         {
@@ -315,7 +322,12 @@ namespace bsparser
             {
                 try
                 {
-                    auto headers = parse_unit(Codec::AV1, unit.bytes, unit.offset);
+                    auto headers = parse_unit(
+                        Codec::AV1,
+                        unit.bytes, 
+                        unit.offset,
+                        parserState_);
+
                     unit.keyframe = !headers.empty() && headers.front().keyframe;
                 }
                 catch (const std::exception&)
@@ -339,7 +351,8 @@ namespace bsparser
         return units;
     }
 
-    StreamParser::StreamParser(Codec codec) : codec_(codec)
+    StreamParser::StreamParser(Codec codec,ParserState* parserState) 
+        : codec_(codec),parserState_(parserState)
     {
         if (codec == Codec::Unknown) throw std::invalid_argument("unknown codec");
     }
@@ -357,7 +370,7 @@ namespace bsparser
             Bytes unit(data, data + size);
             const uint64_t unit_offset = input_offset_;
             input_offset_ += size;
-            return parse_unit(codec_, unit, unit_offset);
+            return parse_unit(codec_, unit, unit_offset,parserState_);
         }
 
         if (!size) return out;
@@ -394,7 +407,7 @@ namespace bsparser
             {
                 Bytes nal(pending_.begin() + startCodeSize, pending_.begin() + next);
                 const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? startCodeSize : 0);
-                auto hs = parse_unit(codec_, nal, header_offset);
+                auto hs = parse_unit(codec_, nal, header_offset,parserState_);
                 out.insert(out.end(), hs.begin(), hs.end());
                 first_annexb_header_ = false;
             }
@@ -417,7 +430,7 @@ namespace bsparser
 
                 const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? startCodeSize : 0);
 
-                auto hs = parse_unit(codec_, nal, header_offset);
+                auto hs = parse_unit(codec_, nal, header_offset,parserState_);
 
                 out.insert(out.end(), hs.begin(), hs.end());
             }
@@ -428,6 +441,9 @@ namespace bsparser
         first_annexb_header_ = true;
         return out;
     }
+
+
+    IvfParser::IvfParser(ParserState* parserState) :parserState_(parserState){}
 
     std::vector<Header> IvfParser::feed(const Bytes& data)
     {
@@ -466,7 +482,13 @@ namespace bsparser
             if (pending_.size() < 12ull + length) break;
             uint64_t ts = le64(pending_, 4);
             Bytes frame(pending_.begin() + 12, pending_.begin() + 12 + length);
-            auto hs = parse_unit(codec_, frame, offset_ + 12);
+
+            auto hs = parse_unit(
+                codec_,
+                 frame,
+                  offset_ + 12,
+                  parserState_);
+
             for (auto& h : hs)
             {
                 field(h, "timestamp", ts);

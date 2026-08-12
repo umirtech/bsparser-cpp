@@ -30,6 +30,7 @@ add_library(
     src/bitreader.cpp
     src/hevc_parse.cpp
     src/vvc_parse.cpp
+    src/avc_parse.cpp
     src/av1_parse.cpp
     src/vp9_parse.cpp
     src/vp8_parse.cpp

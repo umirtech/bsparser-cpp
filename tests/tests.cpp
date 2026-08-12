@@ -24,7 +24,9 @@ std::vector<uint8_t> read_fixture(const char* name)
 std::vector<Unit> scan_annexb_fixture(Codec codec, const char* name)
 {
     const auto bytes = read_fixture(name);
-    UnitScanner scanner(codec);
+
+    auto state = bsparser::create_state();
+    UnitScanner scanner(codec,state);
     std::vector<Unit> units;
     constexpr size_t kChunkSize = 4093;
     for (size_t offset = 0; offset < bytes.size(); offset += kChunkSize)
@@ -35,6 +37,7 @@ std::vector<Unit> scan_annexb_fixture(Codec codec, const char* name)
     }
     auto tail = scanner.finish();
     units.insert(units.end(), tail.begin(), tail.end());
+    bsparser::destroy_state(state);
     return units;
 }
 
@@ -43,6 +46,7 @@ void test_annexb_fixture(Codec codec, const char* name)
     const auto units = scan_annexb_fixture(codec, name);
     assert(units.size() > 1);
 
+    auto state = bsparser::create_state();
     bool has_keyframe = false;
     uint64_t previous_offset = 0;
     for (size_t index = 0; index < units.size(); ++index)
@@ -55,7 +59,8 @@ void test_annexb_fixture(Codec codec, const char* name)
         if (index != 0) assert(previous_offset < unit.offset);
         previous_offset = unit.offset;
         has_keyframe = has_keyframe || unit.keyframe;
-        assert(!parse_unit(codec, unit).empty());
+        assert(!parse_unit(codec, unit,state).empty());
+        bsparser::destroy_state(state);
     }
     assert(has_keyframe);
 }
@@ -63,7 +68,8 @@ void test_annexb_fixture(Codec codec, const char* name)
 void test_ivf_fixture(const char* name, Codec expected_codec, const char* fourcc)
 {
     const auto bytes = read_fixture(name);
-    IvfParser parser;
+    auto state = bsparser::create_state();
+    IvfParser parser(state);
     std::vector<Header> headers;
     constexpr size_t kChunkSize = 4093;
     for (size_t offset = 0; offset < bytes.size(); offset += kChunkSize)
@@ -81,6 +87,8 @@ void test_ivf_fixture(const char* name, Codec expected_codec, const char* fourcc
     {
         assert(headers[index].fields.count("timestamp") == 1);
     }
+
+    bsparser::destroy_state(state);
 }
 
 }  // namespace

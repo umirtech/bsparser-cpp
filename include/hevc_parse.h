@@ -1,8 +1,10 @@
 #pragma once
 #include <cstddef>
+#include <unordered_map>
 #include <bitreader.h>
 
 namespace bsparser {
+   
    
    struct HevcShortTermRps
    {
@@ -15,17 +17,41 @@ namespace bsparser {
       uint32_t num_negative_pics = 0;
       uint32_t num_positive_pics = 0;
 
-      std::vector<uint32_t> delta_poc_s0_minus1;
-      std::vector<uint8_t> used_by_curr_pic_s0_flag;
+      uint32_t num_long_term_ref_pics_sps = 0;
+      bool long_term_ref_pics_present_flag = false;
 
-      std::vector<uint32_t> delta_poc_s1_minus1;
-      std::vector<uint8_t> used_by_curr_pic_s1_flag;
+      std::vector<uint32_t> lt_ref_pic_poc_lsb_sps;
+      std::vector<bool> used_by_curr_pic_lt_sps_flag;
 
-      std::vector<uint8_t> used_by_curr_pic_flag;
-      std::vector<uint8_t> use_delta_flag;
+      // Derived DeltaPocS0 / DeltaPocS1.
+      std::vector<int32_t> delta_poc_s0;
+      std::vector<int32_t> delta_poc_s1;
 
-      // Derived number of delta POCs.
-      uint32_t num_delta_pocs = 0;
+      // Corresponding UsedByCurrPicS0 / UsedByCurrPicS1.
+      std::vector<bool> used_by_curr_pic_s0;
+      std::vector<bool> used_by_curr_pic_s1;
+
+      // Number of entries in the complete RPS.
+      uint32_t num_delta_pocs() const
+      {
+         return static_cast<uint32_t>(
+               delta_poc_s0.size() +
+               delta_poc_s1.size()
+         );
+      }
+
+      uint32_t num_used_by_curr_pic() const
+      {
+         uint32_t count = 0;
+
+         for (bool v : used_by_curr_pic_s0)
+               count += v ? 1 : 0;
+
+         for (bool v : used_by_curr_pic_s1)
+               count += v ? 1 : 0;
+
+         return count;
+      }
    };
 
 
@@ -223,6 +249,9 @@ namespace bsparser {
       bool collocated_from_l0_flag = true;
       uint32_t collocated_ref_idx = 0;
 
+      uint32_t num_pic_total_curr = 0;
+      uint32_t num_long_term_curr = 0;
+
       bool ref_pic_list_modification_flag_l0 = false;
       bool ref_pic_list_modification_flag_l1 = false;
 
@@ -231,6 +260,36 @@ namespace bsparser {
       uint32_t five_minus_max_num_merge_cand = 0;
 
       std::vector<uint32_t> slice_reserved_flag;
+
+
+      bool mvd_l1_zero_flag = false;
+      bool cabac_init_flag = false;
+
+      int32_t slice_qp_delta = 0;
+
+      int32_t slice_cb_qp_offset = 0;
+      int32_t slice_cr_qp_offset = 0;
+
+      bool cu_chroma_qp_offset_enabled_flag = false;
+
+
+      // -------------------------------------------------------------------------
+      // Entry point information
+      // -------------------------------------------------------------------------
+
+      uint32_t num_entry_point_offsets = 0;
+      uint32_t offset_len_minus1 = 0;
+
+      std::vector<uint32_t> entry_point_offset_minus1;
+
+      // -------------------------------------------------------------------------
+      // Slice header extension
+      // -------------------------------------------------------------------------
+
+      uint32_t slice_segment_header_extension_length = 0;
+      std::vector<uint8_t> slice_segment_header_extension_data_byte;
+
+
 
       // Long-term reference picture syntax.
       uint32_t num_long_term_sps = 0;
@@ -241,6 +300,8 @@ namespace bsparser {
       std::vector<uint8_t> used_by_curr_pic_lt_flag;
       std::vector<uint8_t> delta_poc_msb_present_flag;
       std::vector<uint32_t> delta_poc_msb_cycle_lt;
+      std::vector<uint32_t> list_entry_l0;
+      std::vector<uint32_t> list_entry_l1;
    };
 
 
