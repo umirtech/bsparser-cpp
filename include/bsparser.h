@@ -71,7 +71,6 @@ namespace bsparser {
     uint64_t input_offset_ = 0;
     size_t startCodeSize = 0;
     bool annexb_started_ = false;
-    bool first_annexb_header_ = true;
   };
 
   // Incremental IVF parser. It detects the codec from FourCC and emits the IVF

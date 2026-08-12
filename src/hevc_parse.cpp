@@ -118,6 +118,214 @@ namespace bsparser{
     }
 
 
+
+
+    void parse_hevc_pred_weight_table(
+        BitReader& b,
+        Header& h,
+        HevcSlice& slice,
+        const HevcSps& sps)
+    {
+        const uint32_t lumaLog2WeightDenom =
+            static_cast<uint32_t>(b.ue());
+
+        field(
+            h,
+            "luma_log2_weight_denom",
+            lumaLog2WeightDenom
+        );
+
+        uint32_t deltaChromaLog2WeightDenom = 0;
+
+        if (sps.chroma_format_idc != 0)
+        {
+            deltaChromaLog2WeightDenom =
+                static_cast<uint32_t>(b.se());
+
+            field(
+                h,
+                "delta_chroma_log2_weight_denom",
+                deltaChromaLog2WeightDenom
+            );
+        }
+
+        // -------------------------------------------------------------
+        // L0 luma weight flags
+        // -------------------------------------------------------------
+
+        const uint32_t numL0 =
+            slice.num_ref_idx_l0_active_minus1 + 1;
+
+        std::vector<bool> lumaWeightL0Flag(numL0);
+
+        for (uint32_t i = 0; i < numL0; ++i)
+        {
+            lumaWeightL0Flag[i] =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "luma_weight_l0_flag[" +
+                    std::to_string(i) + "]",
+                lumaWeightL0Flag[i]
+            );
+        }
+
+        // -------------------------------------------------------------
+        // L0 chroma weight flags
+        // -------------------------------------------------------------
+
+        std::vector<bool> chromaWeightL0Flag(numL0);
+
+        if (sps.chroma_format_idc != 0)
+        {
+            for (uint32_t i = 0; i < numL0; ++i)
+            {
+                chromaWeightL0Flag[i] =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "chroma_weight_l0_flag[" +
+                        std::to_string(i) + "]",
+                    chromaWeightL0Flag[i]
+                );
+            }
+        }
+
+        // -------------------------------------------------------------
+        // L0 weight values
+        // -------------------------------------------------------------
+
+        for (uint32_t i = 0; i < numL0; ++i)
+        {
+            if (lumaWeightL0Flag[i])
+            {
+                field(
+                    h,
+                    "delta_luma_weight_l0[" +
+                        std::to_string(i) + "]",
+                    b.se()
+                );
+
+                field(
+                    h,
+                    "luma_offset_l0[" +
+                        std::to_string(i) + "]",
+                    b.se()
+                );
+            }
+
+            if (chromaWeightL0Flag[i])
+            {
+                for (uint32_t j = 0; j < 2; ++j)
+                {
+                    field(
+                        h,
+                        "delta_chroma_weight_l0[" +
+                            std::to_string(i) + "][" +
+                            std::to_string(j) + "]",
+                        b.se()
+                    );
+
+                    field(
+                        h,
+                        "delta_chroma_offset_l0[" +
+                            std::to_string(i) + "][" +
+                            std::to_string(j) + "]",
+                        b.se()
+                    );
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // List 1 for B slices
+        // -------------------------------------------------------------
+
+        if (slice.slice_type == 0)
+        {
+            const uint32_t numL1 =
+                slice.num_ref_idx_l1_active_minus1 + 1;
+
+            std::vector<bool> lumaWeightL1Flag(numL1);
+
+            for (uint32_t i = 0; i < numL1; ++i)
+            {
+                lumaWeightL1Flag[i] =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "luma_weight_l1_flag[" +
+                        std::to_string(i) + "]",
+                    lumaWeightL1Flag[i]
+                );
+            }
+
+            std::vector<bool> chromaWeightL1Flag(numL1);
+
+            if (sps.chroma_format_idc != 0)
+            {
+                for (uint32_t i = 0; i < numL1; ++i)
+                {
+                    chromaWeightL1Flag[i] =
+                        b.u(1) != 0;
+
+                    field(
+                        h,
+                        "chroma_weight_l1_flag[" +
+                            std::to_string(i) + "]",
+                        chromaWeightL1Flag[i]
+                    );
+                }
+            }
+
+            for (uint32_t i = 0; i < numL1; ++i)
+            {
+                if (lumaWeightL1Flag[i])
+                {
+                    field(
+                        h,
+                        "delta_luma_weight_l1[" +
+                            std::to_string(i) + "]",
+                        b.se()
+                    );
+
+                    field(
+                        h,
+                        "luma_offset_l1[" +
+                            std::to_string(i) + "]",
+                        b.se()
+                    );
+                }
+
+                if (chromaWeightL1Flag[i])
+                {
+                    for (uint32_t j = 0; j < 2; ++j)
+                    {
+                        field(
+                            h,
+                            "delta_chroma_weight_l1[" +
+                                std::to_string(i) + "][" +
+                                std::to_string(j) + "]",
+                            b.se()
+                        );
+
+                        field(
+                            h,
+                            "delta_chroma_offset_l1[" +
+                                std::to_string(i) + "][" +
+                                std::to_string(j) + "]",
+                            b.se()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+
     void parse_hevc_ref_pic_list_modification(
         BitReader& b,
         Header& h,
@@ -4460,6 +4668,71 @@ namespace bsparser{
         }
 
 
+        // =========================================================================
+        // Temporal MVP / collocated reference
+        // =========================================================================
+        //
+        // slice_temporal_mvp_enabled_flag is present only when
+        // sps_temporal_mvp_enabled_flag is enabled.
+        //
+        // This flag MUST be consumed before collocated_from_l0_flag.
+        // =========================================================================
+
+        if (sps.temporal_mvp_enabled_flag)
+        {
+            slice.slice_temporal_mvp_enabled_flag =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "slice_temporal_mvp_enabled_flag",
+                slice.slice_temporal_mvp_enabled_flag
+            );
+        }
+        else
+        {
+            slice.slice_temporal_mvp_enabled_flag = false;
+        }
+
+        if (slice.slice_temporal_mvp_enabled_flag)
+        {
+            if (slice.slice_type == 0) // B
+            {
+                slice.collocated_from_l0_flag =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "collocated_from_l0_flag",
+                    slice.collocated_from_l0_flag
+                );
+            }
+            else
+            {
+                // For P slices the collocated picture is from List 0.
+                slice.collocated_from_l0_flag = true;
+            }
+
+            const bool needCollocatedRefIdx =
+                (slice.collocated_from_l0_flag &&
+                slice.num_ref_idx_l0_active_minus1 > 0) ||
+                (!slice.collocated_from_l0_flag &&
+                slice.num_ref_idx_l1_active_minus1 > 0);
+
+            if (needCollocatedRefIdx)
+            {
+                slice.collocated_ref_idx =
+                    static_cast<uint32_t>(b.ue());
+
+                field(
+                    h,
+                    "collocated_ref_idx",
+                    slice.collocated_ref_idx
+                );
+            }
+        }
+
+
 
         // =========================================================================
         // Temporal MVP / collocated reference
@@ -4855,6 +5128,7 @@ namespace bsparser{
 
         Bytes r = rbsp(d, 2);
         BitReader b(r);
+
         try
         {
             if (nal_unit_type == 32)
