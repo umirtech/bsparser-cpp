@@ -380,6 +380,7 @@ namespace bsparser
         }
 
         if (!size) return out;
+
         pending_.insert(pending_.end(), data, data + size);
         input_offset_ += size;
 
@@ -391,13 +392,24 @@ namespace bsparser
             {
                 if (pending_.size() > startCodeSize)
                 {
-                    pending_offset_ += pending_.size() - startCodeSize;
-                    pending_.erase(pending_.begin(), pending_.end() - startCodeSize);
+                    const size_t keep = startCodeSize;
+
+                    pending_offset_ += pending_.size() - keep;
+
+                    pending_.erase(
+                        pending_.begin(),
+                        pending_.end() - keep);
                 }
+
                 return out;
             }
+
             pending_offset_ += first;
-            pending_.erase(pending_.begin(), pending_.begin() + first);
+
+            pending_.erase(
+                pending_.begin(),
+                pending_.begin() + first);
+
             annexb_started_ = true;
         }
 
@@ -406,10 +418,11 @@ namespace bsparser
             if (pending_.size() < startCodeSize)
                 break;
 
-            size_t next = start_code(
-                pending_,
-                startCodeSize,
-                startCodeSize);
+            const size_t next =
+                start_code(
+                    pending_,
+                    startCodeSize,
+                    startCodeSize);
 
             if (next == std::string::npos)
                 break;
@@ -426,9 +439,10 @@ namespace bsparser
                     0,
                     parserState_);
 
-                out.insert(out.end(), hs.begin(), hs.end());
-
-                first_annexb_header_ = false;
+                out.insert(
+                    out.end(),
+                    hs.begin(),
+                    hs.end());
             }
 
             pending_offset_ += next;
