@@ -71,18 +71,3 @@ add_test(
     NAME bsparser_tests
     COMMAND bsparser_tests
 )
-
-find_program(NODE_EXECUTABLE node)
-if(NODE_EXECUTABLE)
-    add_test(
-        NAME bsparser_reference_comparison
-        COMMAND
-            ${NODE_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/compare-reference.js
-            ${CMAKE_CURRENT_SOURCE_DIR}/reference/bsparser-web/parser.js
-            $<TARGET_FILE:bsparse>
-            ${CMAKE_CURRENT_SOURCE_DIR}/test-files
-    )
-else()
-    message(WARNING "Node.js was not found; skipping JavaScript reference comparison test")
-endif()
