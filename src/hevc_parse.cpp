@@ -21,6 +21,243 @@ namespace bsparser{
         return n;
     }
 
+    uint32_t hevc_num_pic_total_curr(
+        const HevcShortTermRps& rps,
+        uint32_t numLongTermCurr)
+    {
+        return
+            rps.num_used_by_curr_pic() +
+            numLongTermCurr;
+    }
+
+
+    unsigned hevc_num_pic_total_curr_bits(
+        uint32_t numPicTotalCurr)
+    {
+        return hevc_ceil_log2(
+            numPicTotalCurr
+        );
+    }
+
+
+    uint32_t hevc_num_long_term_curr(
+        const HevcSps& sps,
+        const HevcSlice& slice)
+    {
+        uint32_t count = 0;
+
+        // -------------------------------------------------------------------------
+        // Long-term references coming from SPS
+        // -------------------------------------------------------------------------
+
+        for (uint32_t i = 0;
+            i < slice.num_long_term_sps;
+            ++i)
+        {
+            const uint32_t idx =
+                slice.lt_idx_sps[i];
+
+            if (idx >= sps.used_by_curr_pic_lt_sps_flag.size())
+            {
+                throw std::runtime_error(
+                    "invalid HEVC long-term SPS index");
+            }
+
+            if (sps.used_by_curr_pic_lt_sps_flag[idx])
+            {
+                ++count;
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Long-term references explicitly signalled in the slice
+        // -------------------------------------------------------------------------
+
+        for (uint32_t i = 0;
+            i < slice.num_long_term_pics;
+            ++i)
+        {
+            if (i >=
+                slice.used_by_curr_pic_lt_flag.size())
+            {
+                throw std::runtime_error(
+                    "invalid HEVC long-term slice reference index");
+            }
+
+            if (slice.used_by_curr_pic_lt_flag[
+                    slice.num_long_term_sps + i])
+            {
+                ++count;
+            }
+        }
+
+        return count;
+    }
+
+
+    const HevcShortTermRps& hevc_get_active_rps(
+        const HevcSps& sps,
+        const HevcSlice& slice,
+        const HevcShortTermRps& inlineRps)
+    {
+        if (!slice.short_term_ref_pic_set_sps_flag)
+        {
+            return inlineRps;
+        }
+
+        if (slice.short_term_ref_pic_set_idx >=
+            sps.short_term_ref_pic_sets.size())
+        {
+            throw std::runtime_error(
+                "invalid HEVC active short-term RPS index");
+        }
+
+        return sps.short_term_ref_pic_sets[
+            slice.short_term_ref_pic_set_idx
+        ];
+    }
+
+
+    void parse_hevc_ref_pic_list_modification(
+        BitReader& b,
+        Header& h,
+        HevcSlice& slice,
+        const HevcPps& pps,
+        uint32_t numPicTotalCurr)
+    {
+        slice.num_pic_total_curr =
+            numPicTotalCurr;
+
+        field(
+            h,
+            "num_pic_total_curr",
+            numPicTotalCurr
+        );
+
+        // =========================================================================
+        // HEVC only signals list modification when there is more than one possible
+        // current reference picture.
+        // =========================================================================
+
+        if (!pps.lists_modification_present_flag ||
+            numPicTotalCurr <= 1)
+        {
+            return;
+        }
+
+        const unsigned listEntryBits =
+            hevc_ceil_log2(numPicTotalCurr);
+
+        // =========================================================================
+        // List 0
+        // =========================================================================
+
+        if (slice.slice_type == 1 ||
+            slice.slice_type == 0)
+        {
+            slice.ref_pic_list_modification_flag_l0 =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "ref_pic_list_modification_flag_l0",
+                slice.ref_pic_list_modification_flag_l0
+            );
+
+            if (slice.ref_pic_list_modification_flag_l0)
+            {
+                slice.list_entry_l0.resize(
+                    slice.num_ref_idx_l0_active_minus1 + 1
+                );
+
+                for (uint32_t i = 0;
+                    i <= slice.num_ref_idx_l0_active_minus1;
+                    ++i)
+                {
+                    uint32_t entry = 0;
+
+                    if (listEntryBits > 0)
+                    {
+                        entry =
+                            static_cast<uint32_t>(
+                                b.u(listEntryBits)
+                            );
+                    }
+
+                    if (entry >= numPicTotalCurr)
+                    {
+                        throw std::runtime_error(
+                            "invalid HEVC list_entry_l0");
+                    }
+
+                    slice.list_entry_l0[i] =
+                        entry;
+
+                    field(
+                        h,
+                        "list_entry_l0[" +
+                            std::to_string(i) + "]",
+                        entry
+                    );
+                }
+            }
+        }
+
+        // =========================================================================
+        // List 1
+        // =========================================================================
+
+        if (slice.slice_type == 0)
+        {
+            slice.ref_pic_list_modification_flag_l1 =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "ref_pic_list_modification_flag_l1",
+                slice.ref_pic_list_modification_flag_l1
+            );
+
+            if (slice.ref_pic_list_modification_flag_l1)
+            {
+                slice.list_entry_l1.resize(
+                    slice.num_ref_idx_l1_active_minus1 + 1
+                );
+
+                for (uint32_t i = 0;
+                    i <= slice.num_ref_idx_l1_active_minus1;
+                    ++i)
+                {
+                    uint32_t entry = 0;
+
+                    if (listEntryBits > 0)
+                    {
+                        entry =
+                            static_cast<uint32_t>(
+                                b.u(listEntryBits)
+                            );
+                    }
+
+                    if (entry >= numPicTotalCurr)
+                    {
+                        throw std::runtime_error(
+                            "invalid HEVC list_entry_l1");
+                    }
+
+                    slice.list_entry_l1[i] =
+                        entry;
+
+                    field(
+                        h,
+                        "list_entry_l1[" +
+                            std::to_string(i) + "]",
+                        entry
+                    );
+                }
+            }
+        }
+    }
+
 
     HevcShortTermRps parse_hevc_short_term_ref_pic_set(
         BitReader& b,
@@ -31,19 +268,9 @@ namespace bsparser{
     {
         HevcShortTermRps rps;
 
-        /*
-        * short_term_ref_pic_set()
-        *
-        * When parsing an SPS:
-        *
-        *     stRpsIdx < numShortTermRefPicSets
-        *
-        * When parsing an inline RPS in a slice:
-        *
-        *     stRpsIdx == numShortTermRefPicSets
-        *
-        * The latter case is why delta_idx_minus1 exists.
-        */
+        // =========================================================================
+        // inter_ref_pic_set_prediction_flag
+        // =========================================================================
 
         if (stRpsIdx != 0)
         {
@@ -58,285 +285,497 @@ namespace bsparser{
             );
         }
 
-        // -------------------------------------------------------------------------
-        // Predicted short-term reference picture set
-        // -------------------------------------------------------------------------
+        // =========================================================================
+        // Non-predicted RPS
+        // =========================================================================
 
-        if (rps.inter_ref_pic_set_prediction_flag)
+        if (!rps.inter_ref_pic_set_prediction_flag)
         {
-            uint32_t deltaIdxMinus1 = 0;
+            rps.num_negative_pics =
+                static_cast<uint32_t>(b.ue());
 
-            if (stRpsIdx == numShortTermRefPicSets)
-            {
-                deltaIdxMinus1 =
-                    static_cast<uint32_t>(b.ue());
-
-                rps.delta_idx_minus1 = deltaIdxMinus1;
-
-                field(
-                    h,
-                    "delta_idx_minus1",
-                    deltaIdxMinus1
-                );
-            }
-
-            /*
-            * The referenced RPS is:
-            *
-            *     RefRpsIdx = stRpsIdx - (delta_idx_minus1 + 1)
-            *
-            * For an SPS RPS, delta_idx_minus1 is implicitly zero.
-            */
-            if (deltaIdxMinus1 + 1 > stRpsIdx)
-            {
-                throw std::runtime_error(
-                    "invalid HEVC short-term RPS delta_idx_minus1");
-            }
-
-            const uint32_t refRpsIdx =
-                stRpsIdx - (deltaIdxMinus1 + 1);
-
-            if (refRpsIdx >= previousRps.size())
-            {
-                throw std::runtime_error(
-                    "HEVC short-term RPS references unavailable RPS");
-            }
-
-            const HevcShortTermRps& refRps =
-                previousRps[refRpsIdx];
-
-            const uint32_t refNumDeltaPocs =
-                refRps.num_delta_pocs;
-
-            /*
-            * delta_rps_sign
-            *
-            * deltaRps = (1 - 2 * delta_rps_sign)
-            *            * (abs_delta_rps_minus1 + 1)
-            */
-            rps.delta_rps_sign =
-                b.u(1) != 0;
-
-            field(
-                h,
-                "delta_rps_sign",
-                rps.delta_rps_sign
-            );
-
-            rps.abs_delta_rps_minus1 =
+            rps.num_positive_pics =
                 static_cast<uint32_t>(b.ue());
 
             field(
                 h,
-                "abs_delta_rps_minus1",
-                rps.abs_delta_rps_minus1
+                "num_negative_pics[" +
+                    std::to_string(stRpsIdx) + "]",
+                rps.num_negative_pics
             );
 
-            /*
-            * There is one used_by_curr_pic_flag for every reference
-            * picture in the referenced RPS, plus one additional entry
-            * for the delta RPS itself.
-            *
-            * j = 0 ... NumDeltaPocs
-            */
-            const uint32_t numDeltaPocsPlus1 =
-                refNumDeltaPocs + 1;
-
-            rps.used_by_curr_pic_flag.resize(
-                numDeltaPocsPlus1
+            field(
+                h,
+                "num_positive_pics[" +
+                    std::to_string(stRpsIdx) + "]",
+                rps.num_positive_pics
             );
 
-            rps.use_delta_flag.resize(
-                numDeltaPocsPlus1
-            );
+            constexpr uint32_t kMaxRpsPics = 1024;
 
-            for (uint32_t j = 0;
-                j < numDeltaPocsPlus1;
-                ++j)
+            if (rps.num_negative_pics +
+                    rps.num_positive_pics >
+                kMaxRpsPics)
             {
-                const uint8_t used =
-                    static_cast<uint8_t>(b.u(1));
+                throw std::runtime_error(
+                    "HEVC short-term RPS contains too many pictures");
+            }
 
-                rps.used_by_curr_pic_flag[j] = used;
+            rps.delta_poc_s0.resize(
+                rps.num_negative_pics
+            );
+
+            rps.used_by_curr_pic_s0.resize(
+                rps.num_negative_pics
+            );
+
+            rps.delta_poc_s1.resize(
+                rps.num_positive_pics
+            );
+
+            rps.used_by_curr_pic_s1.resize(
+                rps.num_positive_pics
+            );
+
+            // ---------------------------------------------------------------------
+            // Negative pictures
+            //
+            // Syntax stores delta_poc_s0_minus1.
+            //
+            // Derived:
+            //
+            // DeltaPocS0[0] = -(delta_poc_s0_minus1[0] + 1)
+            //
+            // DeltaPocS0[i] = DeltaPocS0[i-1]
+            //                 - delta_poc_s0_minus1[i] - 1
+            // ---------------------------------------------------------------------
+
+            int32_t prevDeltaPoc = 0;
+
+            for (uint32_t i = 0;
+                i < rps.num_negative_pics;
+                ++i)
+            {
+                const uint32_t deltaMinus1 =
+                    static_cast<uint32_t>(b.ue());
+
+                const bool used =
+                    b.u(1) != 0;
 
                 field(
                     h,
-                    "used_by_curr_pic_flag[" +
+                    "delta_poc_s0_minus1[" +
                         std::to_string(stRpsIdx) + "][" +
-                        std::to_string(j) + "]",
+                        std::to_string(i) + "]",
+                    deltaMinus1
+                );
+
+                field(
+                    h,
+                    "used_by_curr_pic_s0_flag[" +
+                        std::to_string(stRpsIdx) + "][" +
+                        std::to_string(i) + "]",
                     used
                 );
 
-                /*
-                * use_delta_flag is present only when
-                * used_by_curr_pic_flag == 0.
-                *
-                * When used_by_curr_pic_flag == 1,
-                * use_delta_flag is inferred to 1.
-                */
-                if (!used)
+                if (i == 0)
                 {
-                    const uint8_t useDelta =
-                        static_cast<uint8_t>(b.u(1));
-
-                    rps.use_delta_flag[j] = useDelta;
-
-                    field(
-                        h,
-                        "use_delta_flag[" +
-                            std::to_string(stRpsIdx) + "][" +
-                            std::to_string(j) + "]",
-                        useDelta
-                    );
+                    prevDeltaPoc =
+                        -static_cast<int32_t>(
+                            deltaMinus1 + 1
+                        );
                 }
                 else
                 {
-                    rps.use_delta_flag[j] = 1;
+                    prevDeltaPoc -=
+                        static_cast<int32_t>(
+                            deltaMinus1 + 1
+                        );
                 }
+
+                rps.delta_poc_s0[i] =
+                    prevDeltaPoc;
+
+                rps.used_by_curr_pic_s0[i] =
+                    used;
             }
 
-            /*
-            * Number of delta POCs in the predicted RPS is not simply
-            * refNumDeltaPocs + 1. It depends on use_delta_flag.
-            *
-            * The actual POC construction can be added later. For now,
-            * calculate the number needed by subsequent syntax.
-            */
-            uint32_t numDeltaPocs = 0;
+            // ---------------------------------------------------------------------
+            // Positive pictures
+            // ---------------------------------------------------------------------
 
-            for (uint32_t j = 0;
-                j < numDeltaPocsPlus1;
-                ++j)
+            prevDeltaPoc = 0;
+
+            for (uint32_t i = 0;
+                i < rps.num_positive_pics;
+                ++i)
             {
-                if (rps.use_delta_flag[j])
-                    ++numDeltaPocs;
-            }
+                const uint32_t deltaMinus1 =
+                    static_cast<uint32_t>(b.ue());
 
-            rps.num_delta_pocs = numDeltaPocs;
+                const bool used =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "delta_poc_s1_minus1[" +
+                        std::to_string(stRpsIdx) + "][" +
+                        std::to_string(i) + "]",
+                    deltaMinus1
+                );
+
+                field(
+                    h,
+                    "used_by_curr_pic_s1_flag[" +
+                        std::to_string(stRpsIdx) + "][" +
+                        std::to_string(i) + "]",
+                    used
+                );
+
+                if (i == 0)
+                {
+                    prevDeltaPoc =
+                        static_cast<int32_t>(
+                            deltaMinus1 + 1
+                        );
+                }
+                else
+                {
+                    prevDeltaPoc +=
+                        static_cast<int32_t>(
+                            deltaMinus1 + 1
+                        );
+                }
+
+                rps.delta_poc_s1[i] =
+                    prevDeltaPoc;
+
+                rps.used_by_curr_pic_s1[i] =
+                    used;
+            }
 
             return rps;
         }
 
-        // -------------------------------------------------------------------------
-        // Explicit short-term reference picture set
-        // -------------------------------------------------------------------------
+        // =========================================================================
+        // Predicted RPS
+        // =========================================================================
 
-        rps.num_negative_pics =
-            static_cast<uint32_t>(b.ue());
-
-        rps.num_positive_pics =
-            static_cast<uint32_t>(b.ue());
-
-        field(
-            h,
-            "num_negative_pics[" +
-                std::to_string(stRpsIdx) + "]",
-            rps.num_negative_pics
-        );
-
-        field(
-            h,
-            "num_positive_pics[" +
-                std::to_string(stRpsIdx) + "]",
-            rps.num_positive_pics
-        );
-
-        /*
-        * Sanity limit.
-        *
-        * This is not a substitute for the profile/level constraints,
-        * but prevents pathological allocation from malformed input.
-        */
-        constexpr uint32_t kMaxRpsPictures = 4096;
-
-        if (rps.num_negative_pics > kMaxRpsPictures ||
-            rps.num_positive_pics > kMaxRpsPictures)
+        if (stRpsIdx == 0)
         {
             throw std::runtime_error(
-                "HEVC short-term RPS picture count too large");
+                "invalid HEVC RPS prediction at index 0");
         }
 
-        rps.delta_poc_s0_minus1.resize(
-            rps.num_negative_pics
-        );
+        // -------------------------------------------------------------------------
+        // delta_idx_minus1
+        // -------------------------------------------------------------------------
 
-        rps.used_by_curr_pic_s0_flag.resize(
-            rps.num_negative_pics
-        );
+        if (stRpsIdx == numShortTermRefPicSets)
+        {
+            rps.delta_idx_minus1 =
+                static_cast<uint32_t>(
+                    b.ue()
+                );
 
-        rps.delta_poc_s1_minus1.resize(
-            rps.num_positive_pics
-        );
+            field(
+                h,
+                "delta_idx_minus1",
+                rps.delta_idx_minus1
+            );
+        }
 
-        rps.used_by_curr_pic_s1_flag.resize(
-            rps.num_positive_pics
+        if (rps.delta_idx_minus1 >= stRpsIdx)
+        {
+            throw std::runtime_error(
+                "invalid HEVC delta_idx_minus1");
+        }
+
+        const uint32_t refRpsIdx =
+            stRpsIdx -
+            (rps.delta_idx_minus1 + 1);
+
+        if (refRpsIdx >= previousRps.size())
+        {
+            throw std::runtime_error(
+                "HEVC RPS references unavailable RPS");
+        }
+
+        const HevcShortTermRps& refRps =
+            previousRps[refRpsIdx];
+
+        // -------------------------------------------------------------------------
+        // delta_rps_sign
+        // -------------------------------------------------------------------------
+
+        rps.delta_rps_sign =
+            b.u(1) != 0;
+
+        field(
+            h,
+            "delta_rps_sign",
+            rps.delta_rps_sign
         );
 
         // -------------------------------------------------------------------------
-        // Negative pictures
+        // abs_delta_rps_minus1
         // -------------------------------------------------------------------------
 
-        for (uint32_t i = 0;
-            i < rps.num_negative_pics;
+        rps.abs_delta_rps_minus1 =
+            static_cast<uint32_t>(
+                b.ue()
+            );
+
+        field(
+            h,
+            "abs_delta_rps_minus1",
+            rps.abs_delta_rps_minus1
+        );
+
+        const int32_t deltaRps =
+            rps.delta_rps_sign
+                ? -static_cast<int32_t>(
+                    rps.abs_delta_rps_minus1 + 1
+                )
+                : static_cast<int32_t>(
+                    rps.abs_delta_rps_minus1 + 1
+                );
+
+        const uint32_t refNumDeltaPocs =
+            refRps.num_delta_pocs();
+
+        // -------------------------------------------------------------------------
+        // used_by_curr_pic_flag / use_delta_flag
+        //
+        // There is one additional entry for deltaRps itself.
+        // -------------------------------------------------------------------------
+
+        std::vector<bool> usedByCurrPicFlag(
+            refNumDeltaPocs + 1
+        );
+
+        std::vector<bool> useDeltaFlag(
+            refNumDeltaPocs + 1
+        );
+
+        for (uint32_t j = 0;
+            j <= refNumDeltaPocs;
+            ++j)
+        {
+            usedByCurrPicFlag[j] =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "used_by_curr_pic_flag[" +
+                    std::to_string(j) + "]",
+                usedByCurrPicFlag[j]
+            );
+
+            if (!usedByCurrPicFlag[j])
+            {
+                useDeltaFlag[j] =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "use_delta_flag[" +
+                        std::to_string(j) + "]",
+                    useDeltaFlag[j]
+                );
+            }
+            else
+            {
+                useDeltaFlag[j] = true;
+            }
+        }
+
+        // =========================================================================
+        // Build temporary source RPS in spec order
+        // =========================================================================
+
+        std::vector<int32_t> refDeltaPoc;
+        std::vector<bool> refUsed;
+
+        refDeltaPoc.reserve(
+            refNumDeltaPocs
+        );
+
+        refUsed.reserve(
+            refNumDeltaPocs
+        );
+
+        for (size_t i = 0;
+            i < refRps.delta_poc_s0.size();
             ++i)
         {
-            rps.delta_poc_s0_minus1[i] =
-                static_cast<uint32_t>(b.ue());
-
-            field(
-                h,
-                "delta_poc_s0_minus1[" +
-                    std::to_string(stRpsIdx) + "][" +
-                    std::to_string(i) + "]",
-                rps.delta_poc_s0_minus1[i]
+            refDeltaPoc.push_back(
+                refRps.delta_poc_s0[i]
             );
 
-            rps.used_by_curr_pic_s0_flag[i] =
-                static_cast<uint8_t>(b.u(1));
-
-            field(
-                h,
-                "used_by_curr_pic_s0_flag[" +
-                    std::to_string(stRpsIdx) + "][" +
-                    std::to_string(i) + "]",
-                rps.used_by_curr_pic_s0_flag[i]
+            refUsed.push_back(
+                refRps.used_by_curr_pic_s0[i]
             );
         }
 
-        // -------------------------------------------------------------------------
-        // Positive pictures
-        // -------------------------------------------------------------------------
-
-        for (uint32_t i = 0;
-            i < rps.num_positive_pics;
+        for (size_t i = 0;
+            i < refRps.delta_poc_s1.size();
             ++i)
         {
-            rps.delta_poc_s1_minus1[i] =
-                static_cast<uint32_t>(b.ue());
-
-            field(
-                h,
-                "delta_poc_s1_minus1[" +
-                    std::to_string(stRpsIdx) + "][" +
-                    std::to_string(i) + "]",
-                rps.delta_poc_s1_minus1[i]
+            refDeltaPoc.push_back(
+                refRps.delta_poc_s1[i]
             );
 
-            rps.used_by_curr_pic_s1_flag[i] =
-                static_cast<uint8_t>(b.u(1));
-
-            field(
-                h,
-                "used_by_curr_pic_s1_flag[" +
-                    std::to_string(stRpsIdx) + "][" +
-                    std::to_string(i) + "]",
-                rps.used_by_curr_pic_s1_flag[i]
+            refUsed.push_back(
+                refRps.used_by_curr_pic_s1[i]
             );
         }
 
-        rps.num_delta_pocs =
-            rps.num_negative_pics +
-            rps.num_positive_pics;
+
+
+        // =========================================================================
+        // The previous loop must not iterate over the vector being appended to.
+        //
+        // Rebuild DeltaPocS0 safely.
+        // =========================================================================
+
+        rps.delta_poc_s0.clear();
+        rps.used_by_curr_pic_s0.clear();
+
+        // Positive source entries, reverse.
+        for (int j =
+                static_cast<int>(
+                    refRps.delta_poc_s1.size()
+                ) - 1;
+            j >= 0;
+            --j)
+        {
+            const uint32_t sourceIndex =
+                refRps.num_negative_pics +
+                static_cast<uint32_t>(j);
+
+            const int32_t dPoc =
+                refRps.delta_poc_s1[j] +
+                deltaRps;
+
+            if (dPoc < 0 &&
+                useDeltaFlag[sourceIndex])
+            {
+                rps.delta_poc_s0.push_back(dPoc);
+                rps.used_by_curr_pic_s0.push_back(
+                    usedByCurrPicFlag[sourceIndex]
+                );
+            }
+        }
+
+        // deltaRps.
+        if (deltaRps < 0 &&
+            useDeltaFlag[refNumDeltaPocs])
+        {
+            rps.delta_poc_s0.push_back(deltaRps);
+            rps.used_by_curr_pic_s0.push_back(
+                usedByCurrPicFlag[refNumDeltaPocs]
+            );
+        }
+
+        // Negative source entries, forward.
+        for (uint32_t j = 0;
+            j < refRps.delta_poc_s0.size();
+            ++j)
+        {
+            const int32_t dPoc =
+                refRps.delta_poc_s0[j] +
+                deltaRps;
+
+            if (dPoc < 0 &&
+                useDeltaFlag[j])
+            {
+                rps.delta_poc_s0.push_back(dPoc);
+                rps.used_by_curr_pic_s0.push_back(
+                    usedByCurrPicFlag[j]
+                );
+            }
+        }
+
+        // =========================================================================
+        // Derive DeltaPocS1
+        //
+        // 1. Negative source entries, reverse
+        // 2. deltaRps itself if positive
+        // 3. Positive source entries forward
+        // =========================================================================
+
+        for (int j =
+                static_cast<int>(
+                    refRps.delta_poc_s0.size()
+                ) - 1;
+            j >= 0;
+            --j)
+        {
+            const uint32_t sourceIndex =
+                static_cast<uint32_t>(j);
+
+            const int32_t dPoc =
+                refRps.delta_poc_s0[j] +
+                deltaRps;
+
+            if (dPoc > 0 &&
+                useDeltaFlag[sourceIndex])
+            {
+                rps.delta_poc_s1.push_back(dPoc);
+
+                rps.used_by_curr_pic_s1.push_back(
+                    usedByCurrPicFlag[sourceIndex]
+                );
+            }
+        }
+
+        if (deltaRps > 0 &&
+            useDeltaFlag[refNumDeltaPocs])
+        {
+            rps.delta_poc_s1.push_back(deltaRps);
+
+            rps.used_by_curr_pic_s1.push_back(
+                usedByCurrPicFlag[refNumDeltaPocs]
+            );
+        }
+
+        for (uint32_t j = 0;
+            j < refRps.delta_poc_s1.size();
+            ++j)
+        {
+            const uint32_t sourceIndex =
+                refRps.num_negative_pics +
+                j;
+
+            const int32_t dPoc =
+                refRps.delta_poc_s1[j] +
+                deltaRps;
+
+            if (dPoc > 0 &&
+                useDeltaFlag[sourceIndex])
+            {
+                rps.delta_poc_s1.push_back(dPoc);
+
+                rps.used_by_curr_pic_s1.push_back(
+                    usedByCurrPicFlag[sourceIndex]
+                );
+            }
+        }
+
+        // =========================================================================
+        // Derived counts
+        // =========================================================================
+
+        rps.num_negative_pics =
+            static_cast<uint32_t>(
+                rps.delta_poc_s0.size()
+            );
+
+        rps.num_positive_pics =
+            static_cast<uint32_t>(
+                rps.delta_poc_s1.size()
+            );
 
         return rps;
     }
@@ -481,7 +920,6 @@ namespace bsparser{
             }
         }
     }
-
 
 
     void parse_hevc_hrd_parameters(
@@ -2338,23 +2776,32 @@ namespace bsparser{
             numShortTermRefPicSets
         );
 
+        std::vector<HevcShortTermRps> parsedRps;
+
+        parsedRps.reserve(
+            numShortTermRefPicSets
+        );
+
         for (uint32_t i = 0;
             i < numShortTermRefPicSets;
             ++i)
         {
-            auto rps =
+            HevcShortTermRps rps =
                 parse_hevc_short_term_ref_pic_set(
                     b,
                     h,
                     i,
                     numShortTermRefPicSets,
-                    sps.short_term_ref_pic_sets
+                    parsedRps
                 );
 
-            sps.short_term_ref_pic_sets.push_back(
+            parsedRps.push_back(
                 std::move(rps)
             );
         }
+
+        sps.short_term_ref_pic_sets = std::move(parsedRps);
+
 
         // -------------------------------------------------------------------------
         // Long-term reference pictures
@@ -3465,6 +3912,11 @@ namespace bsparser{
             // Short-term reference picture set
             // ---------------------------------------------------------------------
 
+
+            HevcShortTermRps inlineRps;
+
+            const HevcShortTermRps* activeRps = nullptr;
+
             if (!sps.short_term_ref_pic_sets.empty())
             {
                 slice.short_term_ref_pic_set_sps_flag =
@@ -3492,6 +3944,10 @@ namespace bsparser{
                                 b.u(rpsBits)
                             );
                     }
+                    else
+                    {
+                        slice.short_term_ref_pic_set_idx = 0;
+                    }
 
                     field(
                         h,
@@ -3503,39 +3959,57 @@ namespace bsparser{
                         sps.short_term_ref_pic_sets.size())
                     {
                         throw std::runtime_error(
-                            "invalid HEVC short_term_ref_pic_set_idx");
+                            "invalid HEVC short-term RPS index");
                     }
+
+                    activeRps =
+                        &sps.short_term_ref_pic_sets[
+                            slice.short_term_ref_pic_set_idx
+                        ];
                 }
                 else
                 {
-                    /*
-                    * This is the inline short-term RPS case.
-                    *
-                    * The full implementation should call:
-                    *
-                    * parse_hevc_short_term_ref_pic_set(
-                    *     b,
-                    *     h,
-                    *     num_short_term_ref_pic_sets,
-                    *     num_short_term_ref_pic_sets,
-                    *     sps.short_term_ref_pic_sets
-                    * )
-                    *
-                    * For the first state-based pass we explicitly reject it
-                    * rather than silently interpreting the following bits as
-                    * something else.
-                    */
-                    throw std::runtime_error(
-                        "HEVC inline short-term RPS in slice header "
-                        "is not yet implemented");
+                    // -------------------------------------------------------------
+                    // Inline RPS
+                    // -------------------------------------------------------------
+
+                    const uint32_t inlineRpsIdx =
+                        static_cast<uint32_t>(
+                            sps.short_term_ref_pic_sets.size()
+                        );
+
+                    inlineRps =
+                        parse_hevc_short_term_ref_pic_set(
+                            b,
+                            h,
+                            inlineRpsIdx,
+                            inlineRpsIdx,
+                            sps.short_term_ref_pic_sets
+                        );
+
+                    activeRps =
+                        &inlineRps;
                 }
             }
+            else
+            {
+                /*
+                * No SPS short-term RPS exists.
+                *
+                * The syntax does not contain short_term_ref_pic_set_sps_flag.
+                *
+                * Therefore there are no short-term references.
+                */
+                activeRps = nullptr;
+            }
 
-            // ---------------------------------------------------------------------
+            
+            // =========================================================================
             // Long-term references
-            // ---------------------------------------------------------------------
+            // =========================================================================
 
-            if (sps.long_term_ref_pics_present_flag)
+            if (!isIdr &&
+                sps.long_term_ref_pics_present_flag)
             {
                 if (sps.num_long_term_ref_pics_sps > 0)
                 {
@@ -3549,6 +4023,13 @@ namespace bsparser{
                         "num_long_term_sps",
                         slice.num_long_term_sps
                     );
+
+                    if (slice.num_long_term_sps >
+                        sps.num_long_term_ref_pics_sps)
+                    {
+                        throw std::runtime_error(
+                            "invalid HEVC num_long_term_sps");
+                    }
                 }
 
                 slice.num_long_term_pics =
@@ -3562,17 +4043,19 @@ namespace bsparser{
                     slice.num_long_term_pics
                 );
 
-                const uint32_t totalLongTerm =
-                    slice.num_long_term_sps +
-                    slice.num_long_term_pics;
-
                 constexpr uint32_t kMaxLongTermPics = 1024;
 
-                if (totalLongTerm > kMaxLongTermPics)
+                if (slice.num_long_term_sps +
+                        slice.num_long_term_pics >
+                    kMaxLongTermPics)
                 {
                     throw std::runtime_error(
                         "too many HEVC long-term references");
                 }
+
+                const uint32_t totalLongTerm =
+                    slice.num_long_term_sps +
+                    slice.num_long_term_pics;
 
                 slice.lt_idx_sps.resize(
                     slice.num_long_term_sps
@@ -3601,6 +4084,10 @@ namespace bsparser{
                     i < totalLongTerm;
                     ++i)
                 {
+                    // -------------------------------------------------------------
+                    // SPS long-term reference
+                    // -------------------------------------------------------------
+
                     if (i < slice.num_long_term_sps)
                     {
                         const unsigned idxBits =
@@ -3608,22 +4095,27 @@ namespace bsparser{
                                 sps.num_long_term_ref_pics_sps
                             );
 
+                        uint32_t idx = 0;
+
                         if (idxBits > 0)
                         {
-                            slice.lt_idx_sps[i] =
+                            idx =
                                 static_cast<uint32_t>(
                                     b.u(idxBits)
                                 );
                         }
 
+                        slice.lt_idx_sps[i] =
+                            idx;
+
                         field(
                             h,
                             "lt_idx_sps[" +
                                 std::to_string(i) + "]",
-                            slice.lt_idx_sps[i]
+                            idx
                         );
 
-                        if (slice.lt_idx_sps[i] >=
+                        if (idx >=
                             sps.num_long_term_ref_pics_sps)
                         {
                             throw std::runtime_error(
@@ -3631,9 +4123,10 @@ namespace bsparser{
                         }
 
                         slice.poc_lsb_lt[i] =
-                            sps.lt_ref_pic_poc_lsb_sps[
-                                slice.lt_idx_sps[i]
-                            ];
+                            sps.lt_ref_pic_poc_lsb_sps[idx];
+
+                        slice.used_by_curr_pic_lt_flag[i] =
+                            sps.used_by_curr_pic_lt_sps_flag[idx];
 
                         field(
                             h,
@@ -3641,7 +4134,19 @@ namespace bsparser{
                                 std::to_string(i) + "]",
                             slice.poc_lsb_lt[i]
                         );
+
+                        field(
+                            h,
+                            "used_by_curr_pic_lt_flag[" +
+                                std::to_string(i) + "]",
+                            slice.used_by_curr_pic_lt_flag[i]
+                        );
                     }
+
+                    // -------------------------------------------------------------
+                    // Slice-signalled long-term reference
+                    // -------------------------------------------------------------
+
                     else
                     {
                         slice.poc_lsb_lt[i] =
@@ -3657,9 +4162,7 @@ namespace bsparser{
                         );
 
                         slice.used_by_curr_pic_lt_flag[i] =
-                            static_cast<uint8_t>(
-                                b.u(1)
-                            );
+                            b.u(1) != 0;
 
                         field(
                             h,
@@ -3669,10 +4172,12 @@ namespace bsparser{
                         );
                     }
 
+                    // -------------------------------------------------------------
+                    // delta_poc_msb_present_flag
+                    // -------------------------------------------------------------
+
                     slice.delta_poc_msb_present_flag[i] =
-                        static_cast<uint8_t>(
-                            b.u(1)
-                        );
+                        b.u(1) != 0;
 
                     field(
                         h,
@@ -3698,21 +4203,62 @@ namespace bsparser{
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // Temporal MVP
-            // ---------------------------------------------------------------------
+            // =========================================================================
+            // Calculate NumPicTotalCurr
+            // =========================================================================
 
-            if (sps.temporal_mvp_enabled_flag)
+            uint32_t numLongTermCurr = 0;
+
+            for (uint32_t i = 0;
+                i < slice.num_long_term_sps;
+                ++i)
             {
-                slice.slice_temporal_mvp_enabled_flag =
-                    b.u(1) != 0;
-
-                field(
-                    h,
-                    "slice_temporal_mvp_enabled_flag",
-                    slice.slice_temporal_mvp_enabled_flag
-                );
+                if (slice.used_by_curr_pic_lt_flag[i])
+                    ++numLongTermCurr;
             }
+
+            for (uint32_t i = slice.num_long_term_sps;
+                i < slice.num_long_term_sps +
+                    slice.num_long_term_pics;
+                ++i)
+            {
+                if (slice.used_by_curr_pic_lt_flag[i])
+                    ++numLongTermCurr;
+            }
+
+            slice.num_long_term_curr =
+                numLongTermCurr;
+
+            uint32_t numShortTermCurr = 0;
+
+            if (activeRps != nullptr)
+            {
+                numShortTermCurr =
+                    activeRps->num_used_by_curr_pic();
+            }
+
+            slice.num_pic_total_curr =
+                numShortTermCurr +
+                numLongTermCurr;
+
+            field(
+                h,
+                "num_long_term_curr",
+                numLongTermCurr
+            );
+
+            field(
+                h,
+                "num_short_term_curr",
+                numShortTermCurr
+            );
+
+            field(
+                h,
+                "num_pic_total_curr",
+                slice.num_pic_total_curr
+            );
+
         }
 
         // =========================================================================
@@ -3802,51 +4348,161 @@ namespace bsparser{
 
         if (pps.lists_modification_present_flag)
         {
-            /*
-            * Full reference-list construction requires the active RPS.
-            *
-            * We need NumPicTotalCurr to determine the number of bits in
-            * list_entry_lx[].
-            *
-            * Until full RPS reconstruction is implemented, don't consume these
-            * flags speculatively.
-            */
-            throw std::runtime_error(
-                "HEVC reference picture list modification "
-                "requires RPS reconstruction");
+            parse_hevc_ref_pic_list_modification(
+                b,
+                h,
+                slice,
+                pps,
+                slice.num_pic_total_curr
+            );
         }
 
+
         // =========================================================================
-        // Collocated reference
+        // mvd_l1_zero_flag
         // =========================================================================
 
         if (slice.slice_type == 0)
         {
-            slice.collocated_from_l0_flag =
+            slice.mvd_l1_zero_flag =
                 b.u(1) != 0;
 
             field(
                 h,
-                "collocated_from_l0_flag",
-                slice.collocated_from_l0_flag
+                "mvd_l1_zero_flag",
+                slice.mvd_l1_zero_flag
             );
         }
 
-        if ((slice.slice_type == 0 &&
-            !slice.collocated_from_l0_flag) ||
-            (slice.slice_type == 1 &&
-            !slice.collocated_from_l0_flag))
+
+        // =========================================================================
+        // cabac_init_flag
+        // =========================================================================
+
+        if (pps.cabac_init_present_flag &&
+            slice.slice_type != 2)
         {
-            slice.collocated_ref_idx =
-                static_cast<uint32_t>(
-                    b.ue()
+            slice.cabac_init_flag =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "cabac_init_flag",
+                slice.cabac_init_flag
+            );
+        }
+
+
+
+        // =========================================================================
+        // slice_qp_delta
+        // =========================================================================
+
+        slice.slice_qp_delta =
+            static_cast<int32_t>(
+                b.se()
+            );
+
+        field(
+            h,
+            "slice_qp_delta",
+            slice.slice_qp_delta
+        );
+
+
+
+        // =========================================================================
+        // Slice chroma QP offsets
+        // =========================================================================
+
+        if (pps.pps_slice_chroma_qp_offsets_present_flag)
+        {
+            slice.slice_cb_qp_offset =
+                static_cast<int32_t>(
+                    b.se()
+                );
+
+            slice.slice_cr_qp_offset =
+                static_cast<int32_t>(
+                    b.se()
                 );
 
             field(
                 h,
-                "collocated_ref_idx",
-                slice.collocated_ref_idx
+                "slice_cb_qp_offset",
+                slice.slice_cb_qp_offset
             );
+
+            field(
+                h,
+                "slice_cr_qp_offset",
+                slice.slice_cr_qp_offset
+            );
+        }
+
+
+
+
+        // =========================================================================
+        // cu_chroma_qp_offset_enabled_flag
+        // =========================================================================
+
+        if (pps.pps_slice_chroma_qp_offsets_present_flag)
+        {
+            slice.cu_chroma_qp_offset_enabled_flag =
+                b.u(1) != 0;
+
+            field(
+                h,
+                "cu_chroma_qp_offset_enabled_flag",
+                slice.cu_chroma_qp_offset_enabled_flag
+            );
+        }
+
+
+
+        // =========================================================================
+        // Temporal MVP / collocated reference
+        // =========================================================================
+
+        if (slice.slice_temporal_mvp_enabled_flag)
+        {
+            if (slice.slice_type == 0)
+            {
+                slice.collocated_from_l0_flag =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "collocated_from_l0_flag",
+                    slice.collocated_from_l0_flag
+                );
+            }
+            else
+            {
+                // P slice: collocated reference is from L0.
+                slice.collocated_from_l0_flag = true;
+            }
+
+            const bool needCollocatedRefIdx =
+                (slice.collocated_from_l0_flag &&
+                slice.num_ref_idx_l0_active_minus1 > 0) ||
+                (!slice.collocated_from_l0_flag &&
+                slice.num_ref_idx_l1_active_minus1 > 0);
+
+            if (needCollocatedRefIdx)
+            {
+                slice.collocated_ref_idx =
+                    static_cast<uint32_t>(
+                        b.ue()
+                    );
+
+                field(
+                    h,
+                    "collocated_ref_idx",
+                    slice.collocated_ref_idx
+                );
+            }
         }
 
         // =========================================================================
@@ -3864,75 +4520,103 @@ namespace bsparser{
             slice.five_minus_max_num_merge_cand
         );
 
+       
         // =========================================================================
-        // Slice loop filter
+        // Deblocking filter
         // =========================================================================
 
-        if (pps.deblocking_filter_override_enabled_flag)
+        if (pps.deblocking_filter_control_present_flag)
         {
-            slice.deblocking_filter_override_flag =
-                b.u(1) != 0;
-
-            field(
-                h,
-                "deblocking_filter_override_flag",
-                slice.deblocking_filter_override_flag
-            );
-        }
-
-        if (slice.deblocking_filter_override_flag)
-        {
-            slice.slice_deblocking_filter_disabled_flag =
-                b.u(1) != 0;
-
-            field(
-                h,
-                "slice_deblocking_filter_disabled_flag",
-                slice.slice_deblocking_filter_disabled_flag
-            );
-
-            if (!slice.slice_deblocking_filter_disabled_flag)
+            if (pps.deblocking_filter_override_enabled_flag)
             {
-                slice.slice_beta_offset_div2 =
-                    static_cast<int32_t>(
-                        b.se()
-                    );
-
-                slice.slice_tc_offset_div2 =
-                    static_cast<int32_t>(
-                        b.se()
-                    );
+                slice.deblocking_filter_override_flag =
+                    b.u(1) != 0;
 
                 field(
                     h,
-                    "slice_beta_offset_div2",
-                    slice.slice_beta_offset_div2
-                );
-
-                field(
-                    h,
-                    "slice_tc_offset_div2",
-                    slice.slice_tc_offset_div2
+                    "deblocking_filter_override_flag",
+                    slice.deblocking_filter_override_flag
                 );
             }
+            else
+            {
+                slice.deblocking_filter_override_flag =
+                    false;
+            }
+
+            if (slice.deblocking_filter_override_flag)
+            {
+                slice.slice_deblocking_filter_disabled_flag =
+                    b.u(1) != 0;
+
+                field(
+                    h,
+                    "slice_deblocking_filter_disabled_flag",
+                    slice.slice_deblocking_filter_disabled_flag
+                );
+
+                if (!slice.slice_deblocking_filter_disabled_flag)
+                {
+                    slice.slice_beta_offset_div2 =
+                        static_cast<int32_t>(
+                            b.se()
+                        );
+
+                    slice.slice_tc_offset_div2 =
+                        static_cast<int32_t>(
+                            b.se()
+                        );
+
+                    field(
+                        h,
+                        "slice_beta_offset_div2",
+                        slice.slice_beta_offset_div2
+                    );
+
+                    field(
+                        h,
+                        "slice_tc_offset_div2",
+                        slice.slice_tc_offset_div2
+                    );
+                }
+            }
+            else
+            {
+                // Inherit PPS values.
+
+                slice.slice_deblocking_filter_disabled_flag =
+                    pps.pps_deblocking_filter_disabled_flag;
+
+                slice.slice_beta_offset_div2 =
+                    pps.pps_beta_offset_div2;
+
+                slice.slice_tc_offset_div2 =
+                    pps.pps_tc_offset_div2;
+            }
         }
-        else if (pps.deblocking_filter_control_present_flag)
+        else
         {
+            // Deblocking control isn't present in the PPS.
+            // All values are inferred.
+
             slice.slice_deblocking_filter_disabled_flag =
-                pps.pps_deblocking_filter_disabled_flag;
+                false;
 
-            slice.slice_beta_offset_div2 =
-                pps.pps_beta_offset_div2;
-
-            slice.slice_tc_offset_div2 =
-                pps.pps_tc_offset_div2;
+            slice.slice_beta_offset_div2 = 0;
+            slice.slice_tc_offset_div2 = 0;
         }
+
 
         // =========================================================================
         // Loop filter across slices
         // =========================================================================
 
-        if (pps.pps_loop_filter_across_slices_enabled_flag)
+        if (pps.pps_loop_filter_across_slices_enabled_flag &&
+            (
+                slice.slice_sao_luma_flag ||
+                slice.slice_sao_chroma_flag ||
+                !slice.slice_deblocking_filter_disabled_flag
+            ))
         {
             slice.slice_loop_filter_across_slices_enabled_flag =
                 b.u(1) != 0;
@@ -3943,6 +4627,93 @@ namespace bsparser{
                 slice.slice_loop_filter_across_slices_enabled_flag
             );
         }
+        else
+        {
+            slice.slice_loop_filter_across_slices_enabled_flag =
+                false;
+        }
+
+
+
+        // =========================================================================
+        // Entry point offsets
+        // =========================================================================
+
+        const bool tilesOrWpp =
+            pps.tiles_enabled_flag ||
+            pps.entropy_coding_sync_enabled_flag;
+
+        if (tilesOrWpp)
+        {
+            slice.num_entry_point_offsets =
+                static_cast<uint32_t>(
+                    b.ue()
+                );
+
+            field(
+                h,
+                "num_entry_point_offsets",
+                slice.num_entry_point_offsets
+            );
+
+            constexpr uint32_t kMaxEntryPoints = 65535;
+
+            if (slice.num_entry_point_offsets >
+                kMaxEntryPoints)
+            {
+                throw std::runtime_error(
+                    "too many HEVC entry point offsets");
+            }
+
+            if (slice.num_entry_point_offsets > 0)
+            {
+                slice.offset_len_minus1 =
+                    static_cast<uint32_t>(
+                        b.ue()
+                    );
+
+                field(
+                    h,
+                    "offset_len_minus1",
+                    slice.offset_len_minus1
+                );
+
+                const unsigned offsetBits =
+                    slice.offset_len_minus1 + 1;
+
+                if (offsetBits > 32)
+                {
+                    throw std::runtime_error(
+                        "invalid HEVC entry point offset length");
+                }
+
+                slice.entry_point_offset_minus1.resize(
+                    slice.num_entry_point_offsets
+                );
+
+                for (uint32_t i = 0;
+                    i < slice.num_entry_point_offsets;
+                    ++i)
+                {
+                    const uint32_t offset =
+                        static_cast<uint32_t>(
+                            b.u(offsetBits)
+                        );
+
+                    slice.entry_point_offset_minus1[i] =
+                        offset;
+
+                    field(
+                        h,
+                        "entry_point_offset_minus1[" +
+                            std::to_string(i) + "]",
+                        offset
+                    );
+                }
+            }
+        }
+
+
 
         // =========================================================================
         // slice_segment_header_extension_data
@@ -3950,13 +4721,7 @@ namespace bsparser{
 
         if (pps.slice_segment_header_extension_present_flag)
         {
-            /*
-            * extension_length is ue(v), followed by that many bytes.
-            *
-            * We consume it here rather than treating extension bytes as
-            * arbitrary bitstream syntax.
-            */
-            const uint32_t extensionLength =
+            slice.slice_segment_header_extension_length =
                 static_cast<uint32_t>(
                     b.ue()
                 );
@@ -3964,18 +4729,36 @@ namespace bsparser{
             field(
                 h,
                 "slice_segment_header_extension_length",
-                extensionLength
+                slice.slice_segment_header_extension_length
+            );
+
+            constexpr uint32_t kMaxExtensionBytes = 4096;
+
+            if (slice.slice_segment_header_extension_length >
+                kMaxExtensionBytes)
+            {
+                throw std::runtime_error(
+                    "HEVC slice header extension too large");
+            }
+
+            slice.slice_segment_header_extension_data_byte.resize(
+                slice.slice_segment_header_extension_length
             );
 
             for (uint32_t i = 0;
-                i < extensionLength;
+                i < slice.slice_segment_header_extension_length;
                 ++i)
             {
+                slice.slice_segment_header_extension_data_byte[i] =
+                    static_cast<uint8_t>(
+                        b.u(8)
+                    );
+
                 field(
                     h,
                     "slice_segment_header_extension_data_byte[" +
                         std::to_string(i) + "]",
-                    b.u(8)
+                    slice.slice_segment_header_extension_data_byte[i]
                 );
             }
         }
