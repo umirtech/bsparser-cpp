@@ -1,4 +1,5 @@
 #include "bsparser.h"
+#include <cstdio>
 
 namespace bsparser
 {
@@ -18,6 +19,11 @@ namespace bsparser
     
     std::vector<Header> parse_unit(Codec c, const Bytes& b, uint64_t off,ParserState* parserState)
     {
+
+        if (off > b.size() || b.size() - off < 2) {
+            return {};
+        }
+
         switch (c)
         {
             case Codec::VP8:
@@ -397,22 +403,39 @@ namespace bsparser
 
         while (true)
         {
-            if (pending_.size() < startCodeSize) break;
+            if (pending_.size() < startCodeSize)
+                break;
 
-            size_t next = start_code(pending_, startCodeSize, startCodeSize);
+            size_t next = start_code(
+                pending_,
+                startCodeSize,
+                startCodeSize);
 
-            if (next == std::string::npos) break;
+            if (next == std::string::npos)
+                break;
 
             if (next > startCodeSize)
             {
-                Bytes nal(pending_.begin() + startCodeSize, pending_.begin() + next);
-                const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? startCodeSize : 0);
-                auto hs = parse_unit(codec_, nal, header_offset,parserState_);
+                Bytes nal(
+                    pending_.begin() + startCodeSize,
+                    pending_.begin() + next);
+
+                auto hs = parse_unit(
+                    codec_,
+                    nal,
+                    0,
+                    parserState_);
+
                 out.insert(out.end(), hs.begin(), hs.end());
+
                 first_annexb_header_ = false;
             }
+
             pending_offset_ += next;
-            pending_.erase(pending_.begin(), pending_.begin() + next);
+
+            pending_.erase(
+                pending_.begin(),
+                pending_.begin() + next);
         }
 
         return out;
@@ -422,23 +445,17 @@ namespace bsparser
     {
         std::vector<Header> out;
 
-        if (annexb_started_ && pending_.size() >= 4)
+        if (annexb_started_ && pending_.size() >= startCodeSize)
         {
-            if (pending_.size() > startCodeSize)
-            {
-                Bytes nal(pending_.begin() + startCodeSize, pending_.end());
+            Bytes nal(pending_.begin() + startCodeSize, pending_.end());
 
-                const uint64_t header_offset = pending_offset_ + (first_annexb_header_ ? startCodeSize : 0);
+            auto hs = parse_unit(codec_, nal, 0,parserState_);
 
-                auto hs = parse_unit(codec_, nal, header_offset,parserState_);
-
-                out.insert(out.end(), hs.begin(), hs.end());
-            }
+            out.insert(out.end(), hs.begin(), hs.end());
         }
-
+        
         pending_.clear();
         annexb_started_ = false;
-        first_annexb_header_ = true;
         return out;
     }
 

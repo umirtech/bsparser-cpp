@@ -40,8 +40,6 @@ namespace bsparser {
 
     inline size_t legacy_start_code(const uint8_t* data, size_t size, size_t from, size_t& startCodeSize)
     {
-        startCodeSize = 0;
-
         if (size < 3 || from > size - 3)
         {
             return kNotFound;

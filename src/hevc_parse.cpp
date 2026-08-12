@@ -1,5 +1,5 @@
 #include "hevc_parse.h"
-
+#include <log.h>
 
 namespace bsparser{
 
@@ -4767,26 +4767,33 @@ namespace bsparser{
     }
 
 
-    Header parse_hevc(const Bytes& d, uint64_t off,HevcParseState& parseState)
+    Header parse_hevc(const Bytes& d,uint64_t off, HevcParseState& parseState)
     {
-        if (d.size() < 2) throw std::out_of_range("truncated NAL header");
-        
-    
-        uint8_t type = (d[0] >> 1) & 0x3F;
-        uint8_t layer_id = ((d[0] & 0x01) << 5) | (d[1] >> 3);
-        uint8_t tid = d[1] & 0x07;
-        
+        if (off > d.size() || d.size() - off < 2) {
+            throw std::out_of_range("truncated HEVC NAL header");
+        }
 
-        if (tid == 0)
+        const uint8_t b0 = d[off];
+        const uint8_t b1 = d[off + 1];
+
+        const uint8_t forbidden_zero_bit = b0 >> 7;
+        const uint8_t nal_unit_type = (b0 >> 1) & 0x3F;
+        const uint8_t nuh_layer_id =
+            static_cast<uint8_t>(((b0 & 0x01) << 5) | (b1 >> 3));
+        const uint8_t nuh_temporal_id_plus1 = b1 & 0x07;
+
+        if (forbidden_zero_bit != 0)
+            throw std::runtime_error("invalid HEVC forbidden_zero_bit");
+
+        if (nuh_temporal_id_plus1 == 0)
             throw std::runtime_error("invalid HEVC temporal_id_plus1");
 
 
         Header h{off, d.size(), "HEVC NAL", false, {}};
         
-        field(h, "nal_unit_type", type);
-        field(h, "nuh_layer_id", layer_id);
-        field(h, "nuh_temporal_id_plus1", tid);
-
+        field(h, "nal_unit_type", nal_unit_type);
+        field(h, "nuh_layer_id", nuh_layer_id);
+        field(h, "nuh_temporal_id_plus1", nuh_temporal_id_plus1);
 
         static const char* types[] = {
                 "TRAIL_N",             // 0
@@ -4835,13 +4842,13 @@ namespace bsparser{
         constexpr size_t kHevcNalTypeCount =
             sizeof(types) / sizeof(types[0]);
 
-        h.type = type < kHevcNalTypeCount
-            ? types[type]
+        h.type = nal_unit_type < kHevcNalTypeCount
+            ? types[nal_unit_type]
             : "HEVC NAL";
 
-        const bool is_vcl = type <= 31;
-        const bool is_irap = type >= 16 && type <= 23;
-        const bool is_idr = type == 19 || type == 20;
+        //const bool is_vcl = nal_unit_type <= 31;
+        const bool is_irap = nal_unit_type >= 16 && nal_unit_type <= 23;
+        //const bool is_idr = nal_unit_type == 19 || nal_unit_type == 20;
 
         h.keyframe = is_irap;
 
@@ -4850,34 +4857,34 @@ namespace bsparser{
         BitReader b(r);
         try
         {
-            if (type == 32)
+            if (nal_unit_type == 32)
             {
                 auto vps = parse_hevc_vps(b, h);
                 parseState.vps[vps.id] = std::move(vps);
             }
-            else if (type == 33)
+            else if (nal_unit_type == 33)
             {
                 auto sps = parse_hevc_sps(b, h);
                 parseState.sps[sps.id] = std::move(sps);
             }
-            else if (type == 34)
+            else if (nal_unit_type == 34)
             {
                 auto pps = parse_hevc_pps(b, h);
                 parseState.pps[pps.id] = std::move(pps);
             }
-            else if (type <= 31)
+            else if (nal_unit_type <= 31)
             {
                 const HevcSlice slice =
                     parse_hevc_slice_header(
                         b,
                         h,
-                        type,
+                        nal_unit_type,
                         parseState
                     );
 
                 (void)slice;
             }
-            else if (type == 35)
+            else if (nal_unit_type == 35)
             {
                 field(h, "pic_type", b.u(3));
             }
