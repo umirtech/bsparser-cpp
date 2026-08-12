@@ -17,7 +17,6 @@ not a decoder and must not attempt entropy-coded payload parsing.
 | Path | Purpose |
 | --- | --- |
 | `src/bsparser.cpp` | Parsing, streaming scanners, SIMD dispatch |
-| `src/simd_neon_armv7.cpp` | Isolated optional ARMv7 NEON implementation |
 | `include/bsparser.hpp` | Library API |
 | `src/main.cpp` | JSON-lines CLI + HTML report generator |
 | `tests/tests.cpp` | Assertion-based tests |
@@ -45,11 +44,6 @@ not a decoder and must not attempt entropy-coded payload parsing.
 3. Format with the repository `.clang-format`.
 4. Compile all relevant Android ABIs when SIMD/build logic changes.
 
-## NDK compile examples
-
-Use the Android Studio NDK Clang executable. The exact local path is
-environment-specific; see `docs/CODEBASE.md` for commands. Build outputs are
-Android ELF executables and require an emulator/device plus `adb` to run.
 
 ## Scope guidance
 

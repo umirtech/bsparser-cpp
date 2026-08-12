@@ -23,7 +23,17 @@ endforeach()
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
-add_library(bsparser src/bsparser.cpp)
+add_library(
+    bsparser
+    STATIC
+    src/bsparser.cpp
+    src/bitreader.cpp
+    src/hevc_parse.cpp
+    src/vvc_parse.cpp
+    src/av1_parse.cpp
+    src/vp9_parse.cpp
+    src/vp8_parse.cpp
+)
 
 target_include_directories(bsparser
     PUBLIC

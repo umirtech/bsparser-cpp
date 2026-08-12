@@ -7,8 +7,6 @@ turns individual units into lightweight `Header` metadata.
 
 ```text
 input chunks → UnitScanner → Unit(s) → parse_unit() → Header(s)
-                    │
-                    └─ SIMD Annex-B start-code search
 ```
 
 Use `IvfParser` only when the input is an IVF container. Use `StreamParser`
@@ -82,27 +80,6 @@ When editing this code:
 - `finish()` must flush only a complete final Annex-B NAL and must reject a
   truncated AV1 OBU.
 
-## Performance model
-
-The hot path is `find_start_code_fast()` in `cpp/bsparser.cpp`, not syntax
-field extraction. It selects once per process:
-
-| ABI/CPU | Backend |
-| --- | --- |
-| `arm64-v8a` | NEON |
-| `armeabi-v7a` with `HWCAP_NEON` | Isolated ARMv7 NEON source |
-| Other `armeabi-v7a` | Scalar |
-| x86/x86_64 with AVX2 | AVX2 |
-| x86/x86_64 with SSE2 | SSE2 |
-| Other | Scalar |
-
-AVX2/SSE2 use function target attributes, so no global ISA option is needed.
-ARMv7 NEON is in `simd_neon_armv7.cpp` and gets `-mfpu=neon` only for that
-translation unit. CMake enables it only for `ANDROID_ABI=armeabi-v7a` and
-defines `BSPARSER_ARMV7_NEON_DISPATCH` for the dispatcher.
-
-Do not add AVX/NEON instructions to generic parser code. Add an isolated
-implementation plus runtime feature detection instead.
 
 ## Build and verification
 
@@ -122,9 +99,4 @@ Replace `NDK_CLANG` with the NDK `clang++.exe` path.
 # x86_64
 & $NDK_CLANG --target=x86_64-linux-android28 -std=c++17 -Wall -Wextra -Wpedantic `
   -I cpp\include cpp\bsparser.cpp cpp\tests.cpp -o bsparser_tests
-
-# ARMv7: include the isolated NEON implementation and dispatch define
-& $NDK_CLANG --target=armv7a-linux-androideabi28 -std=c++17 -Wall -Wextra -Wpedantic `
-  -DBSPARSER_ARMV7_NEON_DISPATCH=1 -mfpu=neon -I cpp\include `
-  cpp\bsparser.cpp cpp\simd_neon_armv7.cpp cpp\tests.cpp -o bsparser_tests_armv7
 ```
