@@ -156,6 +156,7 @@ int main(int argc, char** argv)
     }
 
     std::ifstream file(input_path, std::ios::binary);
+    
     if (!file)
     {
         std::cerr << "Unable to open input file: " << input_path << '\n';
@@ -176,12 +177,19 @@ int main(int argc, char** argv)
         else
         {
             auto state = bsparser::create_state();
+
             const auto codec = bsparser::codec_from_name(format);
+
             if (codec == bsparser::Codec::Unknown) throw std::invalid_argument("unknown codec: " + format);
+
             bsparser::StreamParser parser(codec,state);
+
             headers = parser.feed(data);
+
             auto tail = parser.finish();
+
             headers.insert(headers.end(), tail.begin(), tail.end());
+            
             bsparser::destroy_state(state);
         }
 

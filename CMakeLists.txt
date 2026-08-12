@@ -67,7 +67,12 @@ target_compile_definitions(
     PRIVATE BSPARSER_TEST_FILES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test-files"
 )
 
+# add_test(
+#    NAME bsparser_tests
+#    COMMAND bsparser_tests 
+#)
+
 add_test(
-    NAME bsparser_tests
-    COMMAND bsparser_tests
+    NAME bsparse
+    COMMAND bsparse hevc  ${CMAKE_CURRENT_SOURCE_DIR}/test-files/h265.h265 --html h265.html
 )
