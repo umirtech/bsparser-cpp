@@ -1,0 +1,16 @@
+bit_depth_chroma=8
+bit_depth_luma=8
+chroma_format_idc=1
+coded_height=720
+coded_width=1280
+colour_primaries=2
+display_height=720
+display_width=1280
+level_idc=31
+mastering_display_present=0
+matrix_coefficients=1
+max_content_light_level=0
+max_pic_average_light_level=0
+profile_idc=100
+transfer_characteristics=2
+video_full_range_flag=0

@@ -119,6 +119,44 @@ add_test(
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_high444.h264
 )
 
+add_executable(
+    bs_avc_hdr_test
+    tests/avc_hdr_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_hdr_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_hdr_test
+    COMMAND bs_avc_hdr_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_hdr.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_hdr.txt
+)
+
+
+
+add_executable(
+    bs_hevc_hdr_test
+    tests/hevc_hdr_test.cpp
+)
+
+target_link_libraries(
+    bs_hevc_hdr_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_hevc_hdr_test
+    COMMAND bs_hevc_hdr_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/hevc_hdr10.hevc
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/hevc_hdr10.txt
+)
+
 
 # ---------------------------------------------------------------------------
 # Fuzzing
