@@ -2,7 +2,6 @@
 #include "hevc_sps_parser.hpp"
 #include "hevc_pps_parser.hpp"
 #include "hevc_vps_parser.hpp"
-#include "log.hpp"
 
 #include <cstddef>
 #include <cstdint>

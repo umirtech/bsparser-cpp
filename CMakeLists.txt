@@ -75,19 +75,19 @@ target_compile_features(bs
 enable_testing()
 
 add_executable(
-    bs_test
-    tests/main.cpp
+    bs_hevc_test
+    tests/hevc_test.cpp
 )
 
 target_link_libraries(
-    bs_test
+    bs_hevc_test
     PRIVATE
         bs
 )
 
 add_test(
-    NAME bs_test
-    COMMAND bs_test
+    NAME bs_hevc_test
+    COMMAND bs_hevc_test
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
 )
 
