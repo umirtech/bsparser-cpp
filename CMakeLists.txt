@@ -2,8 +2,27 @@ cmake_minimum_required(VERSION 3.20)
 
 project(bsparser
     VERSION 0.1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
+
+# Detect whether the building compiler actually supports C++20.  This gates
+# which headers get installed: the C++20 template headers (bsparser.hpp and
+# the core bitstream/parser/syntax/logging tree) are only shipped when the
+# compiler can compile them.  Otherwise only the C-API headers are installed,
+# which is the only path a non-C++20 consumer can use.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(CheckCXXSourceCompiles)
+
+check_cxx_source_compiles("
+#include <version>
+#include <span>
+#if __cplusplus < 202002L
+#error requires C++20
+#endif
+int main() { std::span<int> s; (void)s; return 0; }
+" BS_CXX20_SUPPORTED)
 
 add_library(bs
     INTERFACE
@@ -11,6 +30,7 @@ add_library(bs
 
 target_include_directories(bs
     INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/bitstream/
         ${CMAKE_CURRENT_SOURCE_DIR}/logging/
         ${CMAKE_CURRENT_SOURCE_DIR}/parser/
@@ -73,6 +93,165 @@ target_compile_features(bs
 # Tests
 # ---------------------------------------------------------------------------
 enable_testing()
+
+add_executable(
+    bs_unified_test
+    tests/unified_test.cpp
+)
+
+target_link_libraries(
+    bs_unified_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_unified_test
+    COMMAND bs_unified_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+
+# ---------------------------------------------------------------------------
+# Command-line parser / report exporter
+# ---------------------------------------------------------------------------
+
+add_executable(
+    bs_cli
+    cli/bs_cli.cpp
+)
+
+target_link_libraries(
+    bs_cli
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_cli_hevc
+    COMMAND bs_cli
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
+        --out ${CMAKE_CURRENT_BINARY_DIR}/cli_hevc.json
+)
+
+add_test(
+    NAME bs_cli_avc
+    COMMAND bs_cli
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_main.h264
+        --codec avc
+        --out ${CMAKE_CURRENT_BINARY_DIR}/cli_avc.html
+)
+
+
+# ---------------------------------------------------------------------------
+# C public API (stable ABI → compiled STATIC / SHARED library)
+# ---------------------------------------------------------------------------
+#
+# The C++20 core stays header-only; this single translation unit is the only
+# thing that gets compiled, giving C / older-toolchain / FFI consumers a
+# stable, versionable ABI they can link against.
+#
+#   cmake -DBS_CAPI_SHARED=ON ..   → build a shared library
+
+option(BS_CAPI_SHARED
+    "Build the C API as a shared library (default: static)"
+    OFF
+)
+
+if(BS_CAPI_SHARED)
+    set(BS_CAPI_LIB_TYPE SHARED)
+else()
+    set(BS_CAPI_LIB_TYPE STATIC)
+endif()
+
+add_library(bs_capi
+    ${BS_CAPI_LIB_TYPE}
+    capi/bs_capi.cpp
+)
+
+target_link_libraries(bs_capi
+    PUBLIC
+        bs
+)
+
+target_include_directories(bs_capi
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/capi
+)
+
+set_target_properties(bs_capi
+    PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+)
+
+install(
+    TARGETS bs_capi
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# C-API headers are always installed: the umbrella selects them for any
+# non-C++20 (or C) consumer, and they back the bs_capi library.
+install(
+    FILES bsparser.h
+    DESTINATION include
+)
+
+install(
+    FILES capi/bs_capi.h
+    DESTINATION include
+)
+
+# The C++20 template headers are only shipped when the building compiler
+# supports C++20.  A pre-C++20 (or C) consumer cannot use them header-only,
+# so installing them would be misleading; the C-API library covers that case.
+if(BS_CXX20_SUPPORTED)
+    install(
+        FILES bsparser.hpp
+        DESTINATION include
+    )
+
+    install(
+        DIRECTORY bitstream parser syntax logging
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+endif()
+
+
+# ---------------------------------------------------------------------------
+# C API test (compiled as C, linked against the C++ runtime)
+# ---------------------------------------------------------------------------
+
+add_executable(
+    bs_capi_test
+    tests/capi_test.c
+)
+
+target_link_libraries(
+    bs_capi_test
+    PRIVATE
+        bs_capi
+)
+
+# The only translation unit is C, but it links a C++ static lib, so link
+# with the C++ driver to pull in the C++ runtime.
+set_target_properties(
+    bs_capi_test
+    PROPERTIES
+        LINKER_LANGUAGE CXX
+)
+
+add_test(
+    NAME bs_capi_test
+    COMMAND bs_capi_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
+)
+
+
 
 add_executable(
     bs_hevc_test

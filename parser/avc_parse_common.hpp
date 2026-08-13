@@ -36,10 +36,11 @@ namespace detail {
  * that the syntax value is within the range the H.264 spec
  * permits for the given field.
  */
+template <typename Reader>
 [[nodiscard]]
 inline std::uint32_t
 read_ue_max(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     const char* field,
     std::uint32_t max_value)
 {
@@ -60,10 +61,11 @@ read_ue_max(
 /*
  * Bounded se(v) read.
  */
+template <typename Reader>
 [[nodiscard]]
 inline std::int32_t
 read_se_bounded(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     const char* field,
     std::int32_t max_abs)
 {

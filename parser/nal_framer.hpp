@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -129,6 +130,120 @@ annex_b_start_code_size(
 
 /*
  * -----------------------------------------------------------
+ * SWAR start-code search
+ * -----------------------------------------------------------
+ *
+ * Detects the three-byte form `00 00 01` (a four-byte
+ * `00 00 00 01` start code contains it) using 8-byte lanes.
+ *
+ * Each byte lane is represented by its high bit (0x80). Shifts
+ * are by whole lanes (8 / 16 bits), so markers never bleed
+ * across byte boundaries -- the classic mistake is a 1-bit
+ * shift, which merges a trailing 1-bit of one byte with the
+ * leading zero-bits of the next.
+ */
+
+namespace {
+
+/*
+ * Borrow-free per-byte equality to zero.
+ *
+ * Returns 0x80 in each byte lane whose eight bits are all
+ * zero. The left shifts are masked to discard the bits that
+ * would bleed in from a neighbouring byte, so the result is
+ * exact per byte (unlike the classic `v - 0x01...` haszero
+ * idiom, whose borrow propagation marks the wrong lane).
+ */
+[[nodiscard]]
+inline std::uint64_t
+sw_allzero(
+    std::uint64_t v) noexcept
+{
+    v |= (v << 1) &
+         0xFEFEFEFEFEFEFEFEULL;
+    v |= (v << 2) &
+         0xFCFCFCFCFCFCFCFCULL;
+    v |= (v << 4) &
+         0xF0F0F0F0F0F0F0F0ULL;
+
+    return ~v &
+           0x8080808080808080ULL;
+}
+
+} // namespace
+
+
+/*
+ * Return the index of the first start code at or after `from`,
+ * or `data.size()` when none remains.
+ */
+[[nodiscard]]
+inline std::size_t
+annex_b_find_start_code(
+    std::span<const std::uint8_t> data,
+    std::size_t from) noexcept
+{
+    const std::size_t n = data.size();
+
+    if (from + 3 > n) {
+        return n;
+    }
+
+    const std::uint8_t* p = data.data();
+    std::size_t i = from;
+
+    while (i + 8 <= n) {
+
+        std::uint64_t x;
+        std::memcpy(&x, p + i, 8);
+
+        const std::uint64_t z =
+            sw_allzero(x);
+
+        const std::uint64_t o =
+            sw_allzero(
+                x ^ 0x0101010101010101ULL);
+
+        /*
+         * 00 00 01 ending at lane j: lane j is 0x01 and
+         * lanes j-1, j-2 are 0x00. Lane shifts keep the
+         * markers byte-aligned.
+         */
+        const std::uint64_t match =
+            o &
+            (z << 8) &
+            (z << 16);
+
+        if (match != 0) {
+
+            const int bit =
+                __builtin_ctzll(match);
+
+            const int j = bit / 8;
+
+            return i +
+                   static_cast<std::size_t>(j - 2);
+        }
+
+        i += 6;
+    }
+
+    for (; i + 3 <= n; ++i) {
+
+        if (annex_b_start_code_size(
+                data,
+                i) != 0) {
+
+            return i;
+        }
+    }
+
+    return n;
+}
+
+
+/*
+ * -----------------------------------------------------------
  * Annex-B NAL iterator
  * -----------------------------------------------------------
  *
@@ -158,19 +273,9 @@ private:
     std::size_t find_start_code(
         std::size_t from) const noexcept
     {
-        for (std::size_t i = from;
-             i + 3 <= data_.size();
-             ++i) {
-
-            if (annex_b_start_code_size(
-                    data_,
-                    i) != 0) {
-
-                return i;
-            }
-        }
-
-        return data_.size();
+        return annex_b_find_start_code(
+            data_,
+            from);
     }
 
 
