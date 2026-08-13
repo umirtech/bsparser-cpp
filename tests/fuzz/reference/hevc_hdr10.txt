@@ -1,0 +1,16 @@
+bit_depth_chroma=10
+bit_depth_luma=10
+chroma_format_idc=1
+coded_height=1080
+coded_width=1920
+colour_primaries=9
+display_height=1080
+display_width=1920
+level_idc=120
+mastering_display_present=1
+matrix_coefficients=9
+max_content_light_level=1000
+max_pic_average_light_level=400
+profile_idc=2
+transfer_characteristics=16
+video_full_range_flag=0
