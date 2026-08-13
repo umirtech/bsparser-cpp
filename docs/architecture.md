@@ -12,19 +12,318 @@ Every layer is zero-copy: all spans reference the original input buffer. The
 framing layer, the RBSP bit reader and the logging layer are codec-agnostic
 and are shared by both the HEVC and the AVC stack.
 
+The whole library is surfaceable through a single header, `bsparser.h`, which
+transparently selects the right implementation for the build: the C++20
+header-only templates (`bsparser.hpp`) when a C++20 compiler is available, or
+the C public API (`bs_capi.h`, backed by the compiled `bs_capi` library)
+otherwise — or whenever `BS_USE_C_API` / `BS_FORCE_C_API` is defined. This is
+the recommended entry point for all consumers. The C++20 front end itself is
+documented in "Unified public API" below. The previous
+`dispatch_nals` / `avc::dispatch_nals` entry points remain available and
+unchanged.
+
+> **Header-only is available to C++20 users only, and that is by design.**
+> The core implementation is written in C++20 (it uses `std::span`,
+> `[[nodiscard]]`, etc.), so a consumer's compiler must support C++20 to
+> compile the headers. C and pre-C++20 consumers therefore cannot use the
+> library header-only — they must link the prebuilt `bs_capi` static/shared
+> library (the C API) instead. There is no way around this: "header-only"
+> means *your* compiler compiles the headers, so it must understand C++20.
+
 ---
+
+## Unified public API (`bsparser.hpp`)
+
+`bsparser.hpp` is the recommended entry point. It exposes a `Codec` enum to
+select the codec path, an opaque `State` that auto-manages parameter sets, and a
+single `bs::parse` overload set.
+
+### Codec selection
+
+```cpp
+enum class Codec : std::uint8_t { Hevc, Avc };
+```
+
+The user picks the codec path with this enum and supplies an opaque `State`.
+
+### Opaque State
+
+```cpp
+std::unique_ptr<bs::State> state = bs::create_state(bs::Codec::Hevc);
+```
+
+`bs::State` is opaque: it hides `detail::StateImpl`, which owns a single
+codec-specific `ParameterSetManager`. There is **no global parameter-set store**
+— each `State` is independent, so many `State` instances (even of mixed codecs)
+can coexist without ID collisions. A `State` is move-only (copy is deleted).
+
+### Unified parse + automatic parameter-set management
+
+```cpp
+std::size_t parsed = bs::parse(
+    state,                            // bs::State&
+    data,                             // std::span<const std::uint8_t>
+    bs::NalFramingMode::AnnexB,
+    handlers);                        // bs::BsNalHandlers  (or bs::avc::NalHandlers)
+```
+
+`bs::parse` is overloaded on the handler type (`BsNalHandlers` ⇒ HEVC,
+`avc::NalHandlers` ⇒ AVC) and validates that the `State`'s codec matches.
+Internally it frames the stream and, for every parameter-set NAL (VPS/SPS/PPS
+for HEVC; SPS/PPS for AVC), parses and stores the set into the `State`
+automatically. Slice handlers therefore resolve their dependencies through the
+`State` instead of maintaining their own manager:
+
+```cpp
+// inside a slice handler
+auto* sets = state.hevc_sets();        // nullptr for an AVC state
+auto  resolved = sets->resolve_pps(0); // PPS → SPS → VPS chain
+```
+
+`state.hevc_sets()` / `state.avc_sets()` return the codec manager, or `nullptr`
+when the `State` was created for the other codec.
+
+### Reusing a State across streams
+
+Reusing one `State` across independent streams keeps stale parameter sets, so
+IDs from stream A can shadow stream B. Call `state.clear()` before parsing a new
+stream:
+
+```cpp
+s->clear();
+bs::parse(*s, streamB, bs::NalFramingMode::AnnexB, handlers);
+```
+
+### Typed parameter-set callbacks
+
+Beyond the raw-NAL `BsNalHandlers` / `avc::NalHandlers`, `bs::parse` is also
+overloaded to deliver the **fully-parsed parameter-set structs** (with all
+nested sub-structs intact) through typed function pointers:
+
+```cpp
+bs::HevcParsedHandlers h{};
+h.sps = [](const bs::SequenceParameterSet& sps) { /* ... */ };
+h.pps = [](const bs::PictureParameterSet& pps) { /* ... */ };
+h.vps = [](const bs::VideoParameterSet& vps)   { /* ... */ };
+h.sei = [](const bs::ParsedSei& sei) {
+    for (const auto& m : sei.view.messages) { /* m.payload_type, m.payload */ }
+};
+h.slice = [](const bs::SliceSegmentHeader& sh) { /* sh.slice_type, sh.slice_qp_delta, ... */ };
+bs::parse(*state, data, bs::NalFramingMode::AnnexB, h);
+
+// AVC analogue
+bs::AvcParsedHandlers ah{};
+ah.sps = /* const avc::SequenceParameterSet& */;
+ah.pps = /* const avc::PictureParameterSet& */;
+bs::parse(*state, data, bs::NalFramingMode::AnnexB, ah);
+```
+
+The handler structs are default-constructed empty and NULL-safe: any unset
+slot is simply skipped. They mirror the typed callbacks exposed by the C API
+(see below) and are the preferred way to walk parsed parameter sets without
+keeping the `State` alive.
+
+### Collected StructReport
+
+When callbacks are inconvenient (e.g. one-shot tooling, or FFI), a single
+`bs::StructReport` snapshot can be filled instead:
+
+```cpp
+bs::StructReport report{};
+bs::parse(*state, data, bs::NalFramingMode::AnnexB, report);
+// report.hevc_vps / report.hevc_sps / report.hevc_pps
+// report.avc_sps  / report.avc_pps   (value-copied, codec-dependent)
+```
+
+The report is codec-agnostic: the `State`'s codec selects which vectors are
+populated. Every entry is a copy, so the report outlives the `State`.
+
+### Flow
+
+```
+bs::parse(state, bytes, mode, handlers)
+   │  overload chosen by handler type (Hevc ⇔ BsNalHandlers)
+   ▼
+NalFramingMode → AnnexBNalIterator / LengthPrefixedNalIterator   nal_framer.hpp
+   ▼
+parse_nal_unit(span) → NalUnit / avc::NalUnit
+   │
+   ├─ store_hevc/avc_parameter_set()  →  State's ParameterSetManager (auto)
+   ▼
+handlers.vps/sps/pps/sei/slice(nal)        caller-provided callback
+   │
+   ▼
+RbspBitstreamReader(ebsp) → syntax parsers → models
+```
+
+### C public API (`capi/`)
+
+For consumers that cannot build the C++20 templates (plain C, older
+compilers, or FFI from other languages), `capi/bs_capi.cpp` is a single
+translation unit that bridges this ABI to `bs::State` / `bs::parse`. It is
+compiled into the `bs_capi` target, which can be built as a **STATIC**
+(default) or **SHARED** (`-DBS_CAPI_SHARED=ON`) library. Structured data is
+exchanged through plain C structs (no JSON / serialisation), so the usage
+mirrors the C++ handler-based API:
+
+```c
+BsState* st = bs_state_create(BS_CODEC_HEVC);
+
+/* callback dispatch — each callback receives a BsNalUnit view */
+BsNalHandlers h = {0};
+h.sps   = on_sps;     /* const BsNalUnit* nal */
+h.slice = on_slice;
+bs_parse(st, data, size, BS_FRAMING_ANNEX_B, 4, &h);
+
+/* or a structured report as an array of BsNalEntry structs */
+BsReport* r = bs_parse_report(NULL, data, size,
+                              BS_FRAMING_ANNEX_B, 4); /* auto-detect codec */
+for (size_t i = 0; i < r->nal_count; ++i) {          /* iterate r->nals[i] */
+    /* r->nals[i].nal_type_name, .offset, .size, .is_vcl, ... */
+}
+bs_report_destroy(r);
+bs_state_destroy(st);
+```
+
+#### Typed parameter-set structs
+
+Beyond the raw `BsNalUnit` view, the C API also delivers the fully-parsed
+parameter-set structs (the `BsHevc*` / `BsAvc*` mirrors generated by
+`tools/gen_c_structs.py`, with all nested sub-structs intact). These mirror
+`bs::HevcParsedHandlers` / `bs::AvcParsedHandlers`:
+
+```c
+BsHevcHandlers h = {0};
+h.sps = on_hevc_sps;   /* const BsHevcSequenceParameterSet* */
+h.pps = on_hevc_pps;
+bs_parse_hevc(st, data, size, BS_FRAMING_ANNEX_B, 4, &h);
+
+/* or a collected snapshot (C-side bs::StructReport equivalent) */
+BsStructReport* r = bs_parse_struct_report(NULL, data, size,
+                                           BS_FRAMING_ANNEX_B, 4);
+for (size_t i = 0; i < r->count; ++i) {        /* r->entries[i].kind / .data */
+    const BsHevcSequenceParameterSet* sps =
+        (const BsHevcSequenceParameterSet*)r->entries[i].data;
+    /* ... */
+}
+bs_struct_report_destroy(r);
+```
+
+The typed callback receives an owned struct valid only for the call's
+duration; the library frees it (and its heap buffers) afterwards. The struct
+report owns every entry and is released with `bs_struct_report_destroy`.
+Both are generated alongside the mirror: `bs_structs_conv.hpp` (C++→C
+conversion) and `bs_structs_free.hpp` (per-struct `bs_free_*` helpers).
+
+**SEI** is delivered differently: a SEI NAL carries zero or more messages of
+heterogeneous payload types backed by views into the RBSP buffer, so it is not
+mirrored as a single C struct. Instead each message is delivered on its own via
+`BsSeiCallback` (`payload_type`, `payload` bytes, `payload_size`). The C++
+`sei` handler receives the whole container (`bs::ParsedSei::view.messages` for
+HEVC, `bs::avc::ParsedSei::messages` for AVC) and may iterate at leisure.
+
+**Slice headers** (`BsHevcSliceSegmentHeader` / `BsAvcSliceHeader`) are
+delivered as the fully-parsed mirror struct for every VCL NAL. Because the
+slice's referenced `pps_id` lives inside the header itself, the dispatch does a
+two-pass parse: it reads just the `pps_id` from the front of the RBSP, resolves
+the SPS/PPS through the state's manager, then re-parses the full header with
+the resolved parameter sets. If resolution fails the slice is skipped (no
+callback). The C++ `slice` handler receives `const bs::SliceSegmentHeader&` /
+`const bs::avc::SliceHeader&`.
+
+Both passes use the lightweight, allocation-free `RbspReader` (see the bit
+reader section below): a slice header only ever reads forward, so it never pays
+for the `RbspBitstreamReader` logical-map construction that PS/SEI parsing
+requires. This removes one full-payload scan + heap allocation per slice.
+
+The ABI is plain C: an opaque `BsState*` handle, integer enums, `size_t`, and
+`char*` strings (only the last-error message); no exceptions or STL types
+cross the boundary (errors surface via `bs_get_last_error`). `bs_capi.h` is
+installed to `include/` and the library to `lib/`.
+
+#### Performance
+
+The C++20 templates are an *implementation detail* of the library: they are
+compiled exactly once, into `bs_capi`. C / pre-C++20 consumers never include
+them — they only `#include "bsparser.h"` (which selects the C API) and link
+the library. There is **no runtime penalty**:
+
+- `bs_parse` hands each NAL to the caller as a `const BsNalUnit*` view that
+  points directly into the input buffer — zero-copy, identical to the C++
+  `NalUnit` handler path. The only overhead per NAL is one indirect callback
+  and a `thread_local` read, negligible next to the bit-level parsing.
+- `bs_parse_report` builds a `BsReport` of `BsNalEntry` structs in one pass
+  (the `nal_type_name` fields point at static strings), allocating a single
+  array that the caller frees with `bs_report_destroy`. No per-NAL string
+  building or serialisation.
+- The bit reader and syntax parsers execute inside the already-compiled,
+  optimized C++20 library, so consumers get the same code regardless of their
+  own compiler/standard. (Both paths still auto-store parameter sets, same as
+  the C++ API — a framer-only entry can be added if a consumer wants to skip
+  that parse cost entirely.)
+
+---
+
+## Performance
+
+The parser is optimised around the two facts that dominate real-world HEVC/AVC
+streams:
+
+1. **Most NALs are slices, and slice *headers* are small** — yet the payload a
+   slice NAL carries is dominated by slice *data* the syntax parser never
+   reads.
+2. **The slice-header parser only reads forward** — it never needs random byte
+   access, a total bit count, or `more_rbsp_data()`.
+
+The `RbspBitstreamReader`'s constructor builds a full `logical_to_ebsp_` map by
+scanning + allocating over the *entire* NAL payload. That map is genuinely
+needed only by the parsers that call `more_rbsp_data()` / `find_last_one_bit()`
+(backward scans): the VPS/SPS/PPS extension loops and AVC SEI.
+
+Slice-header dispatch therefore uses the **zero-allocation `RbspReader`** (an
+inline byte cursor with emulation-prevention skipping) for both passes of the
+`pps_id` + full-header parse. Measured on a 5 MB HEVC stream:
+
+```
+                    before         after
+  typed-slice       25.3 ms        17.3 ms     −32%
+  typed-full        31.9 ms        24.9 ms     −22%
+  c-api-full        39.1 ms        32.5 ms     −17%
+```
+
+The same change was applied to AVC by templating `parse_slice_header` and its
+helpers on the reader type (accuracy is verified against `ffmpeg`-generated
+references for both codecs).
+
+### Design rule
+
+> Use `RbspReader` for any parser that only reads forward and never calls
+> `more_rbsp_data()` / `bits_remaining()`. Use `RbspBitstreamReader` only where
+> a backward scan or random byte access is actually required.
+
+---
+
 
 ## 1. Layer overview
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
+│  UNIFIED API   bsparser.hpp                                              │
+│  enum class Codec { Hevc, Avc };                                         │
+│  bs::State (opaque) · bs::create_state() · bs::parse()                   │
+│  → selects codec path, auto-manages parameter sets per State             │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                    │  raw Annex-B bytes (either codec)
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────┐
 │                     ENTRY POINTS / CLIENTS                                │
 │   tests/main.cpp        tests/avc_test.cpp         tests/fuzz/fuzz_*.cpp  │
 │   (HEVC demo)           (AVC demo, H.264 streams)  (fuzz harness +        │
 │                                                   standalone driver)      │
+│   tests/unified_test.cpp  (exercises the unified Codec/State API)         │
 └──────────────────────────────────┬───────────────────────────────────────┘
-                                   │  raw Annex-B bytes (either codec)
-                                   ▼
+                                    │  raw Annex-B bytes (either codec)
+                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  DISPATCH LAYER                                                           │
 │  HEVC:  parser/hevc_nal_parser.hpp        AVC:  parser/avc_nal_parser.hpp   │
@@ -59,12 +358,17 @@ and are shared by both the HEVC and the AVC stack.
                                    │  EBSP payload (no copy)
                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  BIT READER              bitstream/rbsp_bitstream_reader.hpp  (shared)    │
+│  BIT READERS                 bitstream/*.hpp  (shared)                    │
 │                                                                           │
-│  Precomputed logical EPB→RBSP map (skips 00 00 03 emulation bytes, O(1))  │
-│  read_bit · read_bits(n) · read_ue / read_se · read_u8/u16/u32            │
-│  skip_bits · align_to_byte · more_rbsp_data · rbsp_trailing_bits          │
-│  bit_position / bits_remaining / byte_aligned · bounds-checked reads      │
+│  RbspBitstreamReader (map-based):                                         │
+│    precomputed logical EPB→RBSP map (skips 00 00 03, O(1) random access)  │
+│    read_bit/bits/ue/se · more_rbsp_data · rbsp_trailing_bits · align      │
+│    used where backward scans are needed: VPS/SPS/PPS extension loops, AVC │
+│    SEI. Builds the map once in the ctor (scans the whole NAL payload).    │
+│                                                                           │
+│  RbspReader (zero-alloc sequential):                                      │
+│    read_bit/bits/ue/se with an inline byte cursor; NO map, NO allocation  │
+│    used for slice-header parsing (forward reads only) — skips the map.    │
 └───────────────────────────────┬──────────────────┬───────────────────────┘
                                 │                  │
         ┌───────────────────────┴──────────┐       │
@@ -117,7 +421,8 @@ parse_sequence_parameter_set(reader)  →  SequenceParameterSet
    ▼
 parameter_sets.store_sps(std::move(sps))           hevc_parameter_set_manager.hpp
    ▼
-(later) slice: find_pps(id) → find_sps(pps→sps_id) → parse_slice_segment_header
+(later) slice: find_pps(id) → find_sps(pps→sps_id)
+   → parse_slice_segment_header(RbspReader, ...)   rbsp_reader.hpp (no map)
 ```
 
 AVC (`parser/avc_nal_parser.hpp`) mirrors this, with one key difference: AVC has
@@ -208,7 +513,7 @@ Each row: *parser file → syntax model → notable responsibilities / sub-parse
 ├──────────────────┼──────────────────────────┼──────────────────────────────┤
 │ Slice header     │ syntax/avc_slice_header  │ first_mb · slice_type ·       │
 │ parser/          │ .hpp                     │ frame_num · POC · direct/spat │
-│ avc_slice_parser │                          │ · ref idx active override     │
+│ avc_slice_parser │   (templated on Reader)  │ · ref idx active override     │
 │ .hpp             │                          │ (inferred from PPS defaults   │
 │                  │                          │ when clear, 7.4.3.1) · ref    │
 │                  │                          │ pic list mod (L0/L1) · pred   │
@@ -232,7 +537,8 @@ Shared sub-parsers:
   parser/avc_parse_common.hpp                 ParseError · read_ue_max ·
                                               read_se_bounded · ceil_log2
   parser/avc_nal_unit_parser.hpp              1-byte AVC NAL header
-  bitstream/rbsp_bitstream_reader.hpp         shared bit reader (codec-agnostic)
+  bitstream/rbsp_bitstream_reader.hpp         map-based bit reader (PS/SEI)
+  bitstream/rbsp_reader.hpp                   zero-alloc sequential reader (slices)
 ```
 
 ---
@@ -301,12 +607,19 @@ and the same `NalFramingMode` enum from `parser/nal_framer.hpp`.
         │                                   avc_parameter_set_manager.hpp
         │                                   (SPS 32 / PPS 256, resolve())
         ▼
- rbsp_bitstream_reader.hpp → <span> <vector> <cstdint> (self-contained)
- log.hpp                    → self-contained macros (BS_ENABLE_TRACE gate)
+  rbsp_bitstream_reader.hpp → <span> <vector> <cstdint> (self-contained)
+  rbsp_reader.hpp           → <span> <cstdint> (no allocation; slice headers)
+  log.hpp                   → self-contained macros (BS_ENABLE_TRACE gate)
 ```
 
 The two stacks are independent above the shared framing / bit-reader / logging
 layers, so an HEVC build does not drag in AVC code and vice-versa.
+
+`bsparser.hpp` sits at the very top: it `#include`s both stacks plus the shared
+layers and adds the unified `Codec` / `State` / `parse` front end. The unified
+`parse` reuses each stack's existing framing iterators and `dispatch_nal`, and
+adds per-`State` parameter-set auto-storage on top — it does not duplicate the
+per-codec dispatch logic.
 
 ---
 
@@ -315,11 +628,36 @@ layers, so an HEVC build does not drag in AVC code and vice-versa.
 ```
 bsparser/
 ├── CMakeLists.txt                project(bsparser); targets bs_test, bs_avc_test,
-│                                 bs_fuzz, bs_fuzz_driver; BS_ENABLE_* options
+│                                 bs_unified_test, bs_fuzz, bs_fuzz_driver;
+│                                 BS_ENABLE_* options; root added to include path
+├── bsparser.h                   SINGLE UMBRELLA HEADER (use this) — adapts
+│                                 to language (C/C++), standard (C++20 or
+│                                 not) and build config (BS_USE_C_API /
+│                                 BS_FORCE_C_API) and pulls in either the C
+│                                 API (bs_capi.h) or the C++20 templates
+│                                 (bsparser.hpp)
+├── bsparser.hpp                  UNIFIED PUBLIC HEADER (C++20 templates) —
+│                                 aggregates all sub-headers; defines bs::Codec,
+│                                 bs::State, bs::create_state(), bs::parse()
+├── cli/                          command-line tool
+│   ├── bs_cli.cpp                arg parsing, help, codec auto-detect,
+│   │                             framing selection, file I/O
+│   └── report.hpp                Report/NalEntry model, JSON + HTML
+│                                 (self-contained viewer w/ filters) exporters
+├── capi/                         C public API (stable ABI)
+│   ├── bs_capi.h                 extern "C" header: BsState, BsCodec,
+│   │                             BsFramingMode, BsNalUnit, BsNalHandlers,
+│   │                             BsNalEntry, BsReport, bs_parse,
+│   │                             bs_parse_report, bs_state_*, bs_report_destroy,
+│   │                             bs_get_last_error
+│   └── bs_capi.cpp               single TU bridging C ABI ↔ bs::State /
+│                                 bs::parse; compiled into the bs_capi STATIC
+│                                 or SHARED library (structs, no JSON)
 ├── bitstream/
-│   ├── rbsp_bitstream_reader.hpp   primary bit reader (EPB map, ue/se, bounds)
-│   ├── rbsp_reader.hpp             lightweight RbspReader factory used by
-│   │                               make_nal_rbsp_reader()
+│   ├── rbsp_bitstream_reader.hpp   map-based bit reader (EPB map, ue/se,
+│   │                               bounds, more_rbsp_data) — PS/SEI parsing
+│   ├── rbsp_reader.hpp             zero-allocation sequential RbspReader —
+│   │                               slice-header parsing (forward reads only)
 │   └── bitstream_reader.hpp
 ├── parser/
 │   ├── hevc_nal_parser.hpp           HEVC NAL dispatch + handler callbacks
@@ -360,6 +698,7 @@ bsparser/
 │   ├── main.cpp                   HEVC demo driver (reads .hevc file at runtime)
 │   ├── ext_test.cpp               HEVC extension-field validation tool
 │   ├── avc_test.cpp               AVC demo driver (reads .h264 file at runtime)
+│   ├── unified_test.cpp           unified API: Codec/State, multi-state, clear()
 │   └── fuzz/
 │       ├── fuzz_hevc.cpp          shared LLVMFuzzerTestOneInput
 │       ├── fuzz_driver.cpp        standalone file/stdin runner (GCC etc.)

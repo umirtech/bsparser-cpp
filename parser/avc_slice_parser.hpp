@@ -29,9 +29,10 @@ inline constexpr unsigned kMaxReorderingOps = 64;
 inline constexpr unsigned kMaxMmcoOps = 64;
 
 
+template <typename Reader>
 inline RefPicListModification
 parse_ref_pic_list_modification(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     unsigned list_id,
     SliceType slice_type)
 {
@@ -103,9 +104,10 @@ parse_ref_pic_list_modification(
 }
 
 
+template <typename Reader>
 inline PredWeightTable
 parse_pred_weight_table(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     const SequenceParameterSet& sps,
     const SliceHeader& header)
 {
@@ -243,9 +245,10 @@ parse_pred_weight_table(
 }
 
 
+template <typename Reader>
 inline void
 parse_dec_ref_pic_marking(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     const NalUnitType nal_type,
     SliceHeader& header)
 {
@@ -340,10 +343,11 @@ parse_dec_ref_pic_marking(
  * -----------------------------------------------------------
  */
 
+template <typename Reader>
 [[nodiscard]]
 inline SliceHeader
 parse_slice_header(
-    RbspBitstreamReader& reader,
+    Reader& reader,
     const SequenceParameterSet& sps,
     const PictureParameterSet& pps,
     NalUnitType nal_type,
