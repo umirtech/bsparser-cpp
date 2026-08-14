@@ -232,32 +232,6 @@ inline void parse_tracks(std::span<const std::uint8_t> d, VideoTrack& track) {
  * configured length size against the first frame and fall back
  * to 4 bytes when it is implausible.
  */
-inline std::uint32_t effective_length_size(
-    const std::vector<std::vector<std::uint8_t>>& frames, std::uint32_t configured
-) {
-    if (frames.empty()) {
-        return configured;
-    }
-
-    const auto& f0 = frames.front();
-
-    if (f0.size() <= configured) {
-        return 4;
-    }
-
-    std::uint32_t first_len = 0;
-
-    for (std::uint32_t i = 0; i < configured; ++i) {
-        first_len = (first_len << 8) | f0[i];
-    }
-
-    if (first_len == 0 || first_len > f0.size()) {
-        return 4;
-    }
-
-    return configured;
-}
-
 inline bool parse_block(
     std::span<const std::uint8_t> d,
     std::uint64_t track_number,
@@ -345,7 +319,76 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
 
     detail::VideoTrack track;
 
-    std::vector<std::vector<std::uint8_t>> frames;
+    /*
+     * Stream each video frame into the output as it is found
+     * instead of buffering the whole stream, so large files do
+     * not require a second full copy of the video data.
+     */
+    bool output_ready = false;
+    std::uint32_t frame_ts = 0;
+
+    auto emit_frame = [&](std::span<const std::uint8_t> frame) {
+        if (!output_ready) {
+            out.codec_name = track.codec_id;
+            out.width = static_cast<std::uint32_t>(track.width);
+            out.height = static_cast<std::uint32_t>(track.height);
+
+            const bool avc = track.codec_id == "V_MPEG4/ISO/AVC";
+            const bool hevc = track.codec_id == "V_MPEGH/ISO/HEVC";
+            const bool vvc = track.codec_id == "V_VVC";
+            const bool av1 = track.codec_id == "V_AV1";
+            const bool vp = track.codec_id == "V_VP9" || track.codec_id == "V_VP8";
+
+            if (avc || hevc || vvc) {
+                out.codec = avc ? Codec::Avc : (hevc ? Codec::Hevc : Codec::Vvc);
+                out.framing = NalFramingMode::AnnexB;
+
+                const std::size_t lso = avc ? 4u : (hevc ? 18u : 14u);
+
+                if (track.codec_private.size() > lso) {
+                    track.length_size =
+                        static_cast<std::uint32_t>(track.codec_private[lso] & 3u) + 1u;
+                }
+
+                /* sanity-check the length size against this frame */
+                if (frame.size() > track.length_size) {
+                    std::uint32_t fl = 0;
+                    for (std::uint32_t i = 0; i < track.length_size; ++i) {
+                        fl = (fl << 8) | frame[i];
+                    }
+                    if (fl == 0 || fl > frame.size()) {
+                        track.length_size = 4;
+                    }
+                } else {
+                    track.length_size = 4;
+                }
+
+                es::prepend_param_sets(out, track.codec_private, !avc);
+
+            } else if (vp) {
+                out.codec = track.codec_id == "V_VP9" ? Codec::Vp9 : Codec::Vp8;
+                out.framing = NalFramingMode::Ivf;
+                es::append_ivf_header(
+                    out, track.codec_id == "V_VP9" ? "VP90" : "VP80", out.width, out.height
+                );
+
+            } else if (av1) {
+                out.codec = Codec::Av1;
+                out.framing = NalFramingMode::Obu;
+            }
+
+            output_ready = true;
+        }
+
+        if (track.codec_id == "V_MPEG4/ISO/AVC" || track.codec_id == "V_MPEGH/ISO/HEVC" ||
+            track.codec_id == "V_VVC") {
+            es::emit_length_prefixed(out, frame, track.length_size);
+        } else if (track.codec_id == "V_VP9" || track.codec_id == "V_VP8") {
+            es::append_ivf_frame(out, frame, frame_ts++);
+        } else {
+            out.bytes.insert(out.bytes.end(), frame.begin(), frame.end());
+        }
+    };
 
     std::size_t p = seg_begin;
 
@@ -370,7 +413,7 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
             detail::parse_tracks(element, track);
         }
 
-        if (id == detail::kCluster) {
+        if (id == detail::kCluster && track.found) {
             std::size_t q = 0;
 
             while (q + 4 <= element.size()) {
@@ -411,7 +454,7 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
                     std::span<const std::uint8_t> frame;
 
                     if (detail::parse_block(block_data, track.number, frame)) {
-                        frames.emplace_back(frame.begin(), frame.end());
+                        emit_frame(frame);
                     }
                 }
 
@@ -422,87 +465,11 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
         p += size;
     }
 
-    if (!track.found || frames.empty()) {
+    if (!output_ready) {
         return out;
     }
 
-    out.codec_name = track.codec_id;
-    out.width = static_cast<std::uint32_t>(track.width);
-    out.height = static_cast<std::uint32_t>(track.height);
-
-    if (track.codec_id == "V_MPEG4/ISO/AVC") {
-        out.codec = Codec::Avc;
-        out.framing = NalFramingMode::AnnexB;
-
-        if (track.codec_private.size() >= 5) {
-            track.length_size = static_cast<std::uint32_t>(track.codec_private[4] & 3u) + 1u;
-        }
-
-        track.length_size = detail::effective_length_size(frames, track.length_size);
-
-        es::prepend_param_sets(out, track.codec_private, false);
-
-        for (const auto& frame : frames) {
-            es::emit_length_prefixed(out, frame, track.length_size);
-        }
-
-        out.ok = true;
-        return out;
-    }
-
-    if (track.codec_id == "V_MPEGH/ISO/HEVC" || track.codec_id == "V_VVC") {
-        out.codec = track.codec_id == "V_MPEGH/ISO/HEVC" ? Codec::Hevc : Codec::Vvc;
-        out.framing = NalFramingMode::AnnexB;
-
-        const bool hvc = out.codec == Codec::Hevc;
-        const std::size_t lso = hvc ? 18u : 14u;
-
-        if (track.codec_private.size() > lso) {
-            track.length_size = static_cast<std::uint32_t>(track.codec_private[lso] & 3u) + 1u;
-        }
-
-        track.length_size = detail::effective_length_size(frames, track.length_size);
-
-        es::prepend_param_sets(out, track.codec_private, true);
-
-        for (const auto& frame : frames) {
-            es::emit_length_prefixed(out, frame, track.length_size);
-        }
-
-        out.ok = true;
-        return out;
-    }
-
-    if (track.codec_id == "V_AV1") {
-        out.codec = Codec::Av1;
-        out.framing = NalFramingMode::Obu;
-
-        for (const auto& frame : frames) {
-            out.bytes.insert(out.bytes.end(), frame.begin(), frame.end());
-        }
-
-        out.ok = true;
-        return out;
-    }
-
-    if (track.codec_id == "V_VP9" || track.codec_id == "V_VP8") {
-        out.codec = track.codec_id == "V_VP9" ? Codec::Vp9 : Codec::Vp8;
-        out.framing = NalFramingMode::Ivf;
-
-        es::append_ivf_header(
-            out, track.codec_id == "V_VP9" ? "VP90" : "VP80", out.width, out.height
-        );
-
-        std::uint64_t ts = 0;
-
-        for (const auto& frame : frames) {
-            es::append_ivf_frame(out, frame, ts++);
-        }
-
-        out.ok = true;
-        return out;
-    }
-
+    out.ok = true;
     return out;
 }
 
