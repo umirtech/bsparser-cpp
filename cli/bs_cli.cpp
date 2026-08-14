@@ -51,25 +51,87 @@ void print_help(const char* prog) {
 }
 
 /*
- * Very small auto-detector: inspect the first NAL unit.
+ * Very small auto-detector: scan the first few NAL units.
  *
- * HEVC SPS/PPS/VPS types are 33/34/32, which appear in the high byte of the
- * 2-byte HEVC header as (type>>1)&0x3F == 16..17.  AVC SPS/PPS are 7/8, i.e.
- * (b0 & 0x1F) in 1..21.  We pick HEVC when the inferred HEVC type looks like a
- * parameter set, otherwise AVC when the AVC type is in range, else HEVC.
+ * The very first NAL of a stream is not necessarily a parameter set
+ * (an encoder may start with AUD or a VCL slice), so look at up to 16
+ * leading Annex-B NALs and count HEVC vs AVC parameter-set types:
+ *
+ *   HEVC  VPS=32, SPS=33, PPS=34
+ *   AVC   SPS=7,  PPS=8
+ *
+ * The codec with any matching parameter sets wins; with none we fall
+ * back to inspecting the first NAL byte (an AVC type 1..21 is AVC,
+ * otherwise HEVC).
  */
 [[nodiscard]]
 bs::Codec detect_codec(std::span<const std::uint8_t> data) {
+    unsigned hevc_ps = 0;
+    unsigned avc_ps = 0;
     std::size_t i = 0;
+    unsigned nal_count = 0;
 
-    /*
-     * Skip a leading Annex-B start code if present.
-     */
-    if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
-        data[3] == 0x01) {
-        i = 4;
-    } else if (data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01) {
+    while (i < data.size() && nal_count < 16) {
+        if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 &&
+            data[i + 3] == 0x01) {
+            i += 4;
+        } else if (i + 3 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 &&
+                   data[i + 2] == 0x01) {
+            i += 3;
+        } else {
+            break;
+        }
+
+        if (i >= data.size()) {
+            break;
+        }
+
+        const std::uint8_t b0 = data[i];
+        const unsigned hevc_type = (b0 >> 1) & 0x3F;
+        const unsigned avc_type = b0 & 0x1F;
+
+        if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34) {
+            ++hevc_ps;
+        }
+
+        if (avc_type == 7 || avc_type == 8) {
+            ++avc_ps;
+        }
+
+        ++nal_count;
+
+        /*
+         * Advance to the next Annex-B start code.  If the stream is
+         * length-prefixed there is no start code and we stop after the
+         * first NAL, which the fallback below still resolves.
+         */
+        std::size_t j = i;
+
+        while (j + 3 < data.size() &&
+               !(data[j] == 0x00 && data[j + 1] == 0x00 && data[j + 2] == 0x01)) {
+            ++j;
+        }
+
+        if (j + 3 >= data.size()) {
+            break;
+        }
+
+        i = j;
+    }
+
+    if (hevc_ps > avc_ps) {
+        return bs::Codec::Hevc;
+    }
+
+    if (avc_ps > 0) {
+        return bs::Codec::Avc;
+    }
+
+    if (data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01) {
         i = 3;
+    } else if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
+               data[3] == 0x01) {
+        i = 4;
     }
 
     if (i >= data.size()) {
@@ -77,12 +139,7 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
     }
 
     const std::uint8_t b0 = data[i];
-    const unsigned hevc_type = (b0 >> 1) & 0x3F;
     const unsigned avc_type = b0 & 0x1F;
-
-    if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34) {
-        return bs::Codec::Hevc;
-    }
 
     if (avc_type >= 1 && avc_type <= 21) {
         return bs::Codec::Avc;

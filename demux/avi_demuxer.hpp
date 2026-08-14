@@ -46,10 +46,16 @@ struct Chunk {
     std::size_t start = 0;
     std::size_t data = 0;
     std::size_t end = 0;
+    std::size_t size = 0;
     char fourcc[5] = {0, 0, 0, 0, 0};
     bool is_list = false;
 };
 
+/*
+ * AVI chunks are word-aligned: an odd-sized chunk is padded with one
+ * byte.  `size` is the real data length; `end` is the aligned boundary
+ * (data + size + pad) so callers can simply advance with `end`.
+ */
 inline Chunk chunk_at(std::span<const std::uint8_t> d, std::size_t p) {
     Chunk c;
     c.start = p;
@@ -62,8 +68,9 @@ inline Chunk chunk_at(std::span<const std::uint8_t> d, std::size_t p) {
 
     const std::uint32_t size = read_u32(d, p + 4);
 
+    c.size = size;
     c.data = p + 8;
-    c.end = c.data + size;
+    c.end = c.data + size + (size & 1u);
     if (c.end > d.size()) {
         c.end = d.size();
     }
@@ -183,34 +190,47 @@ inline ElementaryStream demux_avi(std::span<const std::uint8_t> data) {
                         break;
                     }
 
-                    if (item.is_list && item.data + 4 <= item.end &&
-                        detail::is_fourcc(data, item.data, "strl")) {
-                        std::size_t q = item.data + 4;
+                            if (item.is_list && item.data + 4 <= item.end &&
+                                detail::is_fourcc(data, item.data, "strl")) {
+                                std::size_t q = item.data + 4;
 
-                        while (q + 8 <= item.end) {
-                            detail::Chunk sub = detail::chunk_at(data, q);
+                                bool in_video_strl = false;
 
-                            if (sub.end <= q) {
-                                break;
-                            }
+                                while (q + 8 <= item.end) {
+                                    detail::Chunk sub = detail::chunk_at(data, q);
 
-                            if (detail::is_fourcc(data, q, "strh") && sub.data + 12 <= sub.end) {
-                                if (detail::is_fourcc(data, sub.data, "vids")) {
-                                    have_video_stream = true;
-                                    codec_fourcc = std::string(
-                                        reinterpret_cast<const char*>(data.data() + sub.data + 4), 4
-                                    );
+                                    if (sub.end <= q) {
+                                        break;
+                                    }
+
+                                    if (detail::is_fourcc(data, q, "strh") &&
+                                        sub.data + 12 <= sub.end) {
+                                        if (detail::is_fourcc(data, sub.data, "vids")) {
+                                            have_video_stream = true;
+                                            in_video_strl = true;
+                                            codec_fourcc = std::string(
+                                                reinterpret_cast<const char*>(
+                                                    data.data() + sub.data + 4
+                                                ),
+                                                4
+                                            );
+                                        }
+                                    }
+
+                                    /*
+                                     * Only take width/height from the video
+                                     * strl: an audio strf is a WAVEFORMATEX
+                                     * and its bytes are not dimensions.
+                                     */
+                                    if (in_video_strl && detail::is_fourcc(data, q, "strf") &&
+                                        sub.data + 20 <= sub.end) {
+                                        width = detail::read_u32(data, sub.data + 4);
+                                        height = detail::read_u32(data, sub.data + 8);
+                                    }
+
+                                    q = sub.end;
                                 }
                             }
-
-                            if (detail::is_fourcc(data, q, "strf") && sub.data + 20 <= sub.end) {
-                                width = detail::read_u32(data, sub.data + 4);
-                                height = detail::read_u32(data, sub.data + 8);
-                            }
-
-                            q = sub.end;
-                        }
-                    }
 
                     p = item.end;
                 }
@@ -291,8 +311,8 @@ inline ElementaryStream demux_avi(std::span<const std::uint8_t> data) {
                                           detail::is_fourcc(data, q, "00db") ||
                                           detail::is_fourcc(data, q, "00dw");
 
-                    if (is_video && sub.data < sub.end) {
-                        const auto frame = data.subspan(sub.data, sub.end - sub.data);
+                    if (is_video && sub.data < sub.data + sub.size) {
+                        const auto frame = data.subspan(sub.data, sub.size);
 
                         if (is_h26x) {
                             detail::append_h26x_chunk(out, frame);
@@ -313,8 +333,8 @@ inline ElementaryStream demux_avi(std::span<const std::uint8_t> data) {
                                   detail::is_fourcc(data, p, "00db") ||
                                   detail::is_fourcc(data, p, "00dw");
 
-            if (is_video && c.data < c.end) {
-                const auto frame = data.subspan(c.data, c.end - c.data);
+            if (is_video && c.data < c.data + c.size) {
+                const auto frame = data.subspan(c.data, c.size);
 
                 if (is_h26x) {
                     detail::append_h26x_chunk(out, frame);

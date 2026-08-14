@@ -157,13 +157,19 @@ inline VideoEntry parse_stsd(std::span<const std::uint8_t> d, std::size_t stsd_p
             e.fourcc = type;
 
             /*
-             * Video sample entry layout: 6 reserved + 2 data-ref
-             * index + 16 (pre_defined/reserved) + width(2) +
-             * height(2) + ... = width/height at offset 24.
+             * VisualSampleEntry layout (offsets within the entry):
+             *   0-7   size + format
+             *   8-13  SampleEntry reserved (6)
+             *   14-15 data_reference_index
+             *   16-17 pre_defined
+             *   18-19 reserved
+             *   20-31 pre_defined[3]
+             *   32-33 width
+             *   34-35 height
              */
-            if (p + 24 + 4 <= entry.end) {
-                e.width = static_cast<std::uint16_t>(read_u32(d, p + 24) >> 16);
-                e.height = static_cast<std::uint16_t>(read_u32(d, p + 24) & 0xFFFFu);
+            if (p + 36 <= entry.end) {
+                e.width = static_cast<std::uint16_t>(read_u32(d, p + 32) >> 16);
+                e.height = static_cast<std::uint16_t>(read_u32(d, p + 32) & 0xFFFFu);
             }
 
             /*
@@ -299,55 +305,64 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
 
     detail::Box moov_box = detail::box_at(data, moov);
 
-    const std::size_t trak = detail::find_child(data, moov_box.data, moov_box.end, "trak");
+    /*
+     * Scan all trak boxes and pick the first video track.  Real-world
+     * files often place audio or subtitle (mp4s) tracks first, so the
+     * first trak is not necessarily the video track.
+     */
+    const std::size_t moov_end = moov_box.end;
 
-    if (trak == data.size()) {
-        return out;
+    std::size_t trak = detail::find_child(data, moov_box.data, moov_end, "trak");
+
+    detail::VideoEntry entry;
+    std::size_t stsz = data.size();
+    std::size_t stsc = data.size();
+    std::size_t stco = data.size();
+    std::size_t co64 = data.size();
+
+    while (trak != data.size() && !entry.found) {
+        detail::Box trak_box = detail::box_at(data, trak);
+
+        const std::size_t mdia = detail::find_child(data, trak_box.data, trak_box.end, "mdia");
+
+        if (mdia != data.size()) {
+            detail::Box mdia_box = detail::box_at(data, mdia);
+
+            const std::size_t minf = detail::find_child(data, mdia_box.data, mdia_box.end, "minf");
+
+            if (minf != data.size()) {
+                detail::Box minf_box = detail::box_at(data, minf);
+
+                const std::size_t stbl =
+                    detail::find_child(data, minf_box.data, minf_box.end, "stbl");
+
+                if (stbl != data.size()) {
+                    detail::Box stbl_box = detail::box_at(data, stbl);
+
+                    const std::size_t stsd =
+                        detail::find_child(data, stbl_box.data, stbl_box.end, "stsd");
+
+                    if (stsd != data.size()) {
+                        entry = detail::parse_stsd(data, stsd);
+
+                        if (entry.found) {
+                            stsz = detail::find_child(data, stbl_box.data, stbl_box.end, "stsz");
+                            stsc = detail::find_child(data, stbl_box.data, stbl_box.end, "stsc");
+                            stco = detail::find_child(data, stbl_box.data, stbl_box.end, "stco");
+                            co64 = detail::find_child(data, stbl_box.data, stbl_box.end, "co64");
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!entry.found) {
+            trak = detail::find_child(data, trak_box.end, moov_end, "trak");
+        }
     }
 
-    detail::Box trak_box = detail::box_at(data, trak);
-
-    const std::size_t mdia = detail::find_child(data, trak_box.data, trak_box.end, "mdia");
-
-    if (mdia == data.size()) {
-        return out;
-    }
-
-    detail::Box mdia_box = detail::box_at(data, mdia);
-
-    const std::size_t minf = detail::find_child(data, mdia_box.data, mdia_box.end, "minf");
-
-    if (minf == data.size()) {
-        return out;
-    }
-
-    detail::Box minf_box = detail::box_at(data, minf);
-
-    const std::size_t stbl = detail::find_child(data, minf_box.data, minf_box.end, "stbl");
-
-    if (stbl == data.size()) {
-        return out;
-    }
-
-    detail::Box stbl_box = detail::box_at(data, stbl);
-
-    const std::size_t stsd = detail::find_child(data, stbl_box.data, stbl_box.end, "stsd");
-
-    const std::size_t stsz = detail::find_child(data, stbl_box.data, stbl_box.end, "stsz");
-
-    const std::size_t stsc = detail::find_child(data, stbl_box.data, stbl_box.end, "stsc");
-
-    std::size_t stco = detail::find_child(data, stbl_box.data, stbl_box.end, "stco");
-    std::size_t co64 = detail::find_child(data, stbl_box.data, stbl_box.end, "co64");
-
-    if (stsd == data.size() || stsz == data.size() || stsc == data.size() ||
+    if (!entry.found || stsz == data.size() || stsc == data.size() ||
         (stco == data.size() && co64 == data.size())) {
-        return out;
-    }
-
-    const detail::VideoEntry entry = detail::parse_stsd(data, stsd);
-
-    if (!entry.found) {
         return out;
     }
 
