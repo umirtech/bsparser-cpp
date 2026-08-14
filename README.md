@@ -37,6 +37,7 @@ and extracts the elementary stream:
 | MPEG-TS | H.264, HEVC, VVC |
 | FLV | H.264, HEVC, VVC, AV1, VP8, VP9 |
 | AVI | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| **MKV / WebM** | **H.264, HEVC, VVC, AV1, VP8, VP9** |
 | IVF | VP8, VP9 |
 
 ```cpp
