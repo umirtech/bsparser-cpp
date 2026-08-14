@@ -18,15 +18,13 @@ struct RawNal {
     std::vector<std::uint8_t> header_and_payload;
 };
 
-std::vector<RawNal> split_annex_b(const std::vector<std::uint8_t>& data)
-{
+std::vector<RawNal> split_annex_b(const std::vector<std::uint8_t>& data) {
     std::vector<RawNal> nals;
     std::vector<std::size_t> starts;
     std::size_t i = 0;
     while (i + 3 < data.size()) {
         if (data[i] == 0x00 && data[i + 1] == 0x00) {
-            if (i + 3 < data.size() && data[i + 2] == 0x00 &&
-                data[i + 3] == 0x01) {
+            if (i + 3 < data.size() && data[i + 2] == 0x00 && data[i + 3] == 0x01) {
                 starts.push_back(i);
                 i += 4;
             } else if (data[i + 2] == 0x01) {
@@ -41,8 +39,7 @@ std::vector<RawNal> split_annex_b(const std::vector<std::uint8_t>& data)
     }
     for (std::size_t k = 0; k < starts.size(); ++k) {
         const std::size_t begin = starts[k];
-        const std::size_t end =
-            k + 1 < starts.size() ? starts[k + 1] : data.size();
+        const std::size_t end = k + 1 < starts.size() ? starts[k + 1] : data.size();
         if (end - begin < 6) {
             continue;
         }
@@ -65,23 +62,20 @@ std::vector<RawNal> split_annex_b(const std::vector<std::uint8_t>& data)
     return nals;
 }
 
-std::span<const std::byte> payload_span(const RawNal& nal)
-{
+std::span<const std::byte> payload_span(const RawNal& nal) {
     const std::uint8_t* base = nal.header_and_payload.data() + 2;
     return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(base),
-        nal.header_and_payload.size() - 2);
+        reinterpret_cast<const std::byte*>(base), nal.header_and_payload.size() - 2
+    );
 }
 
-void dump_sps(bs::RbspBitstreamReader& reader)
-{
+void dump_sps(bs::RbspBitstreamReader& reader) {
     using namespace bs;
     const auto sps = parse_sequence_parameter_set(reader);
     std::cout << "[SPS id=" << sps.sps_seq_parameter_set_id << "]\n";
     const auto& ext = sps.extension;
     std::cout << "  ext flags: range=" << ext.range_extension_flag
-              << " multi=" << ext.multilayer_extension_flag
-              << " 3d=" << ext.extension_3d_flag
+              << " multi=" << ext.multilayer_extension_flag << " 3d=" << ext.extension_3d_flag
               << " scc=" << ext.scc_extension_flag << "\n";
     if (sps.has_range_extension()) {
         const auto& r = sps.range_extension;
@@ -104,14 +98,13 @@ void dump_sps(bs::RbspBitstreamReader& reader)
                       << " delta_max_predictor=" << s.delta_palette_max_predictor_size
                       << " init_present=" << s.sps_palette_predictor_initializers_present_flag
                       << " num_minus1=" << s.sps_num_palette_predictor_initializers_minus1 << "\n";
-            const std::size_t n = static_cast<std::size_t>(
-                s.sps_num_palette_predictor_initializers_minus1) + 1;
-            const std::size_t comps =
-                sps.chroma_format == bs::ChromaFormat::Monochrome ? 1 : 3;
+            const std::size_t n =
+                static_cast<std::size_t>(s.sps_num_palette_predictor_initializers_minus1) + 1;
+            const std::size_t comps = sps.chroma_format == bs::ChromaFormat::Monochrome ? 1 : 3;
             for (std::size_t c = 0; c < comps; ++c) {
                 for (std::size_t k = 0; k < n; ++k) {
-                    std::cout << "    init[" << c << "][" << k << "]="
-                              << s.sps_palette_predictor_initializer[c][k] << "\n";
+                    std::cout << "    init[" << c << "][" << k
+                              << "]=" << s.sps_palette_predictor_initializer[c][k] << "\n";
                 }
             }
         }
@@ -138,19 +131,18 @@ void dump_sps(bs::RbspBitstreamReader& reader)
     }
 }
 
-void dump_pps(bs::RbspBitstreamReader& reader)
-{
+void dump_pps(bs::RbspBitstreamReader& reader) {
     using namespace bs;
     const auto pps = parse_picture_parameter_set(reader);
     std::cout << "[PPS id=" << pps.pps_pic_parameter_set_id << "]\n";
     const auto& ext = pps.extension;
     std::cout << "  ext flags: range=" << ext.range_extension_flag
-              << " multi=" << ext.multilayer_extension_flag
-              << " 3d=" << ext.extension_3d_flag
+              << " multi=" << ext.multilayer_extension_flag << " 3d=" << ext.extension_3d_flag
               << " scc=" << ext.scc_extension_flag << "\n";
     if (pps.has_range_extension()) {
         const auto& r = pps.range_extension;
-        std::cout << "  range: log2_max_tr_skip_minus2=" << r.log2_max_transform_skip_block_size_minus2
+        std::cout << "  range: log2_max_tr_skip_minus2="
+                  << r.log2_max_transform_skip_block_size_minus2
                   << " cross_comp_pred=" << r.cross_component_prediction_enabled_flag
                   << " chroma_qp_offset_list_en=" << r.chroma_qp_offset_list_enabled_flag
                   << " log2_sao_luma=" << r.log2_sao_offset_scale_luma
@@ -172,8 +164,7 @@ void dump_pps(bs::RbspBitstreamReader& reader)
                   << " bit_depth_for_depth_minus8=" << t.pps_bit_depth_for_depth_layers_minus8
                   << " dlt_flags=" << t.depth_layer_transforms.size() << "\n";
         for (const auto& dlt : t.depth_layer_transforms) {
-            std::cout << "    dlt: flag=" << dlt.dlt_flag
-                      << " pred=" << dlt.dlt_pred_flag
+            std::cout << "    dlt: flag=" << dlt.dlt_flag << " pred=" << dlt.dlt_pred_flag
                       << " val_flags_present=" << dlt.dlt_val_flags_present_flag
                       << " value_flag_count=" << dlt.dlt_value_flag.size() << "\n";
         }
@@ -193,8 +184,8 @@ void dump_pps(bs::RbspBitstreamReader& reader)
                   << " chroma_entry_minus8=" << s.chroma_bit_depth_entry_minus8 << "\n";
         for (std::size_t c = 0; c < 3; ++c) {
             for (std::size_t k = 0; k < s.pps_num_palette_predictor_initializers; ++k) {
-                std::cout << "    pps_init[" << c << "][" << k << "]="
-                          << s.pps_palette_predictor_initializer[c][k] << "\n";
+                std::cout << "    pps_init[" << c << "][" << k
+                          << "]=" << s.pps_palette_predictor_initializer[c][k] << "\n";
             }
         }
     }
@@ -202,8 +193,7 @@ void dump_pps(bs::RbspBitstreamReader& reader)
 
 }  // namespace
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     if (argc != 2) {
         std::cerr << "usage: ext_test <file.hevc>\n";
         return 1;
@@ -214,15 +204,16 @@ int main(int argc, char** argv)
         return 1;
     }
     std::vector<std::uint8_t> data(
-        (std::istreambuf_iterator<char>(in)),
-        std::istreambuf_iterator<char>());
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()
+    );
 
     for (const auto& nal : split_annex_b(data)) {
         switch (nal.type) {
             case 32: {
                 bs::RbspBitstreamReader reader(payload_span(nal));
                 const auto vps = bs::parse_video_parameter_set(reader);
-                std::cout << "[VPS id=" << static_cast<unsigned>(vps.vps_video_parameter_set_id) << "]\n";
+                std::cout << "[VPS id=" << static_cast<unsigned>(vps.vps_video_parameter_set_id)
+                          << "]\n";
                 break;
             }
             case 33: {

@@ -84,7 +84,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace bs {
 
 /*
@@ -97,15 +96,7 @@ namespace bs {
  * bs::parse (the handler type already disambiguates the codec; the enum keeps
  * the selection explicit and lets the library validate it).
  */
-enum class Codec : std::uint8_t {
-    Hevc,
-    Avc,
-    Vvc,
-    Av1,
-    Vp9,
-    Vp8
-};
-
+enum class Codec : std::uint8_t { Hevc, Avc, Vvc, Av1, Vp9, Vp8 };
 
 /*
  * ===========================================================================
@@ -136,14 +127,12 @@ struct HevcParsedHandlers {
     void (*slice)(const SliceSegmentHeader&) = nullptr;
 };
 
-
 struct AvcParsedHandlers {
     void (*sps)(const avc::SequenceParameterSet&) = nullptr;
     void (*pps)(const avc::PictureParameterSet&) = nullptr;
     void (*sei)(const avc::ParsedSei&) = nullptr;
     void (*slice)(const avc::SliceHeader&) = nullptr;
 };
-
 
 /*
  * VVC typed handlers: one callback per parameter-set-like NAL
@@ -159,7 +148,6 @@ struct VvcParsedHandlers {
     void (*slice)(const vvc::SliceHeader&) = nullptr;
 };
 
-
 /*
  * AV1 typed handlers.
  */
@@ -168,7 +156,6 @@ struct Av1ParsedHandlers {
     void (*frame_header)(const av1::FrameHeader&) = nullptr;
 };
 
-
 /*
  * VP9 / VP8 typed handlers (frame headers only).
  */
@@ -176,11 +163,9 @@ struct Vp9ParsedHandlers {
     void (*frame_header)(const vp9::FrameHeader&) = nullptr;
 };
 
-
 struct Vp8ParsedHandlers {
     void (*frame_header)(const vp8::FrameHeader&) = nullptr;
 };
-
 
 struct StructReport {
     std::vector<VideoParameterSet> hevc_vps;
@@ -189,7 +174,6 @@ struct StructReport {
     std::vector<avc::SequenceParameterSet> avc_sps;
     std::vector<avc::PictureParameterSet> avc_pps;
 };
-
 
 namespace detail {
 
@@ -204,95 +188,75 @@ namespace detail {
  * never see the per-codec parameter-set managers directly.
  */
 class StateImpl {
-public:
-
-    explicit StateImpl(Codec codec)
-        : codec_(codec)
-    {
+   public:
+    explicit StateImpl(Codec codec) : codec_(codec) {
         switch (codec) {
+            case Codec::Hevc:
+                hevc_ = std::make_unique<ParameterSetManager>();
+                break;
 
-        case Codec::Hevc:
-            hevc_ =
-                std::make_unique<ParameterSetManager>();
-            break;
+            case Codec::Avc:
+                avc_ = std::make_unique<avc::ParameterSetManager>();
+                break;
 
-        case Codec::Avc:
-            avc_ =
-                std::make_unique<avc::ParameterSetManager>();
-            break;
+            case Codec::Vvc:
+                vvc_ = std::make_unique<vvc::ParameterSetManager>();
+                break;
 
-        case Codec::Vvc:
-            vvc_ =
-                std::make_unique<vvc::ParameterSetManager>();
-            break;
-
-        case Codec::Av1:
-        case Codec::Vp9:
-        case Codec::Vp8:
-            break;
+            case Codec::Av1:
+            case Codec::Vp9:
+            case Codec::Vp8:
+                break;
         }
     }
 
-
     [[nodiscard]]
-    Codec codec() const noexcept
-    {
+    Codec codec() const noexcept {
         return codec_;
     }
-
 
     /*
      * Drop every stored parameter set.  Used when one State is
      * reused across independent streams to avoid stale-ID
      * collisions between them.
      */
-    void clear() noexcept
-    {
+    void clear() noexcept {
         switch (codec_) {
+            case Codec::Hevc:
+                hevc_->clear();
+                break;
 
-        case Codec::Hevc:
-            hevc_->clear();
-            break;
+            case Codec::Avc:
+                avc_->clear();
+                break;
 
-        case Codec::Avc:
-            avc_->clear();
-            break;
+            case Codec::Vvc:
+                vvc_->clear();
+                break;
 
-        case Codec::Vvc:
-            vvc_->clear();
-            break;
-
-        case Codec::Av1:
-        case Codec::Vp9:
-        case Codec::Vp8:
-            break;
+            case Codec::Av1:
+            case Codec::Vp9:
+            case Codec::Vp8:
+                break;
         }
     }
 
-
     [[nodiscard]]
-    ParameterSetManager& hevc() noexcept
-    {
+    ParameterSetManager& hevc() noexcept {
         return *hevc_;
     }
 
-
     [[nodiscard]]
-    avc::ParameterSetManager& avc() noexcept
-    {
+    avc::ParameterSetManager& avc() noexcept {
         return *avc_;
     }
 
-
     [[nodiscard]]
-    vvc::ParameterSetManager& vvc() noexcept
-    {
+    vvc::ParameterSetManager& vvc() noexcept {
         return *vvc_;
     }
 
-
-private:
-
+   private:
     Codec codec_;
 
     std::unique_ptr<ParameterSetManager> hevc_{};
@@ -302,21 +266,14 @@ private:
     std::unique_ptr<vvc::ParameterSetManager> vvc_{};
 };
 
-
 /*
  * Convert a span of bytes-like storage into a span of std::byte, which is
  * what the RBSP reader consumes.
  */
 [[nodiscard]]
-inline std::span<const std::byte>
-to_byte_span(
-    std::span<const std::uint8_t> data) noexcept
-{
-    return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(data.data()),
-        data.size());
+inline std::span<const std::byte> to_byte_span(std::span<const std::uint8_t> data) noexcept {
+    return std::span<const std::byte>(reinterpret_cast<const std::byte*>(data.data()), data.size());
 }
-
 
 /*
  * Parse + store one HEVC parameter-set NAL into the manager.
@@ -325,146 +282,126 @@ to_byte_span(
  * whole stream dispatch, and the user's handler is still free to attempt its
  * own parse.
  */
-inline void
-store_hevc_parameter_set(
+inline void store_hevc_parameter_set(
     ParameterSetManager& manager,
     const NalUnit& nal,
     const HevcParsedHandlers& ph = {},
-    StructReport* report = nullptr)
-{
+    StructReport* report = nullptr
+) {
     try {
-
         switch (nal.type()) {
+            case NalUnitType::VPS_NUT: {
+                RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
+                VideoParameterSet vps = parse_video_parameter_set(reader);
+                (void)manager.store_vps(vps);
+                if (ph.vps)
+                    ph.vps(vps);
+                if (report)
+                    report->hevc_vps.push_back(vps);
+                break;
+            }
 
-        case NalUnitType::VPS_NUT: {
-            RbspBitstreamReader reader(
-                to_byte_span(nal.payload_bytes()));
-            VideoParameterSet vps =
-                parse_video_parameter_set(reader);
-            (void)manager.store_vps(vps);
-            if (ph.vps) ph.vps(vps);
-            if (report) report->hevc_vps.push_back(vps);
-            break;
-        }
+            case NalUnitType::SPS_NUT: {
+                RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
+                SequenceParameterSet sps = parse_sequence_parameter_set(reader);
+                (void)manager.store_sps(sps);
+                if (ph.sps)
+                    ph.sps(sps);
+                if (report)
+                    report->hevc_sps.push_back(sps);
+                break;
+            }
 
-        case NalUnitType::SPS_NUT: {
-            RbspBitstreamReader reader(
-                to_byte_span(nal.payload_bytes()));
-            SequenceParameterSet sps =
-                parse_sequence_parameter_set(reader);
-            (void)manager.store_sps(sps);
-            if (ph.sps) ph.sps(sps);
-            if (report) report->hevc_sps.push_back(sps);
-            break;
-        }
+            case NalUnitType::PPS_NUT: {
+                RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
+                PictureParameterSet pps = parse_picture_parameter_set(reader);
+                (void)manager.store_pps(pps);
+                if (ph.pps)
+                    ph.pps(pps);
+                if (report)
+                    report->hevc_pps.push_back(pps);
+                break;
+            }
 
-        case NalUnitType::PPS_NUT: {
-            RbspBitstreamReader reader(
-                to_byte_span(nal.payload_bytes()));
-            PictureParameterSet pps =
-                parse_picture_parameter_set(reader);
-            (void)manager.store_pps(pps);
-            if (ph.pps) ph.pps(pps);
-            if (report) report->hevc_pps.push_back(pps);
-            break;
-        }
-
-        default:
-            break;
+            default:
+                break;
         }
 
     } catch (...) {
         /* leave the manager untouched on parse failure */
     }
 }
-
 
 /*
  * Parse + store one AVC parameter-set NAL into the manager.
  */
-inline void
-store_avc_parameter_set(
+inline void store_avc_parameter_set(
     avc::ParameterSetManager& manager,
     const avc::NalUnit& nal,
     const AvcParsedHandlers& ph = {},
-    StructReport* report = nullptr)
-{
+    StructReport* report = nullptr
+) {
     try {
-
         switch (nal.type()) {
+            case avc::NalUnitType::Sps: {
+                RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
+                avc::SequenceParameterSet sps = avc::parse_sequence_parameter_set(reader);
+                (void)manager.store_sps(sps);
+                if (ph.sps)
+                    ph.sps(sps);
+                if (report)
+                    report->avc_sps.push_back(sps);
+                break;
+            }
 
-        case avc::NalUnitType::Sps: {
-            RbspBitstreamReader reader(
-                to_byte_span(nal.payload_bytes()));
-            avc::SequenceParameterSet sps =
-                avc::parse_sequence_parameter_set(reader);
-            (void)manager.store_sps(sps);
-            if (ph.sps) ph.sps(sps);
-            if (report) report->avc_sps.push_back(sps);
-            break;
-        }
+            case avc::NalUnitType::Pps: {
+                RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
+                avc::PictureParameterSet pps = avc::parse_picture_parameter_set(reader);
+                (void)manager.store_pps(pps);
+                if (ph.pps)
+                    ph.pps(pps);
+                if (report)
+                    report->avc_pps.push_back(pps);
+                break;
+            }
 
-        case avc::NalUnitType::Pps: {
-            RbspBitstreamReader reader(
-                to_byte_span(nal.payload_bytes()));
-            avc::PictureParameterSet pps =
-                avc::parse_picture_parameter_set(reader);
-            (void)manager.store_pps(pps);
-            if (ph.pps) ph.pps(pps);
-            if (report) report->avc_pps.push_back(pps);
-            break;
-        }
-
-        default:
-            break;
+            default:
+                break;
         }
 
     } catch (...) {
         /* leave the manager untouched on parse failure */
     }
 }
-
 
 /*
  * HEVC framing + dispatch with automatic parameter-set storage.
  */
 template <typename Framer>
-inline std::size_t
-dispatch_state_hevc(
+inline std::size_t dispatch_state_hevc(
     StateImpl& impl,
     Framer& framer,
     const BsNalHandlers& handlers,
     const HevcParsedHandlers& ph = {},
-    StructReport* report = nullptr)
-{
+    StructReport* report = nullptr
+) {
     std::size_t parsed_count = 0;
 
-    ParameterSetManager& manager =
-        impl.hevc();
+    ParameterSetManager& manager = impl.hevc();
 
     while (framer.valid()) {
-
-        const auto bytes =
-            framer.nal();
+        const auto bytes = framer.nal();
 
         try {
+            NalUnit nal = parse_nal_unit(bytes);
 
-            NalUnit nal =
-                parse_nal_unit(bytes);
-
-            store_hevc_parameter_set(
-                manager,
-                nal,
-                ph,
-                report);
+            store_hevc_parameter_set(manager, nal, ph, report);
 
             if (ph.sei) {
                 const auto t = nal.type();
-                if (t == NalUnitType::PREFIX_SEI_NUT ||
-                    t == NalUnitType::SUFFIX_SEI_NUT) {
+                if (t == NalUnitType::PREFIX_SEI_NUT || t == NalUnitType::SUFFIX_SEI_NUT) {
                     try {
-                        ParsedSei sei =
-                            parse_sei_nal(nal);
+                        ParsedSei sei = parse_sei_nal(nal);
                         ph.sei(sei);
                     } catch (...) {
                         /* malformed SEI: skip */
@@ -482,33 +419,22 @@ dispatch_state_hevc(
              */
             if (ph.slice && nal.is_vcl()) {
                 try {
-                    const std::uint8_t nut =
-                        static_cast<std::uint8_t>(
-                            nal.nal_type());
+                    const std::uint8_t nut = static_cast<std::uint8_t>(nal.nal_type());
 
                     RbspReader r1(nal.payload_bytes());
                     (void)r1.read_bit();
                     if (is_irap_nal_unit(nut)) {
                         (void)r1.read_bit();
                     }
-                    const std::uint32_t pps_id =
-                        r1.read_ue();
+                    const std::uint32_t pps_id = r1.read_ue();
 
-                    const auto resolved =
-                        manager.resolve_pps(
-                            static_cast<std::uint8_t>(
-                                pps_id));
+                    const auto resolved = manager.resolve_pps(static_cast<std::uint8_t>(pps_id));
 
-                    if (resolved.pps != nullptr &&
-                        resolved.sps != nullptr) {
+                    if (resolved.pps != nullptr && resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
-                        SliceSegmentHeader hdr =
-                            parse_slice_segment_header(
-                                r2,
-                                *resolved.sps,
-                                *resolved.pps,
-                                nut,
-                                nal.temporal_id());
+                        SliceSegmentHeader hdr = parse_slice_segment_header(
+                            r2, *resolved.sps, *resolved.pps, nut, nal.temporal_id()
+                        );
                         ph.slice(hdr);
                     }
                 } catch (...) {
@@ -516,11 +442,7 @@ dispatch_state_hevc(
                 }
             }
 
-            if (dispatch_nal(
-                    nal,
-                    handlers) ==
-                NalParseResult::Parsed) {
-
+            if (dispatch_nal(nal, handlers) == NalParseResult::Parsed) {
                 ++parsed_count;
             }
 
@@ -534,45 +456,33 @@ dispatch_state_hevc(
     return parsed_count;
 }
 
-
 /*
  * AVC framing + dispatch with automatic parameter-set storage.
  */
 template <typename Framer>
-inline std::size_t
-dispatch_state_avc(
+inline std::size_t dispatch_state_avc(
     StateImpl& impl,
     Framer& framer,
     const avc::NalHandlers& handlers,
     const AvcParsedHandlers& ph = {},
-    StructReport* report = nullptr)
-{
+    StructReport* report = nullptr
+) {
     std::size_t parsed_count = 0;
 
-    avc::ParameterSetManager& manager =
-        impl.avc();
+    avc::ParameterSetManager& manager = impl.avc();
 
     while (framer.valid()) {
-
-        const auto bytes =
-            framer.nal();
+        const auto bytes = framer.nal();
 
         try {
+            avc::NalUnit nal = avc::parse_nal_unit(bytes);
 
-            avc::NalUnit nal =
-                avc::parse_nal_unit(bytes);
-
-            store_avc_parameter_set(
-                manager,
-                nal,
-                ph,
-                report);
+            store_avc_parameter_set(manager, nal, ph, report);
 
             if (ph.sei) {
                 if (nal.type() == avc::NalUnitType::Sei) {
                     try {
-                        avc::ParsedSei sei =
-                            avc::parse_sei_nal(nal);
+                        avc::ParsedSei sei = avc::parse_sei_nal(nal);
                         ph.sei(sei);
                     } catch (...) {
                         /* malformed SEI: skip */
@@ -587,32 +497,24 @@ dispatch_state_avc(
              */
             if (ph.slice) {
                 const auto t = nal.type();
-                if (t == avc::NalUnitType::SliceNonIdr ||
-                    t == avc::NalUnitType::SliceIdr) {
+                if (t == avc::NalUnitType::SliceNonIdr || t == avc::NalUnitType::SliceIdr) {
                     try {
                         RbspReader r1(nal.payload_bytes());
                         (void)r1.read_ue();
                         (void)r1.read_ue();
-                        const std::uint32_t pps_id =
-                            r1.read_ue();
+                        const std::uint32_t pps_id = r1.read_ue();
 
-                        const auto resolved =
-                            manager.resolve(
-                                static_cast<std::uint8_t>(
-                                    pps_id));
+                        const auto resolved = manager.resolve(static_cast<std::uint8_t>(pps_id));
 
-                        if (resolved.pps != nullptr &&
-                            resolved.sps != nullptr) {
+                        if (resolved.pps != nullptr && resolved.sps != nullptr) {
                             RbspReader r2(nal.payload_bytes());
-                            avc::SliceHeader hdr =
-                                avc::parse_slice_header(
-                                    r2,
-                                    *resolved.sps,
-                                    *resolved.pps,
-                                    t,
-                                    static_cast<std::uint8_t>(
-                                        nal.header
-                                            .nal_ref_idc));
+                            avc::SliceHeader hdr = avc::parse_slice_header(
+                                r2,
+                                *resolved.sps,
+                                *resolved.pps,
+                                t,
+                                static_cast<std::uint8_t>(nal.header.nal_ref_idc)
+                            );
                             ph.slice(hdr);
                         }
                     } catch (...) {
@@ -621,11 +523,7 @@ dispatch_state_avc(
                 }
             }
 
-            if (avc::dispatch_nal(
-                    nal,
-                    handlers) ==
-                avc::NalParseResult::Parsed) {
-
+            if (avc::dispatch_nal(nal, handlers) == avc::NalParseResult::Parsed) {
                 ++parsed_count;
             }
 
@@ -639,105 +537,92 @@ dispatch_state_avc(
     return parsed_count;
 }
 
-
 /*
  * VVC framing + dispatch with automatic parameter-set storage.
  */
 template <typename Framer>
-inline std::size_t
-dispatch_state_vvc(
-    StateImpl& impl,
-    Framer& framer,
-    const VvcParsedHandlers& ph)
-{
+inline std::size_t dispatch_state_vvc(
+    StateImpl& impl, Framer& framer, const VvcParsedHandlers& ph
+) {
     std::size_t parsed_count = 0;
 
-    vvc::ParameterSetManager& manager =
-        impl.vvc();
+    vvc::ParameterSetManager& manager = impl.vvc();
 
     while (framer.valid()) {
-
         const auto bytes = framer.nal();
 
         try {
-
-            vvc::NalUnit nal =
-                vvc::parse_nal_unit(bytes);
+            vvc::NalUnit nal = vvc::parse_nal_unit(bytes);
 
             switch (nal.type()) {
+                case vvc::NalUnitType::OpiNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::Opi opi = vvc::parse_opi(r);
+                    manager.store_opi(opi);
+                    if (ph.opi)
+                        ph.opi(opi);
+                    break;
+                }
 
-            case vvc::NalUnitType::OpiNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::Opi opi = vvc::parse_opi(r);
-                manager.store_opi(opi);
-                if (ph.opi) ph.opi(opi);
-                break;
-            }
+                case vvc::NalUnitType::DciNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::Dci dci = vvc::parse_dci(r);
+                    manager.store_dci(dci);
+                    if (ph.dci)
+                        ph.dci(dci);
+                    break;
+                }
 
-            case vvc::NalUnitType::DciNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::Dci dci = vvc::parse_dci(r);
-                manager.store_dci(dci);
-                if (ph.dci) ph.dci(dci);
-                break;
-            }
+                case vvc::NalUnitType::VpsNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::VideoParameterSet vps = vvc::parse_vps(r);
+                    manager.store_vps(vps);
+                    if (ph.vps)
+                        ph.vps(vps);
+                    break;
+                }
 
-            case vvc::NalUnitType::VpsNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::VideoParameterSet vps =
-                    vvc::parse_vps(r);
-                manager.store_vps(vps);
-                if (ph.vps) ph.vps(vps);
-                break;
-            }
+                case vvc::NalUnitType::SpsNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::SequenceParameterSet sps = vvc::parse_sps(r);
+                    manager.store_sps(sps);
+                    if (ph.sps)
+                        ph.sps(sps);
+                    break;
+                }
 
-            case vvc::NalUnitType::SpsNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::SequenceParameterSet sps =
-                    vvc::parse_sps(r);
-                manager.store_sps(sps);
-                if (ph.sps) ph.sps(sps);
-                break;
-            }
+                case vvc::NalUnitType::PpsNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::PictureParameterSet pps = vvc::parse_pps(r);
+                    manager.store_pps(pps);
+                    if (ph.pps)
+                        ph.pps(pps);
+                    break;
+                }
 
-            case vvc::NalUnitType::PpsNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::PictureParameterSet pps =
-                    vvc::parse_pps(r);
-                manager.store_pps(pps);
-                if (ph.pps) ph.pps(pps);
-                break;
-            }
+                case vvc::NalUnitType::PhNut: {
+                    RbspReader r(nal.payload_bytes());
+                    vvc::PictureHeader phdr = vvc::parse_ph(r);
+                    manager.store_ph(phdr);
+                    if (ph.ph)
+                        ph.ph(phdr);
+                    break;
+                }
 
-            case vvc::NalUnitType::PhNut: {
-                RbspReader r(nal.payload_bytes());
-                vvc::PictureHeader phdr =
-                    vvc::parse_ph(r);
-                manager.store_ph(phdr);
-                if (ph.ph) ph.ph(phdr);
-                break;
-            }
-
-            default:
-                break;
+                default:
+                    break;
             }
 
             if (ph.slice && nal.is_vcl()) {
                 try {
                     RbspReader r1(nal.payload_bytes());
-                    const std::uint32_t pps_id =
-                        r1.read_ue();
+                    const std::uint32_t pps_id = r1.read_ue();
 
-                    const auto resolved =
-                        manager.resolve(
-                            static_cast<std::uint8_t>(
-                                pps_id));
+                    const auto resolved = manager.resolve(static_cast<std::uint8_t>(pps_id));
 
-                    if (resolved.pps != nullptr &&
-                        resolved.sps != nullptr) {
+                    if (resolved.pps != nullptr && resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
-                        vvc::SliceHeader hdr =
-                            vvc::parse_slice_header(r2);
+                        vvc::SliceHeader hdr = vvc::parse_slice_header(r2);
                         ph.slice(hdr);
                     }
                 } catch (...) {
@@ -757,53 +642,40 @@ dispatch_state_vvc(
     return parsed_count;
 }
 
-
 /*
  * AV1 OBU framing + dispatch.
  */
 template <typename Framer>
-inline std::size_t
-dispatch_state_av1(
-    StateImpl&,
-    Framer& framer,
-    const Av1ParsedHandlers& ph)
-{
+inline std::size_t dispatch_state_av1(StateImpl&, Framer& framer, const Av1ParsedHandlers& ph) {
     std::size_t parsed_count = 0;
 
     while (framer.valid()) {
-
         const auto bytes = framer.obu();
 
         try {
-
             av1::Obu obu = av1::parse_obu(bytes);
 
             switch (static_cast<int>(obu.type())) {
-
-            case static_cast<int>(av1::ObuType::SequenceHeader): {
-                if (ph.sequence_header) {
-                    av1::SequenceHeader sh =
-                        av1::parse_sequence_header(
-                            obu.payload_bytes());
-                    ph.sequence_header(sh);
+                case static_cast<int>(av1::ObuType::SequenceHeader): {
+                    if (ph.sequence_header) {
+                        av1::SequenceHeader sh = av1::parse_sequence_header(obu.payload_bytes());
+                        ph.sequence_header(sh);
+                    }
+                    break;
                 }
-                break;
-            }
 
-            case static_cast<int>(av1::ObuType::FrameHeader):
-            case static_cast<int>(av1::ObuType::RedundantFrameHeader):
-            case static_cast<int>(av1::ObuType::Frame): {
-                if (ph.frame_header) {
-                    av1::FrameHeader fh =
-                        av1::parse_frame_header(
-                            obu.payload_bytes());
-                    ph.frame_header(fh);
+                case static_cast<int>(av1::ObuType::FrameHeader):
+                case static_cast<int>(av1::ObuType::RedundantFrameHeader):
+                case static_cast<int>(av1::ObuType::Frame): {
+                    if (ph.frame_header) {
+                        av1::FrameHeader fh = av1::parse_frame_header(obu.payload_bytes());
+                        ph.frame_header(fh);
+                    }
+                    break;
                 }
-                break;
-            }
 
-            default:
-                break;
+                default:
+                    break;
             }
 
             ++parsed_count;
@@ -818,25 +690,19 @@ dispatch_state_av1(
     return parsed_count;
 }
 
-
 /*
  * VP9 / VP8 IVF framing + dispatch.
  */
 template <typename Framer, typename Header>
-inline std::size_t
-dispatch_state_vp_frame(
-    Framer& framer,
-    Header (*parse)(std::span<const std::uint8_t>),
-    void (*handler)(const Header&))
-{
+inline std::size_t dispatch_state_vp_frame(
+    Framer& framer, Header (*parse)(std::span<const std::uint8_t>), void (*handler)(const Header&)
+) {
     std::size_t parsed_count = 0;
 
     while (framer.valid()) {
-
         const auto bytes = framer.frame();
 
         try {
-
             Header header = parse(bytes);
 
             if (handler != nullptr) {
@@ -855,8 +721,7 @@ dispatch_state_vp_frame(
     return parsed_count;
 }
 
-} // namespace detail
-
+}  // namespace detail
 
 /*
  * ===========================================================================
@@ -869,13 +734,8 @@ dispatch_state_vp_frame(
  * the other codec.
  */
 class State {
-public:
-
-    explicit State(Codec codec)
-        : impl_(std::make_unique<detail::StateImpl>(codec))
-    {
-    }
-
+   public:
+    explicit State(Codec codec) : impl_(std::make_unique<detail::StateImpl>(codec)) {}
 
     State(State&&) noexcept = default;
 
@@ -883,16 +743,13 @@ public:
 
     ~State() = default;
 
-
     /*
      * Which codec path this state was created for.
      */
     [[nodiscard]]
-    Codec codec() const noexcept
-    {
+    Codec codec() const noexcept {
         return impl_->codec();
     }
-
 
     /*
      * Drop all stored parameter sets.  Call this before parsing
@@ -900,163 +757,92 @@ public:
      * parameter-set IDs from the previous stream cannot collide
      * with (or shadow) those of the new one.
      */
-    void clear() noexcept
-    {
+    void clear() noexcept {
         impl_->clear();
     }
-
 
     /*
      * HEVC parameter-set manager, or nullptr when this is an AVC state.
      */
     [[nodiscard]]
-    ParameterSetManager* hevc_sets() noexcept
-    {
-        return
-            impl_->codec() == Codec::Hevc
-                ? &impl_->hevc()
-                : nullptr;
+    ParameterSetManager* hevc_sets() noexcept {
+        return impl_->codec() == Codec::Hevc ? &impl_->hevc() : nullptr;
     }
-
 
     [[nodiscard]]
-    const ParameterSetManager* hevc_sets() const noexcept
-    {
-        return
-            impl_->codec() == Codec::Hevc
-                ? &impl_->hevc()
-                : nullptr;
+    const ParameterSetManager* hevc_sets() const noexcept {
+        return impl_->codec() == Codec::Hevc ? &impl_->hevc() : nullptr;
     }
-
 
     /*
      * AVC parameter-set manager, or nullptr when this is a HEVC state.
      */
     [[nodiscard]]
-    avc::ParameterSetManager* avc_sets() noexcept
-    {
-        return
-            impl_->codec() == Codec::Avc
-                ? &impl_->avc()
-                : nullptr;
+    avc::ParameterSetManager* avc_sets() noexcept {
+        return impl_->codec() == Codec::Avc ? &impl_->avc() : nullptr;
     }
-
 
     [[nodiscard]]
-    const avc::ParameterSetManager* avc_sets() const noexcept
-    {
-        return
-            impl_->codec() == Codec::Avc
-                ? &impl_->avc()
-                : nullptr;
+    const avc::ParameterSetManager* avc_sets() const noexcept {
+        return impl_->codec() == Codec::Avc ? &impl_->avc() : nullptr;
     }
-
 
     /*
      * VVC parameter-set manager, or nullptr when this is not a
      * VVC state.
      */
     [[nodiscard]]
-    vvc::ParameterSetManager* vvc_sets() noexcept
-    {
-        return
-            impl_->codec() == Codec::Vvc
-                ? &impl_->vvc()
-                : nullptr;
+    vvc::ParameterSetManager* vvc_sets() noexcept {
+        return impl_->codec() == Codec::Vvc ? &impl_->vvc() : nullptr;
     }
-
 
     [[nodiscard]]
-    const vvc::ParameterSetManager* vvc_sets() const noexcept
-    {
-        return
-            impl_->codec() == Codec::Vvc
-                ? &impl_->vvc()
-                : nullptr;
+    const vvc::ParameterSetManager* vvc_sets() const noexcept {
+        return impl_->codec() == Codec::Vvc ? &impl_->vvc() : nullptr;
     }
 
-
-private:
-
+   private:
     std::unique_ptr<detail::StateImpl> impl_;
-
 
     /*
      * Allow the unified parse() overloads to reach the implementation.
      */
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const BsNalHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const BsNalHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const avc::NalHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const avc::NalHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const HevcParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const HevcParsedHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const AvcParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const AvcParsedHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        StructReport&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, StructReport&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const VvcParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const VvcParsedHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const Av1ParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const Av1ParsedHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const Vp9ParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const Vp9ParsedHandlers&, unsigned
+    );
 
-    friend std::size_t
-    parse(
-        State&,
-        std::span<const std::uint8_t>,
-        NalFramingMode,
-        const Vp8ParsedHandlers&,
-        unsigned);
+    friend std::size_t parse(
+        State&, std::span<const std::uint8_t>, NalFramingMode, const Vp8ParsedHandlers&, unsigned
+    );
 };
-
 
 /*
  * ---------------------------------------------------------------------------
@@ -1064,13 +850,9 @@ private:
  * ---------------------------------------------------------------------------
  */
 [[nodiscard]]
-inline std::unique_ptr<State>
-create_state(
-    Codec codec)
-{
+inline std::unique_ptr<State> create_state(Codec codec) {
     return std::make_unique<State>(codec);
 }
-
 
 /*
  * ===========================================================================
@@ -1078,48 +860,34 @@ create_state(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const BsNalHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     if (state.codec() != Codec::Hevc) {
-        throw BsNalParseError(
-            "bs::parse: state is not an HEVC state");
+        throw BsNalParseError("bs::parse: state is not an HEVC state");
     }
 
     switch (mode) {
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            return detail::dispatch_state_hevc(*state.impl_, framer, handlers);
+        }
 
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        return detail::dispatch_state_hevc(
-            *state.impl_,
-            framer,
-            handlers);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            return detail::dispatch_state_hevc(*state.impl_, framer, handlers);
+        }
+
+        default:
+            break;
     }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        return detail::dispatch_state_hevc(
-            *state.impl_,
-            framer,
-            handlers);
-    }
-
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1127,48 +895,34 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const avc::NalHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     if (state.codec() != Codec::Avc) {
-        throw avc::NalParseError(
-            "bs::parse: state is not an AVC state");
+        throw avc::NalParseError("bs::parse: state is not an AVC state");
     }
 
     switch (mode) {
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            return detail::dispatch_state_avc(*state.impl_, framer, handlers);
+        }
 
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            handlers);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            return detail::dispatch_state_avc(*state.impl_, framer, handlers);
+        }
+
+        default:
+            break;
     }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            handlers);
-    }
-
-    default:
-        break;
-    }
-
-    throw avc::NalParseError(
-        "bs::parse: unsupported framing mode");
+    throw avc::NalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1176,51 +930,35 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const HevcParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     if (state.codec() != Codec::Hevc) {
-        throw BsNalParseError(
-            "bs::parse: state is not an HEVC state");
+        throw BsNalParseError("bs::parse: state is not an HEVC state");
     }
 
     BsNalHandlers raw{};
     switch (mode) {
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            return detail::dispatch_state_hevc(*state.impl_, framer, raw, handlers);
+        }
 
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        return detail::dispatch_state_hevc(
-            *state.impl_,
-            framer,
-            raw,
-            handlers);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            return detail::dispatch_state_hevc(*state.impl_, framer, raw, handlers);
+        }
+
+        default:
+            break;
     }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        return detail::dispatch_state_hevc(
-            *state.impl_,
-            framer,
-            raw,
-            handlers);
-    }
-
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1232,67 +970,47 @@ parse(
  * dispatch path.
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     StructReport& report,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     switch (mode) {
-
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        if (state.codec() == Codec::Hevc) {
-            return detail::dispatch_state_hevc(
-                *state.impl_,
-                framer,
-                BsNalHandlers{},
-                HevcParsedHandlers{},
-                &report);
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            if (state.codec() == Codec::Hevc) {
+                return detail::dispatch_state_hevc(
+                    *state.impl_, framer, BsNalHandlers{}, HevcParsedHandlers{}, &report
+                );
+            }
+            return detail::dispatch_state_avc(
+                *state.impl_, framer, avc::NalHandlers{}, AvcParsedHandlers{}, &report
+            );
         }
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            avc::NalHandlers{},
-            AvcParsedHandlers{},
-            &report);
-    }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        if (state.codec() == Codec::Hevc) {
-            return detail::dispatch_state_hevc(
-                *state.impl_,
-                framer,
-                BsNalHandlers{},
-                HevcParsedHandlers{},
-                &report);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            if (state.codec() == Codec::Hevc) {
+                return detail::dispatch_state_hevc(
+                    *state.impl_, framer, BsNalHandlers{}, HevcParsedHandlers{}, &report
+                );
+            }
+            return detail::dispatch_state_avc(
+                *state.impl_, framer, avc::NalHandlers{}, AvcParsedHandlers{}, &report
+            );
         }
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            avc::NalHandlers{},
-            AvcParsedHandlers{},
-            &report);
-    }
 
-    default:
-        break;
+        default:
+            break;
     }
 
     if (state.codec() == Codec::Hevc) {
-        throw BsNalParseError(
-            "bs::parse: unsupported framing mode");
+        throw BsNalParseError("bs::parse: unsupported framing mode");
     }
-    throw avc::NalParseError(
-        "bs::parse: unsupported framing mode");
+    throw avc::NalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1300,51 +1018,35 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const AvcParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     if (state.codec() != Codec::Avc) {
-        throw avc::NalParseError(
-            "bs::parse: state is not an AVC state");
+        throw avc::NalParseError("bs::parse: state is not an AVC state");
     }
 
     avc::NalHandlers raw{};
     switch (mode) {
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            return detail::dispatch_state_avc(*state.impl_, framer, raw, handlers);
+        }
 
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            raw,
-            handlers);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            return detail::dispatch_state_avc(*state.impl_, framer, raw, handlers);
+        }
+
+        default:
+            break;
     }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        return detail::dispatch_state_avc(
-            *state.impl_,
-            framer,
-            raw,
-            handlers);
-    }
-
-    default:
-        break;
-    }
-
-    throw avc::NalParseError(
-        "bs::parse: unsupported framing mode");
+    throw avc::NalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1352,48 +1054,34 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const VvcParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     if (state.codec() != Codec::Vvc) {
-        throw BsNalParseError(
-            "bs::parse: state is not a VVC state");
+        throw BsNalParseError("bs::parse: state is not a VVC state");
     }
 
     switch (mode) {
+        case NalFramingMode::AnnexB: {
+            AnnexBNalIterator framer{data};
+            return detail::dispatch_state_vvc(*state.impl_, framer, handlers);
+        }
 
-    case NalFramingMode::AnnexB: {
-        AnnexBNalIterator framer{data};
-        return detail::dispatch_state_vvc(
-            *state.impl_,
-            framer,
-            handlers);
+        case NalFramingMode::LengthPrefixed: {
+            LengthPrefixedNalIterator framer{data, length_size};
+            return detail::dispatch_state_vvc(*state.impl_, framer, handlers);
+        }
+
+        default:
+            break;
     }
 
-    case NalFramingMode::LengthPrefixed: {
-        LengthPrefixedNalIterator framer{
-            data,
-            length_size
-        };
-        return detail::dispatch_state_vvc(
-            *state.impl_,
-            framer,
-            handlers);
-    }
-
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1401,39 +1089,31 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const Av1ParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     (void)length_size;
 
     if (state.codec() != Codec::Av1) {
-        throw BsNalParseError(
-            "bs::parse: state is not an AV1 state");
+        throw BsNalParseError("bs::parse: state is not an AV1 state");
     }
 
     switch (mode) {
+        case NalFramingMode::Obu: {
+            av1::ObuFramer framer{data};
+            return detail::dispatch_state_av1(*state.impl_, framer, handlers);
+        }
 
-    case NalFramingMode::Obu: {
-        av1::ObuFramer framer{data};
-        return detail::dispatch_state_av1(
-            *state.impl_,
-            framer,
-            handlers);
+        default:
+            break;
     }
 
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1441,39 +1121,33 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const Vp9ParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     (void)length_size;
 
     if (state.codec() != Codec::Vp9) {
-        throw BsNalParseError(
-            "bs::parse: state is not a VP9 state");
+        throw BsNalParseError("bs::parse: state is not a VP9 state");
     }
 
     switch (mode) {
+        case NalFramingMode::Ivf: {
+            IvfFramer framer{data};
+            return detail::dispatch_state_vp_frame(
+                framer, vp9::parse_frame_header, handlers.frame_header
+            );
+        }
 
-    case NalFramingMode::Ivf: {
-        IvfFramer framer{data};
-        return detail::dispatch_state_vp_frame(
-            framer,
-            vp9::parse_frame_header,
-            handlers.frame_header);
+        default:
+            break;
     }
 
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
-
 
 /*
  * ===========================================================================
@@ -1481,37 +1155,32 @@ parse(
  * ===========================================================================
  */
 [[nodiscard]]
-inline std::size_t
-parse(
+inline std::size_t parse(
     State& state,
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const Vp8ParsedHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     (void)length_size;
 
     if (state.codec() != Codec::Vp8) {
-        throw BsNalParseError(
-            "bs::parse: state is not a VP8 state");
+        throw BsNalParseError("bs::parse: state is not a VP8 state");
     }
 
     switch (mode) {
+        case NalFramingMode::Ivf: {
+            IvfFramer framer{data};
+            return detail::dispatch_state_vp_frame(
+                framer, vp8::parse_frame_header, handlers.frame_header
+            );
+        }
 
-    case NalFramingMode::Ivf: {
-        IvfFramer framer{data};
-        return detail::dispatch_state_vp_frame(
-            framer,
-            vp8::parse_frame_header,
-            handlers.frame_header);
+        default:
+            break;
     }
 
-    default:
-        break;
-    }
-
-    throw BsNalParseError(
-        "bs::parse: unsupported framing mode");
+    throw BsNalParseError("bs::parse: unsupported framing mode");
 }
 
-} // namespace bs
+}  // namespace bs

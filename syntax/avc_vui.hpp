@@ -13,7 +13,6 @@ namespace avc {
  * AVC HRD parameters (E.1.2).
  */
 struct HrdParameters {
-
     std::uint8_t cpb_cnt_minus1 = 0;
     std::uint8_t bit_rate_scale = 0;
     std::uint8_t cpb_size_scale = 0;
@@ -28,12 +27,10 @@ struct HrdParameters {
     std::uint8_t time_offset_length = 0;
 };
 
-
 /*
  * AVC VUI parameters (E.1.1).
  */
 struct VuiParameters {
-
     bool aspect_ratio_info_present_flag = false;
     std::uint8_t aspect_ratio_idc = 0;
     std::uint16_t sar_width = 0;
@@ -79,5 +76,5 @@ struct VuiParameters {
     std::uint32_t max_dec_frame_buffering = 0;
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

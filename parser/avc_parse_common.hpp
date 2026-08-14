@@ -13,18 +13,11 @@ namespace avc {
  * Shared AVC syntax parse error.
  */
 class ParseError : public std::runtime_error {
-public:
-    explicit ParseError(const char* message)
-        : std::runtime_error(message)
-    {
-    }
+   public:
+    explicit ParseError(const char* message) : std::runtime_error(message) {}
 
-    explicit ParseError(const std::string& message)
-        : std::runtime_error(message)
-    {
-    }
+    explicit ParseError(const std::string& message) : std::runtime_error(message) {}
 };
-
 
 namespace detail {
 
@@ -38,61 +31,36 @@ namespace detail {
  */
 template <typename Reader>
 [[nodiscard]]
-inline std::uint32_t
-read_ue_max(
-    Reader& reader,
-    const char* field,
-    std::uint32_t max_value)
-{
-    const auto value =
-        reader.read_ue();
+inline std::uint32_t read_ue_max(Reader& reader, const char* field, std::uint32_t max_value) {
+    const auto value = reader.read_ue();
 
     if (value > max_value) {
-        throw ParseError(
-            std::string(field) +
-            " out of range: " +
-            std::to_string(value));
+        throw ParseError(std::string(field) + " out of range: " + std::to_string(value));
     }
 
     return value;
 }
-
 
 /*
  * Bounded se(v) read.
  */
 template <typename Reader>
 [[nodiscard]]
-inline std::int32_t
-read_se_bounded(
-    Reader& reader,
-    const char* field,
-    std::int32_t max_abs)
-{
-    const auto value =
-        reader.read_se();
+inline std::int32_t read_se_bounded(Reader& reader, const char* field, std::int32_t max_abs) {
+    const auto value = reader.read_se();
 
-    if (value < -max_abs ||
-        value > max_abs) {
-
-        throw ParseError(
-            std::string(field) +
-            " out of range: " +
-            std::to_string(value));
+    if (value < -max_abs || value > max_abs) {
+        throw ParseError(std::string(field) + " out of range: " + std::to_string(value));
     }
 
     return value;
 }
 
-
 /*
  * Ceil(log2(v)) for v >= 1.
  */
 [[nodiscard]]
-inline unsigned
-ceil_log2(
-    std::uint32_t value) noexcept
-{
+inline unsigned ceil_log2(std::uint32_t value) noexcept {
     unsigned bits = 0;
     std::uint32_t power = 1;
 
@@ -104,7 +72,7 @@ ceil_log2(
     return bits;
 }
 
-} // namespace detail
+}  // namespace detail
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

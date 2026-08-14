@@ -26,66 +26,46 @@
 #include <string>
 #include <vector>
 
-extern "C" int
-LLVMFuzzerTestOneInput(
-    const std::uint8_t* data,
-    std::size_t size);
-
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size);
 
 namespace {
 
-int run_bytes(
-    const std::vector<std::uint8_t>& data)
-{
+int run_bytes(const std::vector<std::uint8_t>& data) {
     if (data.empty()) {
         return 0;
     }
 
-    LLVMFuzzerTestOneInput(
-        data.data(),
-        data.size());
+    LLVMFuzzerTestOneInput(data.data(), data.size());
 
     return 0;
 }
 
-
-int run_file(
-    const char* path)
-{
-    std::ifstream in(
-        path,
-        std::ios::binary);
+int run_file(const char* path) {
+    std::ifstream in(path, std::ios::binary);
 
     if (!in) {
-        std::cerr << "hevc_fuzz_driver: cannot open: "
-                  << path << "\n";
+        std::cerr << "hevc_fuzz_driver: cannot open: " << path << "\n";
         return 1;
     }
 
     const std::vector<std::uint8_t> data(
-        (std::istreambuf_iterator<char>(in)),
-        std::istreambuf_iterator<char>());
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()
+    );
 
     return run_bytes(data);
 }
 
-
-int run_stdin()
-{
+int run_stdin() {
     const std::vector<std::uint8_t> data(
-        (std::istreambuf_iterator<char>(std::cin)),
-        std::istreambuf_iterator<char>());
+        (std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>()
+    );
 
     return run_bytes(data);
 }
 
 }  // namespace
 
-
-int main(
-    int argc,
-    char** argv)
-{
+int main(int argc, char** argv) {
     if (argc < 2) {
         return run_stdin();
     }

@@ -20,8 +20,7 @@
 
 #include <parser/nal_framer.hpp>
 
-static std::vector<std::uint8_t> read_file(const char* path)
-{
+static std::vector<std::uint8_t> read_file(const char* path) {
     FILE* f = std::fopen(path, "rb");
     if (!f) {
         std::fprintf(stderr, "cannot open %s\n", path);
@@ -37,18 +36,16 @@ static std::vector<std::uint8_t> read_file(const char* path)
 }
 
 template <typename T>
-static double avg(const std::vector<T>& v)
-{
+static double avg(const std::vector<T>& v) {
     double s = 0;
-    for (auto x : v) s += static_cast<double>(x);
+    for (auto x : v)
+        s += static_cast<double>(x);
     return s / static_cast<double>(v.size());
 }
 
 static const char* codec_str = "?";
 
-static std::uint64_t bench_raw(const std::vector<std::uint8_t>& buf,
-                               std::size_t iters)
-{
+static std::uint64_t bench_raw(const std::vector<std::uint8_t>& buf, std::size_t iters) {
     std::uint64_t nals = 0;
     volatile std::uint64_t sink = 0;
     auto t0 = std::chrono::steady_clock::now();
@@ -61,15 +58,16 @@ static std::uint64_t bench_raw(const std::vector<std::uint8_t>& buf,
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] raw-only      : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] raw-only      : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     return nals;
 }
 
-static std::uint64_t bench_typed_ps(const std::vector<std::uint8_t>& buf,
-                                    std::size_t iters)
-{
+static std::uint64_t bench_typed_ps(const std::vector<std::uint8_t>& buf, std::size_t iters) {
     std::uint64_t nals = 0;
     auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) {
@@ -83,15 +81,16 @@ static std::uint64_t bench_typed_ps(const std::vector<std::uint8_t>& buf,
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] typed-ps      : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] typed-ps      : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     return nals;
 }
 
-static std::uint64_t bench_typed_slice(const std::vector<std::uint8_t>& buf,
-                                       std::size_t iters)
-{
+static std::uint64_t bench_typed_slice(const std::vector<std::uint8_t>& buf, std::size_t iters) {
     std::uint64_t nals = 0;
     auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) {
@@ -106,15 +105,16 @@ static std::uint64_t bench_typed_slice(const std::vector<std::uint8_t>& buf,
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] typed-slice   : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] typed-slice   : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     return nals;
 }
 
-static std::uint64_t bench_typed_sei(const std::vector<std::uint8_t>& buf,
-                                     std::size_t iters)
-{
+static std::uint64_t bench_typed_sei(const std::vector<std::uint8_t>& buf, std::size_t iters) {
     std::uint64_t nals = 0;
     auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) {
@@ -129,15 +129,16 @@ static std::uint64_t bench_typed_sei(const std::vector<std::uint8_t>& buf,
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] typed-sei     : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] typed-sei     : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     return nals;
 }
 
-static std::uint64_t bench_typed_full(const std::vector<std::uint8_t>& buf,
-                                      std::size_t iters)
-{
+static std::uint64_t bench_typed_full(const std::vector<std::uint8_t>& buf, std::size_t iters) {
     std::uint64_t nals = 0;
     auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) {
@@ -153,14 +154,16 @@ static std::uint64_t bench_typed_full(const std::vector<std::uint8_t>& buf,
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] typed-full    : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] typed-full    : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     return nals;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     if (argc < 3) {
         std::printf("usage: %s <file> <hevc|avc> [iters]\n", argv[0]);
         return 1;
@@ -187,13 +190,15 @@ int main(int argc, char** argv)
                 auto st = bs::create_state(bs::Codec::Avc);
                 bs::avc::NalHandlers h{};
                 bs::parse(*st, buf, bs::NalFramingMode::AnnexB, h);
-                
             }
             auto t1 = std::chrono::steady_clock::now();
             double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-            std::printf("[%s] raw-only      : %8.1f us/iter  %7.1f MB/s\n",
-                        codec_str, us / n,
-                        (buf.size() * n) / (us * 1e-6) / 1e6);
+            std::printf(
+                "[%s] raw-only      : %8.1f us/iter  %7.1f MB/s\n",
+                codec_str,
+                us / n,
+                (buf.size() * n) / (us * 1e-6) / 1e6
+            );
         };
         auto avc_ps = [&](std::size_t n) {
             auto t0 = std::chrono::steady_clock::now();
@@ -203,13 +208,15 @@ int main(int argc, char** argv)
                 h.sps = [](const bs::avc::SequenceParameterSet&) {};
                 h.pps = [](const bs::avc::PictureParameterSet&) {};
                 bs::parse(*st, buf, bs::NalFramingMode::AnnexB, h);
-                
             }
             auto t1 = std::chrono::steady_clock::now();
             double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-            std::printf("[%s] typed-ps      : %8.1f us/iter  %7.1f MB/s\n",
-                        codec_str, us / n,
-                        (buf.size() * n) / (us * 1e-6) / 1e6);
+            std::printf(
+                "[%s] typed-ps      : %8.1f us/iter  %7.1f MB/s\n",
+                codec_str,
+                us / n,
+                (buf.size() * n) / (us * 1e-6) / 1e6
+            );
         };
         auto avc_full = [&](std::size_t n) {
             auto t0 = std::chrono::steady_clock::now();
@@ -221,13 +228,15 @@ int main(int argc, char** argv)
                 h.sei = [](const bs::avc::ParsedSei&) {};
                 h.slice = [](const bs::avc::SliceHeader&) {};
                 bs::parse(*st, buf, bs::NalFramingMode::AnnexB, h);
-                
             }
             auto t1 = std::chrono::steady_clock::now();
             double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-            std::printf("[%s] typed-full    : %8.1f us/iter  %7.1f MB/s\n",
-                        codec_str, us / n,
-                        (buf.size() * n) / (us * 1e-6) / 1e6);
+            std::printf(
+                "[%s] typed-full    : %8.1f us/iter  %7.1f MB/s\n",
+                codec_str,
+                us / n,
+                (buf.size() * n) / (us * 1e-6) / 1e6
+            );
         };
         avc_raw(iters);
         avc_ps(iters);
@@ -238,8 +247,7 @@ int main(int argc, char** argv)
     }
 
     /* C API path (full typed). */
-    auto st = bs_state_create(
-        std::strcmp(codec, "hevc") == 0 ? BS_CODEC_HEVC : BS_CODEC_AVC);
+    auto st = bs_state_create(std::strcmp(codec, "hevc") == 0 ? BS_CODEC_HEVC : BS_CODEC_AVC);
     BsHevcHandlers hh{};
     hh.vps = [](void*, const BsHevcVideoParameterSet*) {};
     hh.sps = [](void*, const BsHevcSequenceParameterSet*) {};
@@ -255,18 +263,19 @@ int main(int argc, char** argv)
     auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) {
         if (std::strcmp(codec, "hevc") == 0) {
-            bs_parse_hevc(st, buf.data(), buf.size(),
-                          BS_FRAMING_ANNEX_B, 4, &hh);
+            bs_parse_hevc(st, buf.data(), buf.size(), BS_FRAMING_ANNEX_B, 4, &hh);
         } else {
-            bs_parse_avc(st, buf.data(), buf.size(),
-                         BS_FRAMING_ANNEX_B, 4, &ah);
+            bs_parse_avc(st, buf.data(), buf.size(), BS_FRAMING_ANNEX_B, 4, &ah);
         }
     }
     auto t1 = std::chrono::steady_clock::now();
     double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    std::printf("[%s] c-api-full    : %8.1f us/iter  %7.1f MB/s\n",
-                codec_str, us / iters,
-                (buf.size() * iters) / (us * 1e-6) / 1e6);
+    std::printf(
+        "[%s] c-api-full    : %8.1f us/iter  %7.1f MB/s\n",
+        codec_str,
+        us / iters,
+        (buf.size() * iters) / (us * 1e-6) / 1e6
+    );
     bs_state_destroy(st);
 
     return 0;

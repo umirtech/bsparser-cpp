@@ -26,7 +26,6 @@ namespace avc {
  *     this NalUnit is being used.
  */
 
-
 /*
  * -----------------------------------------------------------
  * NAL unit header
@@ -40,20 +39,15 @@ namespace avc {
  */
 
 struct NalUnitHeader {
-
     bool forbidden_zero_bit = false;
     std::uint8_t nal_ref_idc = 0;
     NalUnitType nal_unit_type = NalUnitType::Sei;
 
-
     [[nodiscard]]
-    constexpr bool
-    valid() const noexcept
-    {
+    constexpr bool valid() const noexcept {
         return !forbidden_zero_bit;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -62,7 +56,6 @@ struct NalUnitHeader {
  */
 
 struct NalUnit {
-
     NalUnitHeader header{};
 
     /*
@@ -70,74 +63,46 @@ struct NalUnit {
      */
     std::span<const std::uint8_t> payload{};
 
-
     [[nodiscard]]
-    constexpr NalUnitType
-    type() const noexcept
-    {
+    constexpr NalUnitType type() const noexcept {
         return header.nal_unit_type;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    nal_type() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            header.nal_unit_type);
+    constexpr std::uint8_t nal_type() const noexcept {
+        return static_cast<std::uint8_t>(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_vcl() const noexcept
-    {
-        return is_vcl_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_vcl() const noexcept {
+        return is_vcl_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_idr() const noexcept
-    {
-        return is_idr_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_idr() const noexcept {
+        return is_idr_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr std::span<const std::uint8_t>
-    payload_bytes() const noexcept
-    {
+    constexpr std::span<const std::uint8_t> payload_bytes() const noexcept {
         return payload;
     }
 
-
     [[nodiscard]]
-    constexpr std::size_t
-    payload_size() const noexcept
-    {
+    constexpr std::size_t payload_size() const noexcept {
         return payload.size();
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    has_payload() const noexcept
-    {
+    constexpr bool has_payload() const noexcept {
         return !payload.empty();
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    valid() const noexcept
-    {
+    constexpr bool valid() const noexcept {
         return header.valid();
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -146,16 +111,11 @@ struct NalUnit {
  */
 
 [[nodiscard]]
-constexpr NalUnit
-make_nal_unit(
-    const NalUnitHeader& header,
-    std::span<const std::uint8_t> payload) noexcept
-{
-    return NalUnit{
-        header,
-        payload
-    };
+constexpr NalUnit make_nal_unit(
+    const NalUnitHeader& header, std::span<const std::uint8_t> payload
+) noexcept {
+    return NalUnit{header, payload};
 }
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

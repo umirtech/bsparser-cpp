@@ -30,7 +30,6 @@ namespace bs {
  *     while this NalUnit is being used.
  */
 
-
 /*
  * -----------------------------------------------------------
  * NAL payload view
@@ -38,7 +37,6 @@ namespace bs {
  */
 
 struct NalPayloadView {
-
     /*
      * Bytes following the two-byte NAL header.
      *
@@ -49,55 +47,36 @@ struct NalPayloadView {
      */
     std::span<const std::uint8_t> bytes{};
 
-
     [[nodiscard]]
-    constexpr const std::uint8_t*
-    data() const noexcept
-    {
+    constexpr const std::uint8_t* data() const noexcept {
         return bytes.data();
     }
 
-
     [[nodiscard]]
-    constexpr std::size_t
-    size() const noexcept
-    {
+    constexpr std::size_t size() const noexcept {
         return bytes.size();
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    empty() const noexcept
-    {
+    constexpr bool empty() const noexcept {
         return bytes.empty();
     }
 
-
     [[nodiscard]]
-    constexpr const std::uint8_t&
-    operator[](std::size_t index) const noexcept
-    {
+    constexpr const std::uint8_t& operator[](std::size_t index) const noexcept {
         return bytes[index];
     }
 
-
     [[nodiscard]]
-    constexpr auto
-    begin() const noexcept
-    {
+    constexpr auto begin() const noexcept {
         return bytes.begin();
     }
 
-
     [[nodiscard]]
-    constexpr auto
-    end() const noexcept
-    {
+    constexpr auto end() const noexcept {
         return bytes.end();
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -106,7 +85,6 @@ struct NalPayloadView {
  */
 
 struct NalUnit {
-
     /*
      * Decoded two-byte NAL header.
      */
@@ -119,7 +97,6 @@ struct NalUnit {
      */
     NalPayloadView payload{};
 
-
     /*
      * -------------------------------------------------------
      * Header access
@@ -127,36 +104,24 @@ struct NalUnit {
      */
 
     [[nodiscard]]
-    constexpr NalUnitType
-    type() const noexcept
-    {
+    constexpr NalUnitType type() const noexcept {
         return header.nal_unit_type;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    nal_type() const noexcept
-    {
+    constexpr std::uint8_t nal_type() const noexcept {
         return header.nal_type();
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    layer_id() const noexcept
-    {
+    constexpr std::uint8_t layer_id() const noexcept {
         return header.nuh_layer_id;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    temporal_id() const noexcept
-    {
+    constexpr std::uint8_t temporal_id() const noexcept {
         return header.temporal_id();
     }
-
 
     /*
      * -------------------------------------------------------
@@ -165,66 +130,39 @@ struct NalUnit {
      */
 
     [[nodiscard]]
-    constexpr bool
-    is_vcl() const noexcept
-    {
-        return is_vcl_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_vcl() const noexcept {
+        return is_vcl_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_irap() const noexcept
-    {
-        return is_irap_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_irap() const noexcept {
+        return is_irap_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_idr() const noexcept
-    {
-        return is_idr_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_idr() const noexcept {
+        return is_idr_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_cra() const noexcept
-    {
-        return is_cra_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_cra() const noexcept {
+        return is_cra_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_reference_picture() const noexcept
-    {
-        return is_reference_vcl_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_reference_picture() const noexcept {
+        return is_reference_vcl_nal_unit(header.nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_parameter_set() const noexcept
-    {
+    constexpr bool is_parameter_set() const noexcept {
         return bs::is_parameter_set(header);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_sei() const noexcept
-    {
-        return is_sei_nal_unit(
-            header.nal_unit_type);
+    constexpr bool is_sei() const noexcept {
+        return is_sei_nal_unit(header.nal_unit_type);
     }
-
 
     /*
      * -------------------------------------------------------
@@ -233,28 +171,19 @@ struct NalUnit {
      */
 
     [[nodiscard]]
-    constexpr std::span<const std::uint8_t>
-    payload_bytes() const noexcept
-    {
+    constexpr std::span<const std::uint8_t> payload_bytes() const noexcept {
         return payload.bytes;
     }
 
-
     [[nodiscard]]
-    constexpr std::size_t
-    payload_size() const noexcept
-    {
+    constexpr std::size_t payload_size() const noexcept {
         return payload.size();
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    has_payload() const noexcept
-    {
+    constexpr bool has_payload() const noexcept {
         return !payload.empty();
     }
-
 
     /*
      * -------------------------------------------------------
@@ -263,13 +192,10 @@ struct NalUnit {
      */
 
     [[nodiscard]]
-    constexpr bool
-    valid() const noexcept
-    {
+    constexpr bool valid() const noexcept {
         return header.valid();
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -277,41 +203,25 @@ struct NalUnit {
  * -----------------------------------------------------------
  */
 
-
 /*
  * Construct a zero-copy NAL unit view.
  */
 [[nodiscard]]
-constexpr NalUnit
-make_nal_unit(
-    const NalUnitHeader& header,
-    std::span<const std::uint8_t> payload) noexcept
-{
-    return NalUnit{
-        header,
-        NalPayloadView{payload}
-    };
+constexpr NalUnit make_nal_unit(
+    const NalUnitHeader& header, std::span<const std::uint8_t> payload
+) noexcept {
+    return NalUnit{header, NalPayloadView{payload}};
 }
-
 
 /*
  * Convenience overload for a pointer + size.
  */
 [[nodiscard]]
-constexpr NalUnit
-make_nal_unit(
-    const NalUnitHeader& header,
-    const std::uint8_t* data,
-    std::size_t size) noexcept
-{
-    return make_nal_unit(
-        header,
-        std::span<const std::uint8_t>{
-            data,
-            size
-        });
+constexpr NalUnit make_nal_unit(
+    const NalUnitHeader& header, const std::uint8_t* data, std::size_t size
+) noexcept {
+    return make_nal_unit(header, std::span<const std::uint8_t>{data, size});
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -320,51 +230,29 @@ make_nal_unit(
  */
 
 [[nodiscard]]
-constexpr bool
-is_vps(
-    const NalUnit& nal) noexcept
-{
+constexpr bool is_vps(const NalUnit& nal) noexcept {
     return nal.type() == NalUnitType::VPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool
-is_sps(
-    const NalUnit& nal) noexcept
-{
+constexpr bool is_sps(const NalUnit& nal) noexcept {
     return nal.type() == NalUnitType::SPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool
-is_pps(
-    const NalUnit& nal) noexcept
-{
+constexpr bool is_pps(const NalUnit& nal) noexcept {
     return nal.type() == NalUnitType::PPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool
-is_prefix_sei(
-    const NalUnit& nal) noexcept
-{
-    return nal.type() ==
-        NalUnitType::PREFIX_SEI_NUT;
+constexpr bool is_prefix_sei(const NalUnit& nal) noexcept {
+    return nal.type() == NalUnitType::PREFIX_SEI_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool
-is_suffix_sei(
-    const NalUnit& nal) noexcept
-{
-    return nal.type() ==
-        NalUnitType::SUFFIX_SEI_NUT;
+constexpr bool is_suffix_sei(const NalUnit& nal) noexcept {
+    return nal.type() == NalUnitType::SUFFIX_SEI_NUT;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -395,7 +283,6 @@ is_suffix_sei(
  * as separate responsibilities.
  */
 
-
 /*
  * -----------------------------------------------------------
  * Basic NAL size helper
@@ -415,11 +302,8 @@ is_suffix_sei(
  */
 
 [[nodiscard]]
-constexpr std::size_t
-nal_unit_size(
-    const NalUnit& nal) noexcept
-{
+constexpr std::size_t nal_unit_size(const NalUnit& nal) noexcept {
     return 2 + nal.payload_size();
 }
 
-} // namespace bs
+}  // namespace bs

@@ -13,13 +13,7 @@ namespace bs {
  * 2 = 4:2:2
  * 3 = 4:4:4
  */
-enum class ChromaFormat : std::uint8_t {
-    Monochrome = 0,
-    YUV420     = 1,
-    YUV422     = 2,
-    YUV444     = 3
-};
-
+enum class ChromaFormat : std::uint8_t { Monochrome = 0, YUV420 = 1, YUV422 = 2, YUV444 = 3 };
 
 /*
  * H.265 screen-content-coding extension limit.
@@ -27,23 +21,17 @@ enum class ChromaFormat : std::uint8_t {
  * A.3.7 constrains the number of palette predictor
  * initializers to 128 (HEVC_MAX_PALETTE_PREDICTOR_SIZE).
  */
-inline constexpr std::size_t
-    kMaxPalettePredictorSize = 128;
+inline constexpr std::size_t kMaxPalettePredictorSize = 128;
 
 [[nodiscard]]
-constexpr bool is_valid_chroma_format(
-    std::uint32_t value) noexcept
-{
+constexpr bool is_valid_chroma_format(std::uint32_t value) noexcept {
     return value <= 3;
 }
 
 [[nodiscard]]
-constexpr ChromaFormat chroma_format_from_idc(
-    std::uint32_t value)
-{
+constexpr ChromaFormat chroma_format_from_idc(std::uint32_t value) {
     return static_cast<ChromaFormat>(value);
 }
-
 
 /*
  * H.265 bit depth.
@@ -61,13 +49,10 @@ struct BitDepth {
     std::uint8_t chroma = 8;
 
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
-        return luma >= 8 &&
-               chroma >= 8;
+    constexpr bool valid() const noexcept {
+        return luma >= 8 && chroma >= 8;
     }
 };
-
 
 /*
  * H.265 conformance_window / default_display_window.
@@ -78,21 +63,16 @@ struct BitDepth {
  * Actual dimensions depend on chroma_format_idc.
  */
 struct Window {
-    std::uint32_t left_offset   = 0;
-    std::uint32_t right_offset  = 0;
-    std::uint32_t top_offset    = 0;
+    std::uint32_t left_offset = 0;
+    std::uint32_t right_offset = 0;
+    std::uint32_t top_offset = 0;
     std::uint32_t bottom_offset = 0;
 
     [[nodiscard]]
-    constexpr bool empty() const noexcept
-    {
-        return left_offset   == 0 &&
-               right_offset  == 0 &&
-               top_offset    == 0 &&
-               bottom_offset == 0;
+    constexpr bool empty() const noexcept {
+        return left_offset == 0 && right_offset == 0 && top_offset == 0 && bottom_offset == 0;
     }
 };
-
 
 /*
  * H.265 sub_layer_ordering_info().
@@ -106,7 +86,6 @@ struct SubLayerOrderingInfo {
     std::uint32_t max_latency_increase_plus1 = 0;
 };
 
-
 /*
  * H.265 scaling list identifiers.
  *
@@ -115,12 +94,11 @@ struct SubLayerOrderingInfo {
  * are useful throughout the parser.
  */
 enum class ScalingListSize : std::uint8_t {
-    Size4x4   = 0,
-    Size8x8   = 1,
+    Size4x4 = 0,
+    Size8x8 = 1,
     Size16x16 = 2,
     Size32x32 = 3
 };
-
 
 /*
  * H.265 slice types.
@@ -131,30 +109,19 @@ enum class ScalingListSize : std::uint8_t {
  *     1 = P
  *     2 = I
  */
-enum class SliceType : std::uint8_t {
-    B = 0,
-    P = 1,
-    I = 2
-};
+enum class SliceType : std::uint8_t { B = 0, P = 1, I = 2 };
 
 [[nodiscard]]
-constexpr bool is_valid_slice_type(
-    std::uint32_t value) noexcept
-{
+constexpr bool is_valid_slice_type(std::uint32_t value) noexcept {
     return value <= 2;
 }
-
 
 /*
  * H.265 reference picture list.
  *
  * Used later by slice header parsing.
  */
-enum class RefPicList : std::uint8_t {
-    L0 = 0,
-    L1 = 1
-};
-
+enum class RefPicList : std::uint8_t { L0 = 0, L1 = 1 };
 
 /*
  * Picture structure / field information.
@@ -167,7 +134,6 @@ struct PictureStructure {
     bool field_seq = false;
     bool bottom_field = false;
 };
-
 
 /*
  * H.265 VUI timing information.
@@ -184,13 +150,10 @@ struct TimingInfo {
     std::uint32_t num_ticks_poc_diff_one_minus1 = 0;
 
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
-        return num_units_in_tick != 0 &&
-               time_scale != 0;
+    constexpr bool valid() const noexcept {
+        return num_units_in_tick != 0 && time_scale != 0;
     }
 };
-
 
 /*
  * H.265 color description.
@@ -204,7 +167,6 @@ struct ColourDescription {
 
     bool present = false;
 };
-
 
 /*
  * H.265 aspect ratio information.
@@ -225,7 +187,6 @@ struct AspectRatio {
     std::uint16_t sar_height = 0;
 };
 
-
 /*
  * H.265 video signal type.
  */
@@ -239,7 +200,6 @@ struct VideoSignalType {
     ColourDescription colour;
 };
 
-
 /*
  * H.265 chroma location information.
  */
@@ -249,7 +209,6 @@ struct ChromaLocationInfo {
     std::uint32_t chroma_sample_loc_type_top_field = 0;
     std::uint32_t chroma_sample_loc_type_bottom_field = 0;
 };
-
 
 /*
  * H.265 decoded picture dimension information.
@@ -270,18 +229,15 @@ struct PictureDimensions {
     bool conformance_window_flag = false;
 
     [[nodiscard]]
-    constexpr std::uint32_t coded_width() const noexcept
-    {
+    constexpr std::uint32_t coded_width() const noexcept {
         return width_luma_samples;
     }
 
     [[nodiscard]]
-    constexpr std::uint32_t coded_height() const noexcept
-    {
+    constexpr std::uint32_t coded_height() const noexcept {
         return height_luma_samples;
     }
 };
-
 
 /*
  * Useful derived geometry.
@@ -302,7 +258,6 @@ struct CodingBlockGeometry {
     std::uint8_t max_transform_hierarchy_depth_intra = 0;
 };
 
-
 /*
  * H.265 reference picture set identifiers.
  *
@@ -317,14 +272,11 @@ struct ReferencePictureSetInfo {
     std::uint32_t num_delta_pocs = 0;
 };
 
-
 /*
  * Generic flag collection used by profile/constraint
  * structures.
  */
-using ProfileCompatibilityFlags =
-    std::array<bool, 32>;
-
+using ProfileCompatibilityFlags = std::array<bool, 32>;
 
 /*
  * H.265 profile space.
@@ -336,22 +288,12 @@ using ProfileCompatibilityFlags =
  *     2 = profile space 2
  *     3 = profile space 3
  */
-enum class ProfileSpace : std::uint8_t {
-    Unspecified = 0,
-    Space1 = 1,
-    Space2 = 2,
-    Space3 = 3
-};
-
+enum class ProfileSpace : std::uint8_t { Unspecified = 0, Space1 = 1, Space2 = 2, Space3 = 3 };
 
 /*
  * H.265 tier.
  */
-enum class Tier : std::uint8_t {
-    Main = 0,
-    High = 1
-};
-
+enum class Tier : std::uint8_t { Main = 0, High = 1 };
 
 /*
  * Generic H.265 level.
@@ -371,18 +313,15 @@ struct Level {
     std::uint8_t level_idc = 0;
 
     [[nodiscard]]
-    constexpr float value() const noexcept
-    {
+    constexpr float value() const noexcept {
         return static_cast<float>(level_idc) / 30.0F;
     }
 
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
+    constexpr bool valid() const noexcept {
         return level_idc != 0;
     }
 };
-
 
 /*
  * H.265 profile/tier/level identity.
@@ -390,19 +329,16 @@ struct Level {
  * The complete syntax lives in hevc_profile_tier_level.hpp.
  */
 struct ProfileTierLevelId {
-    ProfileSpace profile_space =
-        ProfileSpace::Unspecified;
+    ProfileSpace profile_space = ProfileSpace::Unspecified;
 
     Tier tier = Tier::Main;
 
     std::uint8_t profile_idc = 0;
 
-    ProfileCompatibilityFlags
-        compatibility_flags{};
+    ProfileCompatibilityFlags compatibility_flags{};
 
     Level level{};
 };
-
 
 /*
  * H.265 temporal layer description.
@@ -416,7 +352,6 @@ struct TemporalLayer {
     bool level_present = false;
 };
 
-
 /*
  * H.265 POC configuration.
  *
@@ -428,13 +363,10 @@ struct PocConfiguration {
     std::uint8_t log2_max_pic_order_cnt_lsb_minus4 = 0;
 
     [[nodiscard]]
-    constexpr std::uint32_t max_pic_order_cnt_lsb() const noexcept
-    {
-        return std::uint32_t{1}
-             << (log2_max_pic_order_cnt_lsb_minus4 + 4);
+    constexpr std::uint32_t max_pic_order_cnt_lsb() const noexcept {
+        return std::uint32_t{1} << (log2_max_pic_order_cnt_lsb_minus4 + 4);
     }
 };
-
 
 /*
  * H.265 sample aspect ratio.
@@ -444,12 +376,10 @@ struct SampleAspectRatio {
     std::uint16_t height = 1;
 
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
+    constexpr bool valid() const noexcept {
         return width != 0 && height != 0;
     }
 };
-
 
 /*
  * Utility for safely converting an unsigned syntax value
@@ -459,22 +389,17 @@ struct SampleAspectRatio {
  * range.
  */
 [[nodiscard]]
-constexpr std::uint8_t to_u8(
-    std::uint32_t value) noexcept
-{
+constexpr std::uint8_t to_u8(std::uint32_t value) noexcept {
     return static_cast<std::uint8_t>(value);
 }
-
 
 /*
  * Utility for safely converting an unsigned syntax value
  * to uint16_t.
  */
 [[nodiscard]]
-constexpr std::uint16_t to_u16(
-    std::uint32_t value) noexcept
-{
+constexpr std::uint16_t to_u16(std::uint32_t value) noexcept {
     return static_cast<std::uint16_t>(value);
 }
 
-} // namespace bs
+}  // namespace bs

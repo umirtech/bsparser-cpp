@@ -12,7 +12,6 @@ namespace av1 {
  * Leading fields only. Everything is boolean-coded.
  */
 struct SequenceHeader {
-
     std::uint8_t seq_profile = 0;
 
     bool still_picture = false;
@@ -27,13 +26,11 @@ struct SequenceHeader {
     std::uint32_t max_frame_height = 0;
     bool dimensions_present = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return seq_profile <= 7;
     }
 };
 
-} // namespace av1
-} // namespace bs
+}  // namespace av1
+}  // namespace bs

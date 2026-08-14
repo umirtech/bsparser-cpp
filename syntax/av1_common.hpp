@@ -29,18 +29,12 @@ enum class ObuType : std::uint8_t {
     Padding = 15
 };
 
-
 /*
  * -----------------------------------------------------------
  * AV1 operating mode / frame types
  * -----------------------------------------------------------
  */
-enum class FrameType : std::uint8_t {
-    KeyFrame = 0,
-    InterFrame = 1,
-    IntraOnly = 2,
-    Switch = 3
-};
+enum class FrameType : std::uint8_t { KeyFrame = 0, InterFrame = 1, IntraOnly = 2, Switch = 3 };
 
-} // namespace av1
-} // namespace bs
+}  // namespace av1
+}  // namespace bs

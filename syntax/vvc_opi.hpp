@@ -12,18 +12,15 @@ namespace vvc {
  * H.266 §7.3.2.2
  */
 struct Opi {
-
     bool ols_info_present = false;
 
     bool ptl_present = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return true;
     }
 };
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

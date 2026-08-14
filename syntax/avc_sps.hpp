@@ -14,7 +14,6 @@ namespace avc {
  * H.264 / AVC sequence parameter set (7.3.2.1.1).
  */
 struct SequenceParameterSet {
-
     std::uint8_t profile_idc = 0;
     std::array<bool, 6> constraint_set_flag{};
     std::uint8_t level_idc = 0;
@@ -24,7 +23,7 @@ struct SequenceParameterSet {
      * High-profile syntax block (present when
      * is_high_profile(profile_idc)).
      */
-    std::uint8_t chroma_format_idc = 1;   // default 4:2:0 for non-high profiles
+    std::uint8_t chroma_format_idc = 1;  // default 4:2:0 for non-high profiles
     bool separate_colour_plane_flag = false;
     std::uint8_t bit_depth_luma_minus8 = 0;
     std::uint8_t bit_depth_chroma_minus8 = 0;
@@ -58,7 +57,6 @@ struct SequenceParameterSet {
     bool vui_parameters_present_flag = false;
     VuiParameters vui{};
 
-
     /*
      * -------------------------------------------------------
      * Derived helpers
@@ -66,80 +64,50 @@ struct SequenceParameterSet {
      */
 
     [[nodiscard]]
-    constexpr bool
-    is_high() const noexcept
-    {
+    constexpr bool is_high() const noexcept {
         return is_high_profile(profile_idc);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    is_monochrome() const noexcept
-    {
-        return chroma_format_idc ==
-            static_cast<std::uint8_t>(
-                ChromaFormat::Monochrome);
+    constexpr bool is_monochrome() const noexcept {
+        return chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Monochrome);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    log2_max_frame_num() const noexcept
-    {
-        return static_cast<std::uint32_t>(
-            log2_max_frame_num_minus4) + 4;
+    constexpr std::uint32_t log2_max_frame_num() const noexcept {
+        return static_cast<std::uint32_t>(log2_max_frame_num_minus4) + 4;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    log2_max_pic_order_cnt_lsb() const noexcept
-    {
-        return static_cast<std::uint32_t>(
-            log2_max_pic_order_cnt_lsb_minus4) + 4;
+    constexpr std::uint32_t log2_max_pic_order_cnt_lsb() const noexcept {
+        return static_cast<std::uint32_t>(log2_max_pic_order_cnt_lsb_minus4) + 4;
     }
-
 
     /*
      * Crop unit sizes (7.4.2.1.1).
      */
     [[nodiscard]]
-    constexpr std::uint32_t
-    crop_unit_x() const noexcept
-    {
-        if (chroma_format_idc ==
-            static_cast<std::uint8_t>(ChromaFormat::Monochrome) ||
-            chroma_format_idc ==
-            static_cast<std::uint8_t>(ChromaFormat::Yuv444) ||
+    constexpr std::uint32_t crop_unit_x() const noexcept {
+        if (chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Monochrome) ||
+            chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Yuv444) ||
             separate_colour_plane_flag) {
-
             return 1;
         }
 
         return 2;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    crop_unit_y() const noexcept
-    {
-        const std::uint32_t multiplier =
-            frame_mbs_only_flag ? 1 : 2;
+    constexpr std::uint32_t crop_unit_y() const noexcept {
+        const std::uint32_t multiplier = frame_mbs_only_flag ? 1 : 2;
 
-        if (chroma_format_idc ==
-            static_cast<std::uint8_t>(ChromaFormat::Monochrome) ||
-            chroma_format_idc ==
-            static_cast<std::uint8_t>(ChromaFormat::Yuv444) ||
+        if (chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Monochrome) ||
+            chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Yuv444) ||
             separate_colour_plane_flag) {
-
             return multiplier;
         }
 
-        if (chroma_format_idc ==
-            static_cast<std::uint8_t>(ChromaFormat::Yuv422)) {
-
+        if (chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Yuv422)) {
             return multiplier;
         }
 
@@ -147,47 +115,34 @@ struct SequenceParameterSet {
         return multiplier * 2;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    pic_width_in_luma_samples() const noexcept
-    {
-        const std::uint32_t crop_x =
-            crop_unit_x();
+    constexpr std::uint32_t pic_width_in_luma_samples() const noexcept {
+        const std::uint32_t crop_x = crop_unit_x();
 
-        const std::uint32_t base =
-            (pic_width_in_mbs_minus1 + 1) * 16;
+        const std::uint32_t base = (pic_width_in_mbs_minus1 + 1) * 16;
 
         if (!frame_cropping_flag) {
             return base;
         }
 
-        return base -
-               crop_x * (frame_crop_left_offset + frame_crop_right_offset);
+        return base - crop_x * (frame_crop_left_offset + frame_crop_right_offset);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    pic_height_in_luma_samples() const noexcept
-    {
-        const std::uint32_t multiplier =
-            frame_mbs_only_flag ? 1 : 2;
+    constexpr std::uint32_t pic_height_in_luma_samples() const noexcept {
+        const std::uint32_t multiplier = frame_mbs_only_flag ? 1 : 2;
 
-        const std::uint32_t crop_y =
-            crop_unit_y();
+        const std::uint32_t crop_y = crop_unit_y();
 
-        const std::uint32_t base =
-            (pic_height_in_map_units_minus1 + 1) * 16 * multiplier;
+        const std::uint32_t base = (pic_height_in_map_units_minus1 + 1) * 16 * multiplier;
 
         if (!frame_cropping_flag) {
             return base;
         }
 
-        return base -
-               crop_y * (frame_crop_top_offset + frame_crop_bottom_offset);
+        return base - crop_y * (frame_crop_top_offset + frame_crop_bottom_offset);
     }
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

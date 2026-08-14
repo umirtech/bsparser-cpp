@@ -29,7 +29,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace bs {
 namespace cli {
 
@@ -47,7 +46,6 @@ struct NalEntry {
     std::vector<std::pair<std::string, std::string>> fields;
 };
 
-
 /*
  * Whole-stream report.
  */
@@ -57,7 +55,6 @@ struct Report {
     std::size_t parsed = 0;
     std::vector<NalEntry> entries;
 };
-
 
 /*
  * ---------------------------------------------------------------------------
@@ -74,92 +71,91 @@ inline Report* g_report = nullptr;
 inline const std::uint8_t* g_data_start = nullptr;
 inline State* g_state = nullptr;
 
-
 [[nodiscard]]
-inline std::span<const std::byte>
-to_byte_span(
-    std::span<const std::uint8_t> data) noexcept
-{
-    return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(data.data()),
-        data.size());
+inline std::span<const std::byte> to_byte_span(std::span<const std::uint8_t> data) noexcept {
+    return std::span<const std::byte>(reinterpret_cast<const std::byte*>(data.data()), data.size());
 }
 
-
 [[nodiscard]]
-inline std::size_t
-offset_of(
-    const std::uint8_t* p) noexcept
-{
-    return static_cast<std::size_t>(
-        p - g_data_start);
+inline std::size_t offset_of(const std::uint8_t* p) noexcept {
+    return static_cast<std::size_t>(p - g_data_start);
 }
 
-
 [[nodiscard]]
-inline std::string
-hevc_type_name(
-    NalUnitType t) noexcept
-{
+inline std::string hevc_type_name(NalUnitType t) noexcept {
     switch (t) {
-    case NalUnitType::VPS_NUT:        return "VPS_NUT";
-    case NalUnitType::SPS_NUT:        return "SPS_NUT";
-    case NalUnitType::PPS_NUT:        return "PPS_NUT";
-    case NalUnitType::PREFIX_SEI_NUT: return "PREFIX_SEI_NUT";
-    case NalUnitType::SUFFIX_SEI_NUT: return "SUFFIX_SEI_NUT";
-    case NalUnitType::AUD_NUT:        return "AUD_NUT";
-    case NalUnitType::EOS_NUT:        return "EOS_NUT";
-    case NalUnitType::EOB_NUT:        return "EOB_NUT";
-    case NalUnitType::FD_NUT:         return "FD_NUT";
-    default:
-        if (is_vcl_nal_unit(t)) {
-            return "VCL";
-        }
-        return "NAL_" + std::to_string(
-                   static_cast<unsigned>(t));
+        case NalUnitType::VPS_NUT:
+            return "VPS_NUT";
+        case NalUnitType::SPS_NUT:
+            return "SPS_NUT";
+        case NalUnitType::PPS_NUT:
+            return "PPS_NUT";
+        case NalUnitType::PREFIX_SEI_NUT:
+            return "PREFIX_SEI_NUT";
+        case NalUnitType::SUFFIX_SEI_NUT:
+            return "SUFFIX_SEI_NUT";
+        case NalUnitType::AUD_NUT:
+            return "AUD_NUT";
+        case NalUnitType::EOS_NUT:
+            return "EOS_NUT";
+        case NalUnitType::EOB_NUT:
+            return "EOB_NUT";
+        case NalUnitType::FD_NUT:
+            return "FD_NUT";
+        default:
+            if (is_vcl_nal_unit(t)) {
+                return "VCL";
+            }
+            return "NAL_" + std::to_string(static_cast<unsigned>(t));
     }
 }
 
-
 [[nodiscard]]
-inline std::string
-avc_type_name(
-    avc::NalUnitType t) noexcept
-{
+inline std::string avc_type_name(avc::NalUnitType t) noexcept {
     switch (t) {
-    case avc::NalUnitType::SliceNonIdr:         return "SliceNonIdr";
-    case avc::NalUnitType::SliceDataPartitionA: return "SliceDataPartitionA";
-    case avc::NalUnitType::SliceDataPartitionB: return "SliceDataPartitionB";
-    case avc::NalUnitType::SliceDataPartitionC: return "SliceDataPartitionC";
-    case avc::NalUnitType::SliceIdr:            return "SliceIdr";
-    case avc::NalUnitType::Sei:                 return "SEI";
-    case avc::NalUnitType::Sps:                 return "SPS";
-    case avc::NalUnitType::Pps:                 return "PPS";
-    case avc::NalUnitType::AccessUnitDelimiter: return "AUD";
-    case avc::NalUnitType::EndOfSequence:       return "EndOfSequence";
-    case avc::NalUnitType::EndOfStream:         return "EndOfStream";
-    case avc::NalUnitType::FillerData:          return "FillerData";
-    case avc::NalUnitType::SpsExtension:        return "SpsExtension";
-    default:
-        if (avc::is_vcl_nal_unit(t)) {
-            return "VCL";
-        }
-        return "NAL_" + std::to_string(
-                   static_cast<unsigned>(t));
+        case avc::NalUnitType::SliceNonIdr:
+            return "SliceNonIdr";
+        case avc::NalUnitType::SliceDataPartitionA:
+            return "SliceDataPartitionA";
+        case avc::NalUnitType::SliceDataPartitionB:
+            return "SliceDataPartitionB";
+        case avc::NalUnitType::SliceDataPartitionC:
+            return "SliceDataPartitionC";
+        case avc::NalUnitType::SliceIdr:
+            return "SliceIdr";
+        case avc::NalUnitType::Sei:
+            return "SEI";
+        case avc::NalUnitType::Sps:
+            return "SPS";
+        case avc::NalUnitType::Pps:
+            return "PPS";
+        case avc::NalUnitType::AccessUnitDelimiter:
+            return "AUD";
+        case avc::NalUnitType::EndOfSequence:
+            return "EndOfSequence";
+        case avc::NalUnitType::EndOfStream:
+            return "EndOfStream";
+        case avc::NalUnitType::FillerData:
+            return "FillerData";
+        case avc::NalUnitType::SpsExtension:
+            return "SpsExtension";
+        default:
+            if (avc::is_vcl_nal_unit(t)) {
+                return "VCL";
+            }
+            return "NAL_" + std::to_string(static_cast<unsigned>(t));
     }
 }
 
-
-inline void
-add_entry(
+inline void add_entry(
     std::string type,
     unsigned type_id,
     bool vcl,
     const std::uint8_t* payload,
     std::size_t size,
     std::string summary,
-    std::vector<std::pair<std::string, std::string>> fields = {})
-{
+    std::vector<std::pair<std::string, std::string>> fields = {}
+) {
     if (g_report == nullptr) {
         return;
     }
@@ -177,8 +173,7 @@ add_entry(
     g_report->entries.push_back(std::move(entry));
 }
 
-} // namespace detail
-
+}  // namespace detail
 
 /*
  * ---------------------------------------------------------------------------
@@ -186,20 +181,12 @@ add_entry(
  * ---------------------------------------------------------------------------
  */
 [[nodiscard]]
-inline Report
-build_report(
-    Codec codec,
-    std::span<const std::uint8_t> data,
-    NalFramingMode mode,
-    unsigned length_size = 4)
-{
+inline Report build_report(
+    Codec codec, std::span<const std::uint8_t> data, NalFramingMode mode, unsigned length_size = 4
+) {
     Report report;
-    report.codec =
-        (codec == Codec::Hevc) ? "HEVC" : "AVC";
-    report.framing =
-        (mode == NalFramingMode::AnnexB)
-            ? "Annex-B"
-            : "Length-prefixed";
+    report.codec = (codec == Codec::Hevc) ? "HEVC" : "AVC";
+    report.framing = (mode == NalFramingMode::AnnexB) ? "Annex-B" : "Length-prefixed";
 
     auto state = create_state(codec);
 
@@ -208,382 +195,287 @@ build_report(
     detail::g_state = state.get();
 
     if (codec == Codec::Hevc) {
-
         BsNalHandlers handlers{};
 
-        handlers.vps =
-            [](const NalUnit& nal) {
-                std::string summary = "VPS";
-                std::vector<std::pair<std::string,
-                                      std::string>> fields;
-                try {
-                    RbspBitstreamReader reader(
-                        detail::to_byte_span(
-                            nal.payload_bytes()));
-                    auto vps =
-                        parse_video_parameter_set(reader);
-                    fields.emplace_back(
-                        "vps_id",
-                        std::to_string(static_cast<unsigned>(
-                            vps.vps_video_parameter_set_id)));
-                    fields.emplace_back(
-                        "max_layers",
-                        std::to_string(vps.max_layers()));
-                    fields.emplace_back(
-                        "max_sub_layers",
-                        std::to_string(vps.max_sub_layers()));
-                    summary =
-                        "VPS id=" +
-                        std::to_string(static_cast<unsigned>(
-                            vps.vps_video_parameter_set_id));
-                } catch (...) {
-                    summary = "VPS (unparsable)";
-                }
-                detail::add_entry(
-                    detail::hevc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    std::move(fields));
-            };
+        handlers.vps = [](const NalUnit& nal) {
+            std::string summary = "VPS";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto vps = parse_video_parameter_set(reader);
+                fields.emplace_back(
+                    "vps_id", std::to_string(static_cast<unsigned>(vps.vps_video_parameter_set_id))
+                );
+                fields.emplace_back("max_layers", std::to_string(vps.max_layers()));
+                fields.emplace_back("max_sub_layers", std::to_string(vps.max_sub_layers()));
+                summary = "VPS id=" +
+                          std::to_string(static_cast<unsigned>(vps.vps_video_parameter_set_id));
+            } catch (...) {
+                summary = "VPS (unparsable)";
+            }
+            detail::add_entry(
+                detail::hevc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                std::move(fields)
+            );
+        };
 
-        handlers.sps =
-            [](const NalUnit& nal) {
-                std::string summary = "SPS";
-                std::vector<std::pair<std::string,
-                                      std::string>> fields;
-                try {
-                    RbspBitstreamReader reader(
-                        detail::to_byte_span(
-                            nal.payload_bytes()));
-                    auto sps =
-                        parse_sequence_parameter_set(reader);
-                    fields.emplace_back(
-                        "sps_id",
-                        std::to_string(static_cast<unsigned>(
-                            sps.sps_seq_parameter_set_id)));
-                    fields.emplace_back(
-                        "vps_id",
-                        std::to_string(static_cast<unsigned>(
-                            sps.sps_video_parameter_set_id)));
-                    fields.emplace_back(
-                        "width",
-                        std::to_string(
-                            sps.pic_width_in_luma_samples));
-                    fields.emplace_back(
-                        "height",
-                        std::to_string(
-                            sps.pic_height_in_luma_samples));
-                    fields.emplace_back(
-                        "chroma_format",
-                        std::to_string(static_cast<unsigned>(
-                            sps.chroma_format)));
-                    fields.emplace_back(
-                        "luma_bit_depth",
-                        std::to_string(
-                            static_cast<unsigned>(
-                                sps.luma_bit_depth())));
-                    summary =
-                        std::to_string(
-                            sps.pic_width_in_luma_samples) +
-                        "x" +
-                        std::to_string(
-                            sps.pic_height_in_luma_samples) +
-                        " chroma=" +
-                        std::to_string(static_cast<unsigned>(
-                            sps.chroma_format));
-                } catch (...) {
-                    summary = "SPS (unparsable)";
-                }
-                detail::add_entry(
-                    detail::hevc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    std::move(fields));
-            };
+        handlers.sps = [](const NalUnit& nal) {
+            std::string summary = "SPS";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto sps = parse_sequence_parameter_set(reader);
+                fields.emplace_back(
+                    "sps_id", std::to_string(static_cast<unsigned>(sps.sps_seq_parameter_set_id))
+                );
+                fields.emplace_back(
+                    "vps_id", std::to_string(static_cast<unsigned>(sps.sps_video_parameter_set_id))
+                );
+                fields.emplace_back("width", std::to_string(sps.pic_width_in_luma_samples));
+                fields.emplace_back("height", std::to_string(sps.pic_height_in_luma_samples));
+                fields.emplace_back(
+                    "chroma_format", std::to_string(static_cast<unsigned>(sps.chroma_format))
+                );
+                fields.emplace_back(
+                    "luma_bit_depth", std::to_string(static_cast<unsigned>(sps.luma_bit_depth()))
+                );
+                summary = std::to_string(sps.pic_width_in_luma_samples) + "x" +
+                          std::to_string(sps.pic_height_in_luma_samples) +
+                          " chroma=" + std::to_string(static_cast<unsigned>(sps.chroma_format));
+            } catch (...) {
+                summary = "SPS (unparsable)";
+            }
+            detail::add_entry(
+                detail::hevc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                std::move(fields)
+            );
+        };
 
-        handlers.pps =
-            [](const NalUnit& nal) {
-                std::string summary = "PPS";
-                std::vector<std::pair<std::string,
-                                      std::string>> fields;
-                try {
-                    RbspBitstreamReader reader(
-                        detail::to_byte_span(
-                            nal.payload_bytes()));
-                    auto pps =
-                        parse_picture_parameter_set(reader);
-                    fields.emplace_back(
-                        "pps_id",
-                        std::to_string(static_cast<unsigned>(
-                            pps.pps_pic_parameter_set_id)));
-                    fields.emplace_back(
-                        "sps_id",
-                        std::to_string(static_cast<unsigned>(
-                            pps.pps_seq_parameter_set_id)));
-                    summary =
-                        "PPS id=" +
-                        std::to_string(static_cast<unsigned>(
-                            pps.pps_pic_parameter_set_id));
-                } catch (...) {
-                    summary = "PPS (unparsable)";
-                }
-                detail::add_entry(
-                    detail::hevc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    std::move(fields));
-            };
+        handlers.pps = [](const NalUnit& nal) {
+            std::string summary = "PPS";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto pps = parse_picture_parameter_set(reader);
+                fields.emplace_back(
+                    "pps_id", std::to_string(static_cast<unsigned>(pps.pps_pic_parameter_set_id))
+                );
+                fields.emplace_back(
+                    "sps_id", std::to_string(static_cast<unsigned>(pps.pps_seq_parameter_set_id))
+                );
+                summary =
+                    "PPS id=" + std::to_string(static_cast<unsigned>(pps.pps_pic_parameter_set_id));
+            } catch (...) {
+                summary = "PPS (unparsable)";
+            }
+            detail::add_entry(
+                detail::hevc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                std::move(fields)
+            );
+        };
 
-        handlers.prefix_sei =
-            [](const NalUnit& nal) {
-                std::string summary = "PREFIX_SEI";
-                std::size_t count = 0;
-                try {
-                    auto sei = parse_sei_nal(nal);
-                    count = sei.size();
-                    summary =
-                        "PREFIX_SEI messages=" +
-                        std::to_string(count);
-                } catch (...) {
-                    summary = "PREFIX_SEI (unparsable)";
-                }
-                detail::add_entry(
-                    detail::hevc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    { { "messages",
-                        std::to_string(count) } });
-            };
+        handlers.prefix_sei = [](const NalUnit& nal) {
+            std::string summary = "PREFIX_SEI";
+            std::size_t count = 0;
+            try {
+                auto sei = parse_sei_nal(nal);
+                count = sei.size();
+                summary = "PREFIX_SEI messages=" + std::to_string(count);
+            } catch (...) {
+                summary = "PREFIX_SEI (unparsable)";
+            }
+            detail::add_entry(
+                detail::hevc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                {{"messages", std::to_string(count)}}
+            );
+        };
 
-        handlers.suffix_sei =
-            [](const NalUnit& nal) {
-                std::string summary = "SUFFIX_SEI";
-                std::size_t count = 0;
-                try {
-                    auto sei = parse_sei_nal(nal);
-                    count = sei.size();
-                    summary =
-                        "SUFFIX_SEI messages=" +
-                        std::to_string(count);
-                } catch (...) {
-                    summary = "SUFFIX_SEI (unparsable)";
-                }
-                detail::add_entry(
-                    detail::hevc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    { { "messages",
-                        std::to_string(count) } });
-            };
+        handlers.suffix_sei = [](const NalUnit& nal) {
+            std::string summary = "SUFFIX_SEI";
+            std::size_t count = 0;
+            try {
+                auto sei = parse_sei_nal(nal);
+                count = sei.size();
+                summary = "SUFFIX_SEI messages=" + std::to_string(count);
+            } catch (...) {
+                summary = "SUFFIX_SEI (unparsable)";
+            }
+            detail::add_entry(
+                detail::hevc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                {{"messages", std::to_string(count)}}
+            );
+        };
 
-        handlers.slice =
-            [](const NalUnit& nal) {
-                const std::string name =
-                    detail::hevc_type_name(nal.type());
-                detail::add_entry(
-                    name,
-                    static_cast<unsigned>(nal.type()),
-                    true,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    "Slice (" + name + ")",
-                    {});
-            };
+        handlers.slice = [](const NalUnit& nal) {
+            const std::string name = detail::hevc_type_name(nal.type());
+            detail::add_entry(
+                name,
+                static_cast<unsigned>(nal.type()),
+                true,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                "Slice (" + name + ")",
+                {}
+            );
+        };
 
-        handlers.unsupported =
-            [](const NalUnit& nal) {
-                const std::string name =
-                    detail::hevc_type_name(nal.type());
-                detail::add_entry(
-                    name,
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    name,
-                    {});
-            };
+        handlers.unsupported = [](const NalUnit& nal) {
+            const std::string name = detail::hevc_type_name(nal.type());
+            detail::add_entry(
+                name,
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                name,
+                {}
+            );
+        };
 
-        report.parsed = parse(
-            *state,
-            data,
-            mode,
-            handlers,
-            length_size);
+        report.parsed = parse(*state, data, mode, handlers, length_size);
 
     } else {
-
         avc::NalHandlers handlers{};
 
-        handlers.sps =
-            [](const avc::NalUnit& nal) {
-                std::string summary = "SPS";
-                std::vector<std::pair<std::string,
-                                      std::string>> fields;
-                try {
-                    RbspBitstreamReader reader(
-                        detail::to_byte_span(
-                            nal.payload_bytes()));
-                    auto sps =
-                        avc::parse_sequence_parameter_set(
-                            reader);
-                    fields.emplace_back(
-                        "sps_id",
-                        std::to_string(static_cast<unsigned>(
-                            sps.seq_parameter_set_id)));
-                    fields.emplace_back(
-                        "profile_idc",
-                        std::to_string(static_cast<unsigned>(
-                            sps.profile_idc)));
-                    fields.emplace_back(
-                        "level_idc",
-                        std::to_string(static_cast<unsigned>(
-                            sps.level_idc)));
-                    fields.emplace_back(
-                        "width",
-                        std::to_string(
-                            sps.pic_width_in_luma_samples()));
-                    fields.emplace_back(
-                        "height",
-                        std::to_string(
-                            sps.pic_height_in_luma_samples()));
-                    fields.emplace_back(
-                        "chroma_format_idc",
-                        std::to_string(static_cast<unsigned>(
-                            sps.chroma_format_idc)));
-                    summary =
-                        std::to_string(
-                            sps.pic_width_in_luma_samples()) +
-                        "x" +
-                        std::to_string(
-                            sps.pic_height_in_luma_samples()) +
-                        " profile=" +
-                        std::to_string(static_cast<unsigned>(
-                            sps.profile_idc));
-                } catch (...) {
-                    summary = "SPS (unparsable)";
-                }
-                detail::add_entry(
-                    detail::avc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    std::move(fields));
-            };
+        handlers.sps = [](const avc::NalUnit& nal) {
+            std::string summary = "SPS";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto sps = avc::parse_sequence_parameter_set(reader);
+                fields.emplace_back(
+                    "sps_id", std::to_string(static_cast<unsigned>(sps.seq_parameter_set_id))
+                );
+                fields.emplace_back(
+                    "profile_idc", std::to_string(static_cast<unsigned>(sps.profile_idc))
+                );
+                fields.emplace_back(
+                    "level_idc", std::to_string(static_cast<unsigned>(sps.level_idc))
+                );
+                fields.emplace_back("width", std::to_string(sps.pic_width_in_luma_samples()));
+                fields.emplace_back("height", std::to_string(sps.pic_height_in_luma_samples()));
+                fields.emplace_back(
+                    "chroma_format_idc",
+                    std::to_string(static_cast<unsigned>(sps.chroma_format_idc))
+                );
+                summary = std::to_string(sps.pic_width_in_luma_samples()) + "x" +
+                          std::to_string(sps.pic_height_in_luma_samples()) +
+                          " profile=" + std::to_string(static_cast<unsigned>(sps.profile_idc));
+            } catch (...) {
+                summary = "SPS (unparsable)";
+            }
+            detail::add_entry(
+                detail::avc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                std::move(fields)
+            );
+        };
 
-        handlers.pps =
-            [](const avc::NalUnit& nal) {
-                std::string summary = "PPS";
-                std::vector<std::pair<std::string,
-                                      std::string>> fields;
-                try {
-                    RbspBitstreamReader reader(
-                        detail::to_byte_span(
-                            nal.payload_bytes()));
-                    auto pps =
-                        avc::parse_picture_parameter_set(
-                            reader);
-                    fields.emplace_back(
-                        "pps_id",
-                        std::to_string(static_cast<unsigned>(
-                            pps.pic_parameter_set_id)));
-                    fields.emplace_back(
-                        "sps_id",
-                        std::to_string(static_cast<unsigned>(
-                            pps.seq_parameter_set_id)));
-                    summary =
-                        "PPS id=" +
-                        std::to_string(static_cast<unsigned>(
-                            pps.pic_parameter_set_id));
-                } catch (...) {
-                    summary = "PPS (unparsable)";
-                }
-                detail::add_entry(
-                    detail::avc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    std::move(fields));
-            };
+        handlers.pps = [](const avc::NalUnit& nal) {
+            std::string summary = "PPS";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto pps = avc::parse_picture_parameter_set(reader);
+                fields.emplace_back(
+                    "pps_id", std::to_string(static_cast<unsigned>(pps.pic_parameter_set_id))
+                );
+                fields.emplace_back(
+                    "sps_id", std::to_string(static_cast<unsigned>(pps.seq_parameter_set_id))
+                );
+                summary =
+                    "PPS id=" + std::to_string(static_cast<unsigned>(pps.pic_parameter_set_id));
+            } catch (...) {
+                summary = "PPS (unparsable)";
+            }
+            detail::add_entry(
+                detail::avc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                std::move(fields)
+            );
+        };
 
-        handlers.sei =
-            [](const avc::NalUnit& nal) {
-                std::string summary = "SEI";
-                std::size_t count = 0;
-                try {
-                    auto sei =
-                        avc::parse_sei_nal(nal);
-                    count = sei.messages.size();
-                    summary =
-                        "SEI messages=" +
-                        std::to_string(count);
-                } catch (...) {
-                    summary = "SEI (unparsable)";
-                }
-                detail::add_entry(
-                    detail::avc_type_name(nal.type()),
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    summary,
-                    { { "messages",
-                        std::to_string(count) } });
-            };
+        handlers.sei = [](const avc::NalUnit& nal) {
+            std::string summary = "SEI";
+            std::size_t count = 0;
+            try {
+                auto sei = avc::parse_sei_nal(nal);
+                count = sei.messages.size();
+                summary = "SEI messages=" + std::to_string(count);
+            } catch (...) {
+                summary = "SEI (unparsable)";
+            }
+            detail::add_entry(
+                detail::avc_type_name(nal.type()),
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                summary,
+                {{"messages", std::to_string(count)}}
+            );
+        };
 
-        handlers.slice =
-            [](const avc::NalUnit& nal) {
-                const std::string name =
-                    detail::avc_type_name(nal.type());
-                detail::add_entry(
-                    name,
-                    static_cast<unsigned>(nal.type()),
-                    true,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    "Slice (" + name + ")",
-                    {});
-            };
+        handlers.slice = [](const avc::NalUnit& nal) {
+            const std::string name = detail::avc_type_name(nal.type());
+            detail::add_entry(
+                name,
+                static_cast<unsigned>(nal.type()),
+                true,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                "Slice (" + name + ")",
+                {}
+            );
+        };
 
-        handlers.unsupported =
-            [](const avc::NalUnit& nal) {
-                const std::string name =
-                    detail::avc_type_name(nal.type());
-                detail::add_entry(
-                    name,
-                    static_cast<unsigned>(nal.type()),
-                    false,
-                    nal.payload_bytes().data(),
-                    nal.payload_bytes().size(),
-                    name,
-                    {});
-            };
+        handlers.unsupported = [](const avc::NalUnit& nal) {
+            const std::string name = detail::avc_type_name(nal.type());
+            detail::add_entry(
+                name,
+                static_cast<unsigned>(nal.type()),
+                false,
+                nal.payload_bytes().data(),
+                nal.payload_bytes().size(),
+                name,
+                {}
+            );
+        };
 
-        report.parsed = parse(
-            *state,
-            data,
-            mode,
-            handlers,
-            length_size);
+        report.parsed = parse(*state, data, mode, handlers, length_size);
     }
 
     detail::g_report = nullptr;
@@ -593,51 +485,49 @@ build_report(
     return report;
 }
 
-
 /*
  * ---------------------------------------------------------------------------
  * JSON export
  * ---------------------------------------------------------------------------
  */
 [[nodiscard]]
-inline std::string
-json_escape(
-    const std::string& s)
-{
+inline std::string json_escape(const std::string& s) {
     std::string out;
     out.reserve(s.size() + 2);
 
     for (char c : s) {
         switch (c) {
-        case '"':  out += "\\\""; break;
-        case '\\': out += "\\\\"; break;
-        case '\n': out += "\\n";  break;
-        case '\r': out += "\\r";  break;
-        case '\t': out += "\\t";  break;
-        default:
-            if (static_cast<unsigned char>(c) < 0x20) {
-                char buf[8];
-                std::snprintf(
-                    buf,
-                    sizeof(buf),
-                    "\\u%04x",
-                    static_cast<unsigned>(c));
-                out += buf;
-            } else {
-                out += c;
-            }
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(c));
+                    out += buf;
+                } else {
+                    out += c;
+                }
         }
     }
 
     return out;
 }
 
-
 [[nodiscard]]
-inline std::string
-to_json(
-    const Report& report)
-{
+inline std::string to_json(const Report& report) {
     std::ostringstream os;
     os << "{\n";
     os << "  \"codec\": \"" << json_escape(report.codec) << "\",\n";
@@ -645,10 +535,7 @@ to_json(
     os << "  \"parsed\": " << report.parsed << ",\n";
     os << "  \"nals\": [\n";
 
-    for (std::size_t i = 0;
-         i < report.entries.size();
-         ++i) {
-
+    for (std::size_t i = 0; i < report.entries.size(); ++i) {
         const auto& e = report.entries[i];
 
         os << "    {\n";
@@ -661,17 +548,12 @@ to_json(
         os << "      \"summary\": \"" << json_escape(e.summary) << "\",\n";
         os << "      \"fields\": {";
 
-        for (std::size_t f = 0;
-             f < e.fields.size();
-             ++f) {
-
+        for (std::size_t f = 0; f < e.fields.size(); ++f) {
             if (f) {
                 os << ", ";
             }
-            os << "\"" << json_escape(e.fields[f].first)
-               << "\": \""
-               << json_escape(e.fields[f].second)
-               << "\"";
+            os << "\"" << json_escape(e.fields[f].first) << "\": \""
+               << json_escape(e.fields[f].second) << "\"";
         }
 
         os << "}\n";
@@ -685,17 +567,13 @@ to_json(
     return os.str();
 }
 
-
 /*
  * ---------------------------------------------------------------------------
  * HTML export (self-contained viewer with filter controls)
  * ---------------------------------------------------------------------------
  */
 [[nodiscard]]
-inline std::string
-to_html(
-    const Report& report)
-{
+inline std::string to_html(const Report& report) {
     /*
      * Embed the report as JSON.  Escape "</" so the data cannot
      * prematurely close the <script> element.
@@ -720,8 +598,7 @@ to_html(
     os << "<meta charset=\"utf-8\">\n";
     os << "<meta name=\"viewport\" "
           "content=\"width=device-width, initial-scale=1\">\n";
-    os << "<title>bsparser report — " << json_escape(report.codec)
-       << "</title>\n";
+    os << "<title>bsparser report — " << json_escape(report.codec) << "</title>\n";
     os << "<style>\n";
     os << "body{font-family:system-ui,Segoe UI,Roboto,sans-serif;"
           "margin:0;background:#0f1115;color:#e6e6e6}\n";
@@ -751,13 +628,10 @@ to_html(
     os << "</head>\n";
     os << "<body>\n";
     os << "<header>\n";
-    os << "<h1>bsparser — " << json_escape(report.codec)
-       << " bitstream report</h1>\n";
-    os << "<div class=\"meta\">framing: "
-       << json_escape(report.framing)
-       << " &middot; NAL units: "
-       << report.entries.size()
-       << " &middot; parsed: " << report.parsed << "</div>\n";
+    os << "<h1>bsparser — " << json_escape(report.codec) << " bitstream report</h1>\n";
+    os << "<div class=\"meta\">framing: " << json_escape(report.framing)
+       << " &middot; NAL units: " << report.entries.size() << " &middot; parsed: " << report.parsed
+       << "</div>\n";
     os << "<div class=\"controls\">\n";
     os << "<input id=\"search\" type=\"text\" "
           "placeholder=\"filter by type / summary…\" "
@@ -854,5 +728,5 @@ render();
     return os.str();
 }
 
-} // namespace cli
-} // namespace bs
+}  // namespace cli
+}  // namespace bs

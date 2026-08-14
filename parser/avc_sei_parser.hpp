@@ -23,25 +23,18 @@ namespace avc {
  */
 
 [[nodiscard]]
-inline ParsedSei
-parse_sei_nal(
-    const NalUnit& nal)
-{
-    const auto payload =
-        nal.payload_bytes();
+inline ParsedSei parse_sei_nal(const NalUnit& nal) {
+    const auto payload = nal.payload_bytes();
 
-    const auto byte_span =
-        std::span<const std::byte>(
-            reinterpret_cast<const std::byte*>(
-                payload.data()),
-            payload.size());
+    const auto byte_span = std::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(payload.data()), payload.size()
+    );
 
     RbspBitstreamReader reader(byte_span);
 
     ParsedSei sei;
 
     while (reader.more_rbsp_data()) {
-
         /*
          * payload_type / payload_size are 8-bit fields that
          * may be chained with 0xFF extensions.
@@ -61,11 +54,8 @@ parse_sei_nal(
             payload_size += byte;
         } while (byte == 0xFF);
 
-        if (static_cast<std::uint64_t>(payload_size) >
-            reader.bits_remaining() / 8) {
-
-            throw ParseError(
-                "sei: payload size exceeds RBSP");
+        if (static_cast<std::uint64_t>(payload_size) > reader.bits_remaining() / 8) {
+            throw ParseError("sei: payload size exceeds RBSP");
         }
 
         SeiMessage message;
@@ -73,24 +63,16 @@ parse_sei_nal(
         message.payload_type = payload_type;
         message.payload_size = payload_size;
 
-        const std::size_t offset =
-            sei.rbsp_storage.size();
+        const std::size_t offset = sei.rbsp_storage.size();
 
-        sei.rbsp_storage.reserve(
-            sei.rbsp_storage.size() + payload_size);
+        sei.rbsp_storage.reserve(sei.rbsp_storage.size() + payload_size);
 
-        for (std::uint32_t i = 0;
-             i < payload_size;
-             ++i) {
-
-            sei.rbsp_storage.push_back(
-                reader.read_u8());
+        for (std::uint32_t i = 0; i < payload_size; ++i) {
+            sei.rbsp_storage.push_back(reader.read_u8());
         }
 
         message.payload =
-            std::span<const std::uint8_t>(
-                sei.rbsp_storage.data() + offset,
-                payload_size);
+            std::span<const std::uint8_t>(sei.rbsp_storage.data() + offset, payload_size);
 
         sei.messages.push_back(message);
     }
@@ -100,5 +82,5 @@ parse_sei_nal(
     return sei;
 }
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

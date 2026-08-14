@@ -14,10 +14,7 @@
 
 using namespace bs;
 
-static std::size_t
-scalar_find(const std::span<const std::uint8_t>& d,
-            std::size_t from)
-{
+static std::size_t scalar_find(const std::span<const std::uint8_t>& d, std::size_t from) {
     for (std::size_t i = from; i + 3 <= d.size(); ++i) {
         if (annex_b_start_code_size(d, i) != 0) {
             return i;
@@ -27,10 +24,9 @@ scalar_find(const std::span<const std::uint8_t>& d,
 }
 
 template <typename F>
-static std::vector<std::pair<std::size_t, std::size_t>>
-collect(F finder,
-        const std::span<const std::uint8_t>& d)
-{
+static std::vector<std::pair<std::size_t, std::size_t>> collect(
+    F finder, const std::span<const std::uint8_t>& d
+) {
     std::vector<std::pair<std::size_t, std::size_t>> out;
     std::size_t pos = 0;
     while (pos + 3 <= d.size()) {
@@ -38,8 +34,7 @@ collect(F finder,
         if (start == d.size()) {
             break;
         }
-        std::size_t prefix =
-            annex_b_start_code_size(d, start);
+        std::size_t prefix = annex_b_start_code_size(d, start);
         if (prefix == 0) {
             prefix = 3;
         }
@@ -58,8 +53,7 @@ collect(F finder,
     return out;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     std::vector<std::uint8_t> buf;
 
     if (argc >= 2) {
@@ -76,12 +70,10 @@ int main(int argc, char** argv)
         std::fclose(f);
     }
 
-    auto sw = [&](const std::span<const std::uint8_t>& d,
-                  std::size_t from) {
+    auto sw = [&](const std::span<const std::uint8_t>& d, std::size_t from) {
         return annex_b_find_start_code(d, from);
     };
-    auto sc = [&](const std::span<const std::uint8_t>& d,
-                  std::size_t from) {
+    auto sc = [&](const std::span<const std::uint8_t>& d, std::size_t from) {
         return scalar_find(d, from);
     };
 
@@ -91,28 +83,16 @@ int main(int argc, char** argv)
         auto a = collect(sw, buf);
         auto b = collect(sc, buf);
         if (a != b) {
-            std::cerr << "REAL FILE mismatch: "
-                      << a.size() << " vs " << b.size()
-                      << "\n";
-            std::size_t m = a.size() < b.size()
-                                ? a.size()
-                                : b.size();
+            std::cerr << "REAL FILE mismatch: " << a.size() << " vs " << b.size() << "\n";
+            std::size_t m = a.size() < b.size() ? a.size() : b.size();
             for (std::size_t k = 0; k < m; ++k) {
                 if (a[k] != b[k]) {
-                    std::cerr << "  first diff nal " << k
-                              << " sw=[" << a[k].first
-                              << "," << a[k].second << "] sc=["
-                              << b[k].first << ","
-                              << b[k].second << "]\n";
-                    std::size_t at = a[k].first > 8
-                                         ? a[k].first - 8
-                                         : 0;
-                    for (std::size_t p = at;
-                         p < at + 16 && p < buf.size();
-                         ++p) {
-                        std::cerr << "   buf[" << p << "]="
-                                  << std::hex
-                                  << (int)buf[p] << std::dec
+                    std::cerr << "  first diff nal " << k << " sw=[" << a[k].first << ","
+                              << a[k].second << "] sc=[" << b[k].first << "," << b[k].second
+                              << "]\n";
+                    std::size_t at = a[k].first > 8 ? a[k].first - 8 : 0;
+                    for (std::size_t p = at; p < at + 16 && p < buf.size(); ++p) {
+                        std::cerr << "   buf[" << p << "]=" << std::hex << (int)buf[p] << std::dec
                                   << "\n";
                     }
                     break;
@@ -120,8 +100,7 @@ int main(int argc, char** argv)
             }
             failures++;
         } else {
-            std::cout << "real file: " << a.size()
-                      << " nals OK\n";
+            std::cout << "real file: " << a.size() << " nals OK\n";
         }
     }
 
@@ -130,19 +109,16 @@ int main(int argc, char** argv)
     std::uniform_int_distribution<int> size_dist(0, 4096);
 
     for (int trial = 0; trial < 4000; ++trial) {
-        std::size_t len =
-            static_cast<std::size_t>(size_dist(rng));
+        std::size_t len = static_cast<std::size_t>(size_dist(rng));
         buf.resize(len);
         for (std::size_t i = 0; i < len; ++i) {
-            buf[i] =
-                static_cast<std::uint8_t>(byte_dist(rng));
+            buf[i] = static_cast<std::uint8_t>(byte_dist(rng));
         }
         auto a = collect(sw, buf);
         auto b = collect(sc, buf);
         if (a != b) {
-            std::cerr << "RANDOM mismatch len=" << len
-                      << " sw=" << a.size()
-                      << " sc=" << b.size() << "\n";
+            std::cerr << "RANDOM mismatch len=" << len << " sw=" << a.size() << " sc=" << b.size()
+                      << "\n";
             failures++;
         }
     }

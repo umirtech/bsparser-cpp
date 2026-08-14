@@ -23,7 +23,6 @@ namespace bs {
  * We model the syntax values directly.
  */
 
-
 /*
  * One CPB entry.
  *
@@ -59,7 +58,6 @@ struct CpbEntry {
     bool cbr_flag = false;
 };
 
-
 /*
  * sub_layer_hrd_parameters()
  *
@@ -80,7 +78,6 @@ struct SubLayerHrdParameters {
     }
 };
 
-
 /*
  * Timing information shared by HRD parameters.
  *
@@ -94,11 +91,9 @@ struct HrdTimingInfo {
 
     [[nodiscard]]
     bool valid() const noexcept {
-        return num_units_in_tick != 0 &&
-               time_scale != 0;
+        return num_units_in_tick != 0 && time_scale != 0;
     }
 };
-
 
 /*
  * Common HRD information.
@@ -142,8 +137,7 @@ struct HrdCommonInfo {
      *
      *     du_cpb_removal_delay_increment_length_minus1
      */
-    std::uint8_t
-        du_cpb_removal_delay_increment_length_minus1 = 0;
+    std::uint8_t du_cpb_removal_delay_increment_length_minus1 = 0;
 
     /*
      * Indicates whether sub-picture CPB parameters are
@@ -154,8 +148,7 @@ struct HrdCommonInfo {
     /*
      * Length of the DU output delay field.
      */
-    std::uint8_t
-        dpb_output_delay_du_length_minus1 = 0;
+    std::uint8_t dpb_output_delay_du_length_minus1 = 0;
 
     /*
      * HRD scaling factors.
@@ -175,16 +168,12 @@ struct HrdCommonInfo {
     /*
      * Delay field lengths.
      */
-    std::uint8_t
-        initial_cpb_removal_delay_length_minus1 = 0;
+    std::uint8_t initial_cpb_removal_delay_length_minus1 = 0;
 
-    std::uint8_t
-        au_cpb_removal_delay_length_minus1 = 0;
+    std::uint8_t au_cpb_removal_delay_length_minus1 = 0;
 
-    std::uint8_t
-        dpb_output_delay_length_minus1 = 0;
+    std::uint8_t dpb_output_delay_length_minus1 = 0;
 };
-
 
 /*
  * HRD information for one temporal sub-layer.
@@ -255,11 +244,9 @@ struct HrdSubLayer {
 
     [[nodiscard]]
     std::size_t cpb_count() const noexcept {
-        return static_cast<std::size_t>(
-            cpb_cnt_minus1) + 1;
+        return static_cast<std::size_t>(cpb_cnt_minus1) + 1;
     }
 };
-
 
 /*
  * Complete hrd_parameters() structure.
@@ -292,102 +279,67 @@ struct HrdParameters {
 
     [[nodiscard]]
     constexpr std::size_t sub_layer_count() const noexcept {
-        return static_cast<std::size_t>(
-            max_num_sub_layers_minus1) + 1;
+        return static_cast<std::size_t>(max_num_sub_layers_minus1) + 1;
     }
 
     [[nodiscard]]
-    HrdSubLayer& sub_layer(
-        std::size_t index) noexcept {
+    HrdSubLayer& sub_layer(std::size_t index) noexcept {
         return sub_layers[index];
     }
 
     [[nodiscard]]
-    const HrdSubLayer& sub_layer(
-        std::size_t index) const noexcept {
+    const HrdSubLayer& sub_layer(std::size_t index) const noexcept {
         return sub_layers[index];
     }
 };
 
-
 /*
  * Semantic helpers
  */
-
 
 /*
  * Return the number of bits in the initial CPB removal
  * delay field.
  */
 [[nodiscard]]
-constexpr unsigned initial_cpb_removal_delay_bits(
-    const HrdParameters& hrd) noexcept
-{
-    return static_cast<unsigned>(
-        hrd.common
-            .initial_cpb_removal_delay_length_minus1)
-        + 1;
+constexpr unsigned initial_cpb_removal_delay_bits(const HrdParameters& hrd) noexcept {
+    return static_cast<unsigned>(hrd.common.initial_cpb_removal_delay_length_minus1) + 1;
 }
-
 
 /*
  * Return the number of bits in the AU CPB removal
  * delay field.
  */
 [[nodiscard]]
-constexpr unsigned au_cpb_removal_delay_bits(
-    const HrdParameters& hrd) noexcept
-{
-    return static_cast<unsigned>(
-        hrd.common
-            .au_cpb_removal_delay_length_minus1)
-        + 1;
+constexpr unsigned au_cpb_removal_delay_bits(const HrdParameters& hrd) noexcept {
+    return static_cast<unsigned>(hrd.common.au_cpb_removal_delay_length_minus1) + 1;
 }
-
 
 /*
  * Return the number of bits in the DPB output delay field.
  */
 [[nodiscard]]
-constexpr unsigned dpb_output_delay_bits(
-    const HrdParameters& hrd) noexcept
-{
-    return static_cast<unsigned>(
-        hrd.common
-            .dpb_output_delay_length_minus1)
-        + 1;
+constexpr unsigned dpb_output_delay_bits(const HrdParameters& hrd) noexcept {
+    return static_cast<unsigned>(hrd.common.dpb_output_delay_length_minus1) + 1;
 }
-
 
 /*
  * Return the number of bits in the DU CPB removal
  * delay increment field.
  */
 [[nodiscard]]
-constexpr unsigned du_cpb_removal_delay_increment_bits(
-    const HrdParameters& hrd) noexcept
-{
-    return static_cast<unsigned>(
-        hrd.common
-            .du_cpb_removal_delay_increment_length_minus1)
-        + 1;
+constexpr unsigned du_cpb_removal_delay_increment_bits(const HrdParameters& hrd) noexcept {
+    return static_cast<unsigned>(hrd.common.du_cpb_removal_delay_increment_length_minus1) + 1;
 }
-
 
 /*
  * Return the number of bits in the DPB output delay DU
  * field.
  */
 [[nodiscard]]
-constexpr unsigned dpb_output_delay_du_bits(
-    const HrdParameters& hrd) noexcept
-{
-    return static_cast<unsigned>(
-        hrd.common
-            .dpb_output_delay_du_length_minus1)
-        + 1;
+constexpr unsigned dpb_output_delay_du_bits(const HrdParameters& hrd) noexcept {
+    return static_cast<unsigned>(hrd.common.dpb_output_delay_du_length_minus1) + 1;
 }
-
 
 /*
  * H.265 CPB scale.
@@ -397,31 +349,19 @@ constexpr unsigned dpb_output_delay_du_bits(
  * minus1 values.
  */
 [[nodiscard]]
-constexpr std::uint64_t bit_rate_scale_factor(
-    const HrdParameters& hrd) noexcept
-{
-    return std::uint64_t{1}
-        << (6 + hrd.common.bit_rate_scale);
+constexpr std::uint64_t bit_rate_scale_factor(const HrdParameters& hrd) noexcept {
+    return std::uint64_t{1} << (6 + hrd.common.bit_rate_scale);
 }
-
 
 [[nodiscard]]
-constexpr std::uint64_t cpb_size_scale_factor(
-    const HrdParameters& hrd) noexcept
-{
-    return std::uint64_t{1}
-        << (4 + hrd.common.cpb_size_scale);
+constexpr std::uint64_t cpb_size_scale_factor(const HrdParameters& hrd) noexcept {
+    return std::uint64_t{1} << (4 + hrd.common.cpb_size_scale);
 }
-
 
 [[nodiscard]]
-constexpr std::uint64_t cpb_size_du_scale_factor(
-    const HrdParameters& hrd) noexcept
-{
-    return std::uint64_t{1}
-        << (4 + hrd.common.cpb_size_du_scale);
+constexpr std::uint64_t cpb_size_du_scale_factor(const HrdParameters& hrd) noexcept {
+    return std::uint64_t{1} << (4 + hrd.common.cpb_size_du_scale);
 }
-
 
 /*
  * Decode the actual nominal CPB bit rate from:
@@ -433,44 +373,25 @@ constexpr std::uint64_t cpb_size_du_scale_factor(
  * This follows the H.265 HRD semantic scaling.
  */
 [[nodiscard]]
-constexpr std::uint64_t cpb_bit_rate(
-    const HrdParameters& hrd,
-    const CpbEntry& cpb) noexcept
-{
-    return
-        (static_cast<std::uint64_t>(
-            cpb.bit_rate_value_minus1) + 1) *
-        bit_rate_scale_factor(hrd);
+constexpr std::uint64_t cpb_bit_rate(const HrdParameters& hrd, const CpbEntry& cpb) noexcept {
+    return (static_cast<std::uint64_t>(cpb.bit_rate_value_minus1) + 1) * bit_rate_scale_factor(hrd);
 }
-
 
 /*
  * Decode CPB size.
  */
 [[nodiscard]]
-constexpr std::uint64_t cpb_size(
-    const HrdParameters& hrd,
-    const CpbEntry& cpb) noexcept
-{
-    return
-        (static_cast<std::uint64_t>(
-            cpb.cpb_size_value_minus1) + 1) *
-        cpb_size_scale_factor(hrd);
+constexpr std::uint64_t cpb_size(const HrdParameters& hrd, const CpbEntry& cpb) noexcept {
+    return (static_cast<std::uint64_t>(cpb.cpb_size_value_minus1) + 1) * cpb_size_scale_factor(hrd);
 }
-
 
 /*
  * Decode DU CPB size.
  */
 [[nodiscard]]
-constexpr std::uint64_t cpb_size_du(
-    const HrdParameters& hrd,
-    const CpbEntry& cpb) noexcept
-{
-    return
-        (static_cast<std::uint64_t>(
-            cpb.cpb_size_du_value_minus1) + 1) *
-        cpb_size_du_scale_factor(hrd);
+constexpr std::uint64_t cpb_size_du(const HrdParameters& hrd, const CpbEntry& cpb) noexcept {
+    return (static_cast<std::uint64_t>(cpb.cpb_size_du_value_minus1) + 1) *
+           cpb_size_du_scale_factor(hrd);
 }
 
-} // namespace bs
+}  // namespace bs

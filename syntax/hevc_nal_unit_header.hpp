@@ -27,7 +27,6 @@ namespace bs {
  * It intentionally does not contain the two raw bytes.
  */
 
-
 /*
  * -----------------------------------------------------------
  * NAL unit type
@@ -117,7 +116,6 @@ enum class NalUnitType : std::uint8_t {
     UNSPEC63 = 63
 };
 
-
 /*
  * -----------------------------------------------------------
  * NAL header
@@ -125,7 +123,6 @@ enum class NalUnitType : std::uint8_t {
  */
 
 struct NalUnitHeader {
-
     /*
      * forbidden_zero_bit
      *
@@ -138,8 +135,7 @@ struct NalUnitHeader {
      *
      * u(6)
      */
-    NalUnitType nal_unit_type =
-        NalUnitType::TRAIL_N;
+    NalUnitType nal_unit_type = NalUnitType::TRAIL_N;
 
     /*
      * nuh_layer_id
@@ -167,7 +163,6 @@ struct NalUnitHeader {
      */
     std::uint8_t nuh_temporal_id_plus1 = 1;
 
-
     /*
      * -------------------------------------------------------
      * Helpers
@@ -175,54 +170,34 @@ struct NalUnitHeader {
      */
 
     [[nodiscard]]
-    constexpr std::uint8_t
-    nal_type() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            nal_unit_type);
+    constexpr std::uint8_t nal_type() const noexcept {
+        return static_cast<std::uint8_t>(nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    temporal_id() const noexcept
-    {
+    constexpr std::uint8_t temporal_id() const noexcept {
         if (nuh_temporal_id_plus1 == 0) {
             return 0;
         }
 
-        return static_cast<std::uint8_t>(
-            nuh_temporal_id_plus1 - 1);
+        return static_cast<std::uint8_t>(nuh_temporal_id_plus1 - 1);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    valid_temporal_id() const noexcept
-    {
-        return nuh_temporal_id_plus1 >= 1 &&
-               nuh_temporal_id_plus1 <= 7;
+    constexpr bool valid_temporal_id() const noexcept {
+        return nuh_temporal_id_plus1 >= 1 && nuh_temporal_id_plus1 <= 7;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    valid_layer_id() const noexcept
-    {
+    constexpr bool valid_layer_id() const noexcept {
         return nuh_layer_id <= 63;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    valid() const noexcept
-    {
-        return !forbidden_zero_bit &&
-               valid_temporal_id() &&
-               valid_layer_id();
+    constexpr bool valid() const noexcept {
+        return !forbidden_zero_bit && valid_temporal_id() && valid_layer_id();
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -230,37 +205,26 @@ struct NalUnitHeader {
  * -----------------------------------------------------------
  */
 
-
 /*
  * VCL NAL units occupy types 0..31.
  */
 [[nodiscard]]
-constexpr bool is_vcl_nal_unit(
-    NalUnitType type) noexcept
-{
-    return
-        static_cast<std::uint8_t>(type) <= 31;
+constexpr bool is_vcl_nal_unit(NalUnitType type) noexcept {
+    return static_cast<std::uint8_t>(type) <= 31;
 }
-
 
 [[nodiscard]]
-constexpr bool is_vcl_nal_unit(
-    std::uint8_t type) noexcept
-{
+constexpr bool is_vcl_nal_unit(std::uint8_t type) noexcept {
     return type <= 31;
 }
-
 
 /*
  * Non-VCL NAL units.
  */
 [[nodiscard]]
-constexpr bool is_non_vcl_nal_unit(
-    NalUnitType type) noexcept
-{
+constexpr bool is_non_vcl_nal_unit(NalUnitType type) noexcept {
     return !is_vcl_nal_unit(type);
 }
-
 
 /*
  * IRAP VCL NAL units:
@@ -275,107 +239,68 @@ constexpr bool is_non_vcl_nal_unit(
  * Types 16..21.
  */
 [[nodiscard]]
-constexpr bool is_irap_nal_unit(
-    NalUnitType type) noexcept
-{
-    const auto value =
-        static_cast<std::uint8_t>(type);
+constexpr bool is_irap_nal_unit(NalUnitType type) noexcept {
+    const auto value = static_cast<std::uint8_t>(type);
 
-    return value >= 16 &&
-           value <= 21;
+    return value >= 16 && value <= 21;
 }
-
 
 [[nodiscard]]
-constexpr bool is_irap_nal_unit(
-    std::uint8_t type) noexcept
-{
-    return type >= 16 &&
-           type <= 21;
+constexpr bool is_irap_nal_unit(std::uint8_t type) noexcept {
+    return type >= 16 && type <= 21;
 }
-
 
 /*
  * IDR pictures.
  */
 [[nodiscard]]
-constexpr bool is_idr_nal_unit(
-    NalUnitType type) noexcept
-{
-    return
-        type == NalUnitType::IDR_W_RADL ||
-        type == NalUnitType::IDR_N_LP;
+constexpr bool is_idr_nal_unit(NalUnitType type) noexcept {
+    return type == NalUnitType::IDR_W_RADL || type == NalUnitType::IDR_N_LP;
 }
-
 
 [[nodiscard]]
-constexpr bool is_idr_nal_unit(
-    std::uint8_t type) noexcept
-{
-    return type == 19 ||
-           type == 20;
+constexpr bool is_idr_nal_unit(std::uint8_t type) noexcept {
+    return type == 19 || type == 20;
 }
-
 
 /*
  * CRA picture.
  */
 [[nodiscard]]
-constexpr bool is_cra_nal_unit(
-    NalUnitType type) noexcept
-{
+constexpr bool is_cra_nal_unit(NalUnitType type) noexcept {
     return type == NalUnitType::CRA_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool is_cra_nal_unit(
-    std::uint8_t type) noexcept
-{
+constexpr bool is_cra_nal_unit(std::uint8_t type) noexcept {
     return type == 21;
 }
-
 
 /*
  * BLA picture.
  */
 [[nodiscard]]
-constexpr bool is_bla_nal_unit(
-    NalUnitType type) noexcept
-{
-    const auto value =
-        static_cast<std::uint8_t>(type);
+constexpr bool is_bla_nal_unit(NalUnitType type) noexcept {
+    const auto value = static_cast<std::uint8_t>(type);
 
-    return value >= 16 &&
-           value <= 18;
+    return value >= 16 && value <= 18;
 }
-
 
 /*
  * RADL picture.
  */
 [[nodiscard]]
-constexpr bool is_radl_nal_unit(
-    NalUnitType type) noexcept
-{
-    return
-        type == NalUnitType::RADL_N ||
-        type == NalUnitType::RADL_R;
+constexpr bool is_radl_nal_unit(NalUnitType type) noexcept {
+    return type == NalUnitType::RADL_N || type == NalUnitType::RADL_R;
 }
-
 
 /*
  * RASL picture.
  */
 [[nodiscard]]
-constexpr bool is_rasl_nal_unit(
-    NalUnitType type) noexcept
-{
-    return
-        type == NalUnitType::RASL_N ||
-        type == NalUnitType::RASL_R;
+constexpr bool is_rasl_nal_unit(NalUnitType type) noexcept {
+    return type == NalUnitType::RASL_N || type == NalUnitType::RASL_R;
 }
-
 
 /*
  * Reference-picture VCL NAL.
@@ -390,11 +315,8 @@ constexpr bool is_rasl_nal_unit(
  * except that the IRAP range follows the same convention.
  */
 [[nodiscard]]
-constexpr bool is_reference_vcl_nal_unit(
-    NalUnitType type) noexcept
-{
-    const auto value =
-        static_cast<std::uint8_t>(type);
+constexpr bool is_reference_vcl_nal_unit(NalUnitType type) noexcept {
+    const auto value = static_cast<std::uint8_t>(type);
 
     if (value > 31) {
         return false;
@@ -403,18 +325,14 @@ constexpr bool is_reference_vcl_nal_unit(
     return (value & 1U) != 0;
 }
 
-
 [[nodiscard]]
-constexpr bool is_reference_vcl_nal_unit(
-    std::uint8_t type) noexcept
-{
+constexpr bool is_reference_vcl_nal_unit(std::uint8_t type) noexcept {
     if (type > 31) {
         return false;
     }
 
     return (type & 1U) != 0;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -423,38 +341,24 @@ constexpr bool is_reference_vcl_nal_unit(
  */
 
 [[nodiscard]]
-constexpr bool is_vps_nal_unit(
-    NalUnitType type) noexcept
-{
+constexpr bool is_vps_nal_unit(NalUnitType type) noexcept {
     return type == NalUnitType::VPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool is_sps_nal_unit(
-    NalUnitType type) noexcept
-{
+constexpr bool is_sps_nal_unit(NalUnitType type) noexcept {
     return type == NalUnitType::SPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool is_pps_nal_unit(
-    NalUnitType type) noexcept
-{
+constexpr bool is_pps_nal_unit(NalUnitType type) noexcept {
     return type == NalUnitType::PPS_NUT;
 }
 
-
 [[nodiscard]]
-constexpr bool is_sei_nal_unit(
-    NalUnitType type) noexcept
-{
-    return
-        type == NalUnitType::PREFIX_SEI_NUT ||
-        type == NalUnitType::SUFFIX_SEI_NUT;
+constexpr bool is_sei_nal_unit(NalUnitType type) noexcept {
+    return type == NalUnitType::PREFIX_SEI_NUT || type == NalUnitType::SUFFIX_SEI_NUT;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -463,13 +367,9 @@ constexpr bool is_sei_nal_unit(
  */
 
 [[nodiscard]]
-constexpr NalUnitType nal_unit_type_from_value(
-    std::uint8_t value) noexcept
-{
-    return static_cast<NalUnitType>(
-        value & 0x3FU);
+constexpr NalUnitType nal_unit_type_from_value(std::uint8_t value) noexcept {
+    return static_cast<NalUnitType>(value & 0x3FU);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -490,24 +390,15 @@ constexpr NalUnitType nal_unit_type_from_value(
  */
 
 [[nodiscard]]
-constexpr std::uint16_t
-pack_nal_unit_header(
-    const NalUnitHeader& header) noexcept
-{
-    return
-        (static_cast<std::uint16_t>(
-            header.forbidden_zero_bit ? 1U : 0U) << 15) |
+constexpr std::uint16_t pack_nal_unit_header(const NalUnitHeader& header) noexcept {
+    return (static_cast<std::uint16_t>(header.forbidden_zero_bit ? 1U : 0U) << 15) |
 
-        (static_cast<std::uint16_t>(
-            header.nal_type() & 0x3FU) << 9) |
+           (static_cast<std::uint16_t>(header.nal_type() & 0x3FU) << 9) |
 
-        (static_cast<std::uint16_t>(
-            header.nuh_layer_id & 0x3FU) << 3) |
+           (static_cast<std::uint16_t>(header.nuh_layer_id & 0x3FU) << 3) |
 
-        static_cast<std::uint16_t>(
-            header.nuh_temporal_id_plus1 & 0x07U);
+           static_cast<std::uint16_t>(header.nuh_temporal_id_plus1 & 0x07U);
 }
-
 
 /*
  * Decode the 16-bit NAL header representation.
@@ -516,38 +407,26 @@ pack_nal_unit_header(
  * header bit occupying bit 15.
  */
 [[nodiscard]]
-constexpr NalUnitHeader
-unpack_nal_unit_header(
-    std::uint16_t value) noexcept
-{
+constexpr NalUnitHeader unpack_nal_unit_header(std::uint16_t value) noexcept {
     NalUnitHeader header{};
 
-    header.forbidden_zero_bit =
-        ((value >> 15) & 1U) != 0;
+    header.forbidden_zero_bit = ((value >> 15) & 1U) != 0;
 
     header.nal_unit_type =
-        nal_unit_type_from_value(
-            static_cast<std::uint8_t>(
-                (value >> 9) & 0x3FU));
+        nal_unit_type_from_value(static_cast<std::uint8_t>((value >> 9) & 0x3FU));
 
-    header.nuh_layer_id =
-        static_cast<std::uint8_t>(
-            (value >> 3) & 0x3FU);
+    header.nuh_layer_id = static_cast<std::uint8_t>((value >> 3) & 0x3FU);
 
-    header.nuh_temporal_id_plus1 =
-        static_cast<std::uint8_t>(
-            value & 0x07U);
+    header.nuh_temporal_id_plus1 = static_cast<std::uint8_t>(value & 0x07U);
 
     return header;
 }
-
 
 /*
  * -----------------------------------------------------------
  * Raw byte helpers
  * -----------------------------------------------------------
  */
-
 
 /*
  * Pack a NAL header into the two bytes used by HEVC.
@@ -564,13 +443,9 @@ unpack_nal_unit_header(
  *     temporal-id-plus1
  */
 [[nodiscard]]
-constexpr std::uint16_t
-pack_nal_unit_header_bytes(
-    const NalUnitHeader& header) noexcept
-{
+constexpr std::uint16_t pack_nal_unit_header_bytes(const NalUnitHeader& header) noexcept {
     return pack_nal_unit_header(header);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -579,10 +454,7 @@ pack_nal_unit_header_bytes(
  */
 
 [[nodiscard]]
-constexpr bool
-validate_nal_unit_header(
-    const NalUnitHeader& header) noexcept
-{
+constexpr bool validate_nal_unit_header(const NalUnitHeader& header) noexcept {
     if (header.forbidden_zero_bit) {
         return false;
     }
@@ -598,7 +470,6 @@ validate_nal_unit_header(
     return true;
 }
 
-
 /*
  * -----------------------------------------------------------
  * Semantic predicates on the structure
@@ -606,54 +477,29 @@ validate_nal_unit_header(
  */
 
 [[nodiscard]]
-constexpr bool
-is_vcl(
-    const NalUnitHeader& header) noexcept
-{
-    return is_vcl_nal_unit(
-        header.nal_unit_type);
+constexpr bool is_vcl(const NalUnitHeader& header) noexcept {
+    return is_vcl_nal_unit(header.nal_unit_type);
 }
-
 
 [[nodiscard]]
-constexpr bool
-is_irap(
-    const NalUnitHeader& header) noexcept
-{
-    return is_irap_nal_unit(
-        header.nal_unit_type);
+constexpr bool is_irap(const NalUnitHeader& header) noexcept {
+    return is_irap_nal_unit(header.nal_unit_type);
 }
-
 
 [[nodiscard]]
-constexpr bool
-is_idr(
-    const NalUnitHeader& header) noexcept
-{
-    return is_idr_nal_unit(
-        header.nal_unit_type);
+constexpr bool is_idr(const NalUnitHeader& header) noexcept {
+    return is_idr_nal_unit(header.nal_unit_type);
 }
-
 
 [[nodiscard]]
-constexpr bool
-is_cra(
-    const NalUnitHeader& header) noexcept
-{
-    return is_cra_nal_unit(
-        header.nal_unit_type);
+constexpr bool is_cra(const NalUnitHeader& header) noexcept {
+    return is_cra_nal_unit(header.nal_unit_type);
 }
-
 
 [[nodiscard]]
-constexpr bool
-is_reference_picture(
-    const NalUnitHeader& header) noexcept
-{
-    return is_reference_vcl_nal_unit(
-        header.nal_unit_type);
+constexpr bool is_reference_picture(const NalUnitHeader& header) noexcept {
+    return is_reference_vcl_nal_unit(header.nal_unit_type);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -662,17 +508,10 @@ is_reference_picture(
  */
 
 [[nodiscard]]
-constexpr bool
-is_parameter_set(
-    const NalUnitHeader& header) noexcept
-{
-    return
-        header.nal_unit_type ==
-            NalUnitType::VPS_NUT ||
-        header.nal_unit_type ==
-            NalUnitType::SPS_NUT ||
-        header.nal_unit_type ==
-            NalUnitType::PPS_NUT;
+constexpr bool is_parameter_set(const NalUnitHeader& header) noexcept {
+    return header.nal_unit_type == NalUnitType::VPS_NUT ||
+           header.nal_unit_type == NalUnitType::SPS_NUT ||
+           header.nal_unit_type == NalUnitType::PPS_NUT;
 }
 
-} // namespace bs
+}  // namespace bs

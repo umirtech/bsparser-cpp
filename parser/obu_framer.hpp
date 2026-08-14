@@ -26,31 +26,21 @@ namespace av1 {
  * referencing the input buffer.
  */
 class ObuFramer {
-public:
-    explicit ObuFramer(
-        std::span<const std::uint8_t> data)
-        : data_(data)
-    {
+   public:
+    explicit ObuFramer(std::span<const std::uint8_t> data) : data_(data) {
         low_overhead_ =
-            !(data.size() >= 3 &&
-              data[0] == 0x00 &&
-              data[1] == 0x00 &&
-              data[2] == 0x01);
+            !(data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01);
 
         locate_next();
     }
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return !finished_;
     }
 
-
     [[nodiscard]]
-    std::span<const std::uint8_t> obu() const noexcept
-    {
+    std::span<const std::uint8_t> obu() const noexcept {
         if (finished_) {
             return {};
         }
@@ -58,27 +48,19 @@ public:
         return data_.subspan(obu_begin_, obu_end_ - obu_begin_);
     }
 
-
-    void next()
-    {
+    void next() {
         locate_next();
     }
 
-
-private:
+   private:
     [[nodiscard]]
     static std::size_t find_start_code(
-        std::span<const std::uint8_t> data,
-        std::size_t from) noexcept
-    {
+        std::span<const std::uint8_t> data, std::size_t from
+    ) noexcept {
         std::size_t i = from;
 
         while (i + 2 < data.size()) {
-
-            if (data[i] == 0x00 &&
-                data[i + 1] == 0x00 &&
-                data[i + 2] == 0x01) {
-
+            if (data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x01) {
                 return i;
             }
 
@@ -88,21 +70,15 @@ private:
         return data.size();
     }
 
-
     /*
      * Read the ULEB128 size at `pos`; advance pos.
      */
-    static std::uint64_t read_size(
-        std::span<const std::uint8_t> data,
-        std::size_t& pos)
-    {
+    static std::uint64_t read_size(std::span<const std::uint8_t> data, std::size_t& pos) {
         std::uint64_t size = 0;
 
         for (unsigned i = 0; i < 8; ++i) {
-
             if (pos >= data.size()) {
-                throw std::out_of_range(
-                    "AV1: truncated OBU size");
+                throw std::out_of_range("AV1: truncated OBU size");
             }
 
             const std::uint8_t b = data[pos++];
@@ -114,13 +90,10 @@ private:
             }
         }
 
-        throw std::invalid_argument(
-            "AV1: OBU size too large");
+        throw std::invalid_argument("AV1: OBU size too large");
     }
 
-
-    void locate_next()
-    {
+    void locate_next() {
         if (low_overhead_) {
             locate_next_low_overhead();
         } else {
@@ -128,11 +101,8 @@ private:
         }
     }
 
-
-    void locate_next_annex_b()
-    {
-        const std::size_t start =
-            find_start_code(data_, current_);
+    void locate_next_annex_b() {
+        const std::size_t start = find_start_code(data_, current_);
 
         if (start == data_.size()) {
             finished_ = true;
@@ -141,8 +111,7 @@ private:
 
         const std::size_t begin = start + 3;
 
-        const std::size_t next =
-            find_start_code(data_, begin);
+        const std::size_t next = find_start_code(data_, begin);
 
         if (begin >= next) {
             current_ = next;
@@ -156,9 +125,7 @@ private:
         finished_ = false;
     }
 
-
-    void locate_next_low_overhead()
-    {
+    void locate_next_low_overhead() {
         if (current_ >= data_.size()) {
             finished_ = true;
             return;
@@ -183,7 +150,6 @@ private:
         }
 
         if (!has_size_field) {
-
             /* Cannot size the OBU; treat the rest as one unit. */
             obu_begin_ = begin;
             obu_end_ = data_.size();
@@ -192,8 +158,7 @@ private:
             return;
         }
 
-        const std::uint64_t size =
-            read_size(data_, pos);
+        const std::uint64_t size = read_size(data_, pos);
 
         obu_begin_ = begin;
         obu_end_ = pos + static_cast<std::size_t>(size);
@@ -207,7 +172,6 @@ private:
         finished_ = false;
     }
 
-
     std::span<const std::uint8_t> data_{};
 
     std::size_t current_ = 0;
@@ -218,5 +182,5 @@ private:
     bool finished_ = true;
 };
 
-} // namespace av1
-} // namespace bs
+}  // namespace av1
+}  // namespace bs

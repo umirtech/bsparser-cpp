@@ -1,30 +1,35 @@
+# Android Studio / AOSP C++ style
+# -----------------------------------------------------------------------------
+# Based on Google style, overridden to match Android Studio's C/C++
+# formatting: 4-space indent, K&R braces, 100 columns, left pointers.
+# -----------------------------------------------------------------------------
 BasedOnStyle: Google
 
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
 
-BreakBeforeBraces: Allman
+# K&R brace style (braces attach to the preceding line)
+BreakBeforeBraces: Attach
 
 AlignAfterOpenBracket: BlockIndent
 BinPackParameters: false
 BinPackArguments: false
 
+# Android pointers/references bind to the type
+DerivePointerAlignment: false
 PointerAlignment: Left
 ReferenceAlignment: Left
 
-AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty
 
-ColumnLimit: 120
+# Android Studio line length
+ColumnLimit: 100
 
 IndentCaseLabels: true
 
-BraceWrapping:
-  AfterFunction: true
-  AfterControlStatement: Never
-  BeforeElse: false
-  BeforeCatch: false
+SpacesBeforeTrailingComments: 2
 
 SortIncludes: Never
