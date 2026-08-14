@@ -147,6 +147,71 @@ inline std::string avc_type_name(avc::NalUnitType t) noexcept {
     }
 }
 
+[[nodiscard]]
+inline std::string vvc_type_name(vvc::NalUnitType t) noexcept {
+    switch (t) {
+        case vvc::NalUnitType::OpiNut:
+            return "OPI_NUT";
+        case vvc::NalUnitType::DciNut:
+            return "DCI_NUT";
+        case vvc::NalUnitType::VpsNut:
+            return "VPS_NUT";
+        case vvc::NalUnitType::SpsNut:
+            return "SPS_NUT";
+        case vvc::NalUnitType::PpsNut:
+            return "PPS_NUT";
+        case vvc::NalUnitType::PrefixApsNut:
+            return "PREFIX_APS_NUT";
+        case vvc::NalUnitType::SuffixApsNut:
+            return "SUFFIX_APS_NUT";
+        case vvc::NalUnitType::PhNut:
+            return "PH_NUT";
+        case vvc::NalUnitType::AudNut:
+            return "AUD_NUT";
+        case vvc::NalUnitType::EosNut:
+            return "EOS_NUT";
+        case vvc::NalUnitType::EobNut:
+            return "EOB_NUT";
+        case vvc::NalUnitType::SeiPrefixNut:
+            return "PREFIX_SEI_NUT";
+        case vvc::NalUnitType::SeiSuffixNut:
+            return "SUFFIX_SEI_NUT";
+        case vvc::NalUnitType::FdNut:
+            return "FD_NUT";
+        default:
+            if (vvc::is_vcl_nal_unit(static_cast<std::uint8_t>(t))) {
+                return "VCL";
+            }
+            return "NAL_" + std::to_string(static_cast<unsigned>(t));
+    }
+}
+
+[[nodiscard]]
+inline std::string av1_type_name(unsigned type) noexcept {
+    switch (type) {
+        case 1:
+            return "SEQUENCE_HEADER";
+        case 2:
+            return "TEMPORAL_DELIMITER";
+        case 3:
+            return "FRAME_HEADER";
+        case 4:
+            return "TILE_GROUP";
+        case 5:
+            return "METADATA";
+        case 6:
+            return "FRAME";
+        case 7:
+            return "REDUNDANT_FRAME_HEADER";
+        case 8:
+            return "TILE_LIST";
+        case 15:
+            return "PADDING";
+        default:
+            return "OBU_" + std::to_string(type);
+    }
+}
+
 inline void add_entry(
     std::string type,
     unsigned type_id,
@@ -359,7 +424,7 @@ inline Report build_report(
 
         report.parsed = parse(*state, data, mode, handlers, length_size);
 
-    } else {
+    } else if (codec == Codec::Avc) {
         avc::NalHandlers handlers{};
 
         handlers.sps = [](const avc::NalUnit& nal) {
@@ -476,6 +541,96 @@ inline Report build_report(
         };
 
         report.parsed = parse(*state, data, mode, handlers, length_size);
+    } else if (
+        codec == Codec::Vvc || codec == Codec::Av1 || codec == Codec::Vp9 || codec == Codec::Vp8
+    ) {
+        report.codec = (codec == Codec::Vvc)   ? "VVC"
+                       : (codec == Codec::Av1) ? "AV1"
+                       : (codec == Codec::Vp9) ? "VP9"
+                                               : "VP8";
+        report.framing = (mode == NalFramingMode::AnnexB) ? "Annex-B"
+                         : (mode == NalFramingMode::Obu)  ? "OBU"
+                         : (mode == NalFramingMode::Ivf)  ? "IVF"
+                                                          : "Length-prefixed";
+
+        if (codec == Codec::Vvc) {
+            auto add_vvc = [&](auto framer) {
+                std::size_t i = 0;
+                while (framer.valid()) {
+                    const auto span = framer.nal();
+                    try {
+                        auto nal = vvc::parse_nal_unit(span);
+                        const std::string name = detail::vvc_type_name(nal.type());
+                        detail::add_entry(
+                            name,
+                            nal.nal_type(),
+                            nal.is_vcl(),
+                            nal.payload_bytes().data(),
+                            nal.payload_bytes().size(),
+                            name,
+                            {}
+                        );
+                    } catch (...) {
+                        detail::add_entry(
+                            "bad", 0, false, span.data(), span.size(), "unparsable", {}
+                        );
+                    }
+                    framer.next();
+                    ++i;
+                }
+                return i;
+            };
+
+            if (mode == NalFramingMode::AnnexB) {
+                report.parsed = add_vvc(AnnexBNalIterator{data});
+            } else {
+                report.parsed = add_vvc(LengthPrefixedNalIterator{data, length_size});
+            }
+
+        } else if (codec == Codec::Av1) {
+            av1::ObuFramer framer{data};
+            std::size_t i = 0;
+            while (framer.valid()) {
+                const auto span = framer.obu();
+                try {
+                    auto obu = av1::parse_obu(span);
+                    const std::string name = detail::av1_type_name(obu.type());
+                    detail::add_entry(
+                        name,
+                        obu.type(),
+                        false,
+                        obu.payload_bytes().data(),
+                        obu.payload_bytes().size(),
+                        name,
+                        {}
+                    );
+                } catch (...) {
+                    detail::add_entry("bad", 0, false, span.data(), span.size(), "unparsable", {});
+                }
+                framer.next();
+                ++i;
+            }
+            report.parsed = i;
+
+        } else {
+            IvfFramer framer{data};
+            std::size_t i = 0;
+            while (framer.valid()) {
+                const auto frame = framer.frame();
+                detail::add_entry(
+                    "frame",
+                    0,
+                    false,
+                    frame.data(),
+                    frame.size(),
+                    std::to_string(frame.size()) + " bytes",
+                    {}
+                );
+                framer.next();
+                ++i;
+            }
+            report.parsed = i;
+        }
     }
 
     detail::g_report = nullptr;

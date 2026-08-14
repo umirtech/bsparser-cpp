@@ -24,6 +24,8 @@
 
 #include "report.hpp"
 
+#include <demux/demuxer.hpp>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -183,6 +185,14 @@ int main(int argc, char** argv) {
         codec = Codec::Hevc;
     } else if (codec_arg == "avc") {
         codec = Codec::Avc;
+    } else if (codec_arg == "vvc") {
+        codec = Codec::Vvc;
+    } else if (codec_arg == "av1") {
+        codec = Codec::Av1;
+    } else if (codec_arg == "vp9") {
+        codec = Codec::Vp9;
+    } else if (codec_arg == "vp8") {
+        codec = Codec::Vp8;
     } else if (codec_arg == "auto") {
         std::ifstream probe(input_path, std::ios::binary);
         if (!probe) {
@@ -237,6 +247,34 @@ int main(int argc, char** argv) {
     }
 
     std::span<const std::uint8_t> data{bytes.data(), bytes.size()};
+
+    /*
+     * Container auto-detection: if the input is a muxed file
+     * (MP4 / TS / FLV / AVI / IVF), demux it to an elementary
+     * stream and let the demuxer choose the codec + framing.
+     */
+    std::vector<std::uint8_t> demuxed;
+    const demux::Container container = demux::sniff(data);
+
+    if (container != demux::Container::Unknown) {
+        const demux::ElementaryStream es = demux::demux(container, data);
+
+        if (es.ok && !es.bytes.empty()) {
+            demuxed = es.bytes;
+            data = std::span<const std::uint8_t>(demuxed.data(), demuxed.size());
+            codec = es.codec;
+            mode = es.framing;
+
+            static const char* container_names[] = {"?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF"};
+
+            std::cout << "container=" << container_names[static_cast<unsigned>(container)]
+                      << " codec=" << es.codec_name << " " << es.width << "x" << es.height
+                      << " (demuxed " << es.bytes.size() << " bytes)\n";
+        } else {
+            std::cerr << "warning: detected " << static_cast<unsigned>(container)
+                      << " container but demux failed; parsing as raw stream\n";
+        }
+    }
 
     /*
      * Parse + build the report.

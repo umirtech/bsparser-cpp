@@ -384,6 +384,46 @@ endforeach()
 
 
 # ---------------------------------------------------------------------------
+# Container demux tests (muxed samples -> elementary stream)
+# ---------------------------------------------------------------------------
+
+add_executable(
+    bs_demux_test
+    tests/demux_test.cpp
+)
+
+target_link_libraries(
+    bs_demux_test
+    PRIVATE
+        bs
+)
+
+foreach(pair IN ITEMS
+    "hevc.mp4 hevc"
+    "h264.mp4 avc"
+    "vvc.mp4 vvc"
+    "av1.mp4 av1"
+    "vp9.mp4 vp9"
+    "h264_enc.ts avc"
+    "h264_enc.flv avc"
+    "h264_enc.avi avc"
+)
+
+    string(REPLACE " " ";" parts "${pair}")
+    list(GET parts 0 sample)
+    list(GET parts 1 codec)
+
+    add_test(
+        NAME bs_demux_${sample}
+        COMMAND bs_demux_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${sample}
+            ${codec}
+    )
+
+endforeach()
+
+
+# ---------------------------------------------------------------------------
 # Fuzzing
 # ---------------------------------------------------------------------------
 #
