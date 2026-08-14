@@ -1,0 +1,280 @@
+{
+  "schema": 1,
+  "collection": "samples.mplayerhq.hu",
+  "generated": "2026-08-14",
+  "purpose": "Curated real-world samples for bsparser validation. Regenerate with tools/download_real_samples.py.",
+  "validation": {
+    "command": "python tools/compare_ffmpeg.py <files...>",
+    "ctests": "ctest --test-dir build (30 tests)",
+    "accuracy": "build/verify_c.exe tests/fuzz/corpus/hevc_hdr10.hevc tests/fuzz/reference/hevc_hdr10.txt hevc (and avc_hdr)"
+  },
+  "samples": [
+    {
+      "name": "avc_avi_hbc9.avi",
+      "local": "tests/real/avc_avi_hbc9.avi",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/hbc9.avi",
+      "size_bytes": 10554794,
+      "container": "AVI",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 704,
+        "height": 352
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 5264,
+        "parsed": 5264,
+        "vcl": 5180
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "avc_mkv_hellsing.mkv",
+      "local": "tests/real/avc_mkv_hellsing.mkv",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/hellsing-h264-blocking.mkv",
+      "size_bytes": 1035085,
+      "container": "MKV",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 720,
+        "height": 480
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 91,
+        "parsed": 91,
+        "vcl": 89
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "avc_mp4_cathedral.mp4",
+      "local": "tests/real/avc_mp4_cathedral.mp4",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/cathedral-beta2-400extra-crop-avc.mp4",
+      "size_bytes": 24154488,
+      "container": "MP4",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 640,
+        "height": 352
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 9407,
+        "parsed": 9407,
+        "vcl": 9300
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "avc_mp4_envivio.mp4",
+      "local": "tests/real/avc_mp4_envivio.mp4",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/envivio-h264.mp4",
+      "size_bytes": 519221,
+      "container": "MP4",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 352,
+        "height": 288
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 890,
+        "parsed": 890,
+        "vcl": 888
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "avc_mp4_nero.mp4",
+      "local": "tests/real/avc_mp4_nero.mp4",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/NeroAVC.mp4",
+      "size_bytes": 6766583,
+      "container": "MP4",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 720,
+        "height": 576
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 806,
+        "parsed": 806,
+        "vcl": 803
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "avc_raw_foreman.264",
+      "local": "tests/real/avc_raw_foreman.264",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h264/foreman_p16x16.264",
+      "size_bytes": 3734,
+      "container": "raw AVC",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 176,
+        "height": 144
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 4,
+        "parsed": 4,
+        "vcl": 2
+      },
+      "ffmpeg_trace_match": "PASS"
+    },
+    {
+      "name": "flv_zelda.flv",
+      "local": "tests/real/flv_zelda.flv",
+      "url": "https://samples.mplayerhq.hu/FLV/zelda.flv",
+      "size_bytes": 601526,
+      "container": "FLV",
+      "ffprobe": {
+        "codec": "flv1",
+        "width": 160,
+        "height": 120
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 67,
+        "parsed": 27,
+        "vcl": 12
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "FLV1/Sorenson video: unsupported codec; FLV demuxer correctly rejects it and bs_cli falls back to a raw parse."
+    },
+    {
+      "name": "hevc_mkv_3d.mkv",
+      "local": "tests/real/hevc_mkv_3d.mkv",
+      "url": "https://samples.mplayerhq.hu/3D/20110805-112659-ch0.mkv",
+      "size_bytes": 6305786,
+      "container": "MKV",
+      "ffprobe": {
+        "codec": "h264",
+        "width": 720,
+        "height": 480
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 406,
+        "parsed": 406,
+        "vcl": 270
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "3D AVC MKV using Annex-B blocks (fixed); ffmpeg cannot decode it ('non-existing PPS 0'); full stream demuxed faithfully."
+    },
+    {
+      "name": "hevc_raw_sintel.265",
+      "local": "tests/real/hevc_raw_sintel.265",
+      "url": "https://samples.mplayerhq.hu/ffmpeg-bugs/trac/ticket6907/Sintel_272p_logo.265",
+      "size_bytes": 44990735,
+      "container": "raw HEVC",
+      "ffprobe": {
+        "codec": "hevc",
+        "width": 0,
+        "height": 0
+      },
+      "bsparser": {
+        "codec": "HEVC",
+        "framing": "Annex-B",
+        "nals": 21316,
+        "parsed": 21316,
+        "vcl": 21313
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "ffmpeg trace_headers errors on HEVC slices for this file (SPS delta_poc); SPS fields compared and match."
+    },
+    {
+      "name": "hevc_raw_uhd.hevc",
+      "local": "tests/real/hevc_raw_uhd.hevc",
+      "url": "https://samples.mplayerhq.hu/ffmpeg-bugs/trac/ticket4185/UHD_ENT_Transformer_cut.hevc",
+      "size_bytes": 36096874,
+      "container": "raw HEVC",
+      "ffprobe": {
+        "codec": "hevc",
+        "width": 3840,
+        "height": 2160
+      },
+      "bsparser": {
+        "codec": "HEVC",
+        "framing": "Annex-B",
+        "nals": 413,
+        "parsed": 259,
+        "vcl": 122
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "ffmpeg trace_headers errors on HEVC slices (max_bytes_per_pic_denom); SPS fields compared and match."
+    },
+    {
+      "name": "hevc_ts_polsat.ts",
+      "local": "tests/real/hevc_ts_polsat.ts",
+      "url": "https://samples.mplayerhq.hu/ffmpeg-bugs/trac/ticket4141/polsat_1080i_hevc.ts",
+      "size_bytes": 11064928,
+      "container": "MPEG-TS",
+      "ffprobe": {
+        "codec": "hevc",
+        "width": 1920,
+        "height": 540
+      },
+      "bsparser": {
+        "codec": "HEVC",
+        "framing": "Annex-B",
+        "nals": 1865,
+        "parsed": 1407,
+        "vcl": 458
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "1080i broadcast HEVC; ffmpeg cannot decode it ('SPS 0 does not exist') so its slice trace is misaligned; our parser resolves the real SPS/PPS."
+    },
+    {
+      "name": "vvc_ts2.ts",
+      "local": "tests/real/vvc_ts2.ts",
+      "url": "https://samples.mplayerhq.hu/V-codecs/h266/vvc%20test%202.ts",
+      "size_bytes": 21946368,
+      "container": "MPEG-TS",
+      "ffprobe": {
+        "codec": "jpegxs",
+        "width": 0,
+        "height": 0
+      },
+      "bsparser": {
+        "codec": "AVC",
+        "framing": "Annex-B",
+        "nals": 1327,
+        "parsed": 13,
+        "vcl": 10
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "stream_type 0x32 = JPEG XS, NOT VVC despite the h266 directory name; no supported video stream."
+    },
+    {
+      "name": "webm_vp8.webm",
+      "local": "tests/real/webm_vp8.webm",
+      "url": "https://samples.mplayerhq.hu/ffmpeg-bugs/trac/ticket1430/Sam%20and%20Cocoa%20shaky%20original.webm",
+      "size_bytes": 3697674,
+      "container": "MKV/WebM",
+      "ffprobe": {
+        "codec": "vp8",
+        "width": 720,
+        "height": 480
+      },
+      "bsparser": {
+        "codec": "VP8",
+        "framing": "IVF",
+        "nals": 637,
+        "parsed": 637,
+        "vcl": 0
+      },
+      "ffmpeg_trace_match": "N/A",
+      "notes": "VP8: 637/637 frames parsed; no per-field ffmpeg trace comparison (VP8 not in the comparison tool)."
+    }
+  ]
+}
