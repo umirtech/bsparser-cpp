@@ -26,6 +26,35 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 | VP9 | IVF | frame headers |
 | VP8 | IVF | frame headers |
 
+## Container demuxing
+
+Feed **muxed files directly** — the `demux/` layer auto-detects the container
+and extracts the elementary stream:
+
+| Container | Supported codecs |
+|---|---|
+| MP4 / ISO-BMFF | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| MPEG-TS | H.264, HEVC, VVC |
+| FLV | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| AVI | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| IVF | VP8, VP9 |
+
+```cpp
+#include <bsparser.hpp>
+#include <demux/demuxer.hpp>
+
+auto es = bs::demux::demux(bytes);        // auto-detect container
+if (es.ok) {
+    auto state = bs::create_state(es.codec);
+    bs::HevcParsedHandlers h{};
+    // ...
+    bs::parse(*state, es.bytes, es.framing, h);   // es.codec / es.framing chosen
+}
+```
+
+The CLI does this automatically: `bs_cli input.mp4` demuxes and parses the
+video track without any `--codec`/`--format` flags.
+
 ---
 
 ## Build

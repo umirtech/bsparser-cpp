@@ -662,6 +662,42 @@ generated with `ffmpeg` (`libvvenc`, `libaom-av1`, `libvpx`, `libvpx-vp9`).
 
 ---
 
+## 5c. Container demuxing (`demux/`)
+
+A separate **demux layer** lets callers feed *muxed files* directly instead of
+pre-extracting elementary streams. It auto-detects the container and extracts
+the first video track:
+
+```
+container bytes
+   │  demux::sniff()  (magic bytes / box scan / TS sync)
+   ▼
+MP4 │ MPEG-TS │ FLV │ AVI │ IVF          demux/{mp4,ts,flv,avi}_demuxer.hpp
+   ▼
+ElementaryStream { codec, framing, bytes, width, height }
+   ▼
+bs::parse(state, es.bytes, es.framing, handlers)   (existing path)
+```
+
+- **MP4** (`mp4_demuxer.hpp`): walks `moov→trak→mdia→minf→stbl` (stsd/stsz/
+  stsc/stco/co64), reads sample sizes/offsets and reconstructs a self-contained
+  elementary stream: avc1/hvc1/hev1/vvc1 → Annex-B (parameter sets prepended
+  from avcC/hvcC/vvcC), av01 → OBUs, vp09/vp08 → IVF.
+- **MPEG-TS** (`ts_demuxer.hpp`): follows PAT→PMT to the first video stream,
+  strips PES headers and concatenates the Annex-B payload.
+- **FLV** (`flv_demuxer.hpp`): walks video tags; AVC/HEVC/VVC NALUs → Annex-B,
+  AV1 → OBUs, VP8/VP9 → IVF.
+- **AVI** (`avi_demuxer.hpp`): reads `hdrl`/`strh`/`strf` + `movi` chunks;
+  H.26x chunks (Annex-B or length-prefixed) → Annex-B, VP8/VP9 → IVF, AV1 → OBUs.
+- **IVF** passes through as the VP8/VP9 elementary stream.
+
+The CLI calls `demux::sniff` + `demux::demux` automatically, so
+`bs_cli input.mp4` works without `--codec`/`--format`. The demux layer is
+deliberately limited: single video track, no fragmented MP4 (`moof`), no
+MKV/WebM (EBML), no subtitles/audio.
+
+---
+
 ## 6. Directory map
 
 ```
@@ -726,6 +762,13 @@ bsparser/
 │   ├── vvc_parameter_set_manager.hpp   VVC DCI/OPI/VPS/SPS/PPS/PH store
 │   ├── obu_framer.hpp · av1_obu_parser.hpp · av1_sequence/frame_header_parser.hpp
 │   ├── ivf_framer.hpp · vp8_frame_header_parser.hpp · vp9_frame_header_parser.hpp
+├── demux/                       container demuxing layer
+│   ├── demuxer.hpp              Container sniff() + auto-detect facade
+│   ├── mp4_demuxer.hpp          ISO-BMFF (stsd/stsz/stsc/stco → ES)
+│   ├── ts_demuxer.hpp           MPEG-TS (PAT/PMT/PES → Annex-B)
+│   ├── flv_demuxer.hpp          FLV video tags → ES
+│   ├── avi_demuxer.hpp          RIFF/AVI → ES
+│   └── stream.hpp               Container + ElementaryStream types
 ├── syntax/                        immutable parsed models
 │   ├── hevc_common.hpp                 shared enums/constants (HEVC)
 │   ├── hevc_nal_unit.hpp · hevc_nal_unit_header.hpp
