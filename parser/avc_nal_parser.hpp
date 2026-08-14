@@ -224,6 +224,9 @@ dispatch_nals(
             data,
             length_size,
             handlers);
+
+    default:
+        break;
     }
 
     throw NalParseError(

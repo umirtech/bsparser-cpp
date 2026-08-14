@@ -52,6 +52,9 @@
 #include <parser/avc_sei_parser.hpp>
 #include <parser/avc_slice_parser.hpp>
 #include <parser/avc_sps_parser.hpp>
+#include <parser/av1_frame_header_parser.hpp>
+#include <parser/av1_obu_parser.hpp>
+#include <parser/av1_sequence_header_parser.hpp>
 #include <parser/hevc_nal_parser.hpp>
 #include <parser/hevc_parameter_set_manager.hpp>
 #include <parser/hevc_pps_parser.hpp>
@@ -59,7 +62,20 @@
 #include <parser/hevc_slice_parser.hpp>
 #include <parser/hevc_sps_parser.hpp>
 #include <parser/hevc_vps_parser.hpp>
+#include <parser/ivf_framer.hpp>
 #include <parser/nal_framer.hpp>
+#include <parser/obu_framer.hpp>
+#include <parser/vp8_frame_header_parser.hpp>
+#include <parser/vp9_frame_header_parser.hpp>
+#include <parser/vvc_dci_parser.hpp>
+#include <parser/vvc_opi_parser.hpp>
+#include <parser/vvc_nal_unit_parser.hpp>
+#include <parser/vvc_parameter_set_manager.hpp>
+#include <parser/vvc_ph_parser.hpp>
+#include <parser/vvc_pps_parser.hpp>
+#include <parser/vvc_slice_parser.hpp>
+#include <parser/vvc_sps_parser.hpp>
+#include <parser/vvc_vps_parser.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -83,7 +99,11 @@ namespace bs {
  */
 enum class Codec : std::uint8_t {
     Hevc,
-    Avc
+    Avc,
+    Vvc,
+    Av1,
+    Vp9,
+    Vp8
 };
 
 
@@ -125,6 +145,43 @@ struct AvcParsedHandlers {
 };
 
 
+/*
+ * VVC typed handlers: one callback per parameter-set-like NAL
+ * plus slice headers.
+ */
+struct VvcParsedHandlers {
+    void (*dci)(const vvc::Dci&) = nullptr;
+    void (*opi)(const vvc::Opi&) = nullptr;
+    void (*vps)(const vvc::VideoParameterSet&) = nullptr;
+    void (*sps)(const vvc::SequenceParameterSet&) = nullptr;
+    void (*pps)(const vvc::PictureParameterSet&) = nullptr;
+    void (*ph)(const vvc::PictureHeader&) = nullptr;
+    void (*slice)(const vvc::SliceHeader&) = nullptr;
+};
+
+
+/*
+ * AV1 typed handlers.
+ */
+struct Av1ParsedHandlers {
+    void (*sequence_header)(const av1::SequenceHeader&) = nullptr;
+    void (*frame_header)(const av1::FrameHeader&) = nullptr;
+};
+
+
+/*
+ * VP9 / VP8 typed handlers (frame headers only).
+ */
+struct Vp9ParsedHandlers {
+    void (*frame_header)(const vp9::FrameHeader&) = nullptr;
+};
+
+
+struct Vp8ParsedHandlers {
+    void (*frame_header)(const vp8::FrameHeader&) = nullptr;
+};
+
+
 struct StructReport {
     std::vector<VideoParameterSet> hevc_vps;
     std::vector<SequenceParameterSet> hevc_sps;
@@ -152,12 +209,27 @@ public:
     explicit StateImpl(Codec codec)
         : codec_(codec)
     {
-        if (codec == Codec::Hevc) {
+        switch (codec) {
+
+        case Codec::Hevc:
             hevc_ =
                 std::make_unique<ParameterSetManager>();
-        } else {
+            break;
+
+        case Codec::Avc:
             avc_ =
                 std::make_unique<avc::ParameterSetManager>();
+            break;
+
+        case Codec::Vvc:
+            vvc_ =
+                std::make_unique<vvc::ParameterSetManager>();
+            break;
+
+        case Codec::Av1:
+        case Codec::Vp9:
+        case Codec::Vp8:
+            break;
         }
     }
 
@@ -176,10 +248,24 @@ public:
      */
     void clear() noexcept
     {
-        if (codec_ == Codec::Hevc) {
+        switch (codec_) {
+
+        case Codec::Hevc:
             hevc_->clear();
-        } else {
+            break;
+
+        case Codec::Avc:
             avc_->clear();
+            break;
+
+        case Codec::Vvc:
+            vvc_->clear();
+            break;
+
+        case Codec::Av1:
+        case Codec::Vp9:
+        case Codec::Vp8:
+            break;
         }
     }
 
@@ -198,6 +284,13 @@ public:
     }
 
 
+    [[nodiscard]]
+    vvc::ParameterSetManager& vvc() noexcept
+    {
+        return *vvc_;
+    }
+
+
 private:
 
     Codec codec_;
@@ -205,6 +298,8 @@ private:
     std::unique_ptr<ParameterSetManager> hevc_{};
 
     std::unique_ptr<avc::ParameterSetManager> avc_{};
+
+    std::unique_ptr<vvc::ParameterSetManager> vvc_{};
 };
 
 
@@ -544,6 +639,222 @@ dispatch_state_avc(
     return parsed_count;
 }
 
+
+/*
+ * VVC framing + dispatch with automatic parameter-set storage.
+ */
+template <typename Framer>
+inline std::size_t
+dispatch_state_vvc(
+    StateImpl& impl,
+    Framer& framer,
+    const VvcParsedHandlers& ph)
+{
+    std::size_t parsed_count = 0;
+
+    vvc::ParameterSetManager& manager =
+        impl.vvc();
+
+    while (framer.valid()) {
+
+        const auto bytes = framer.nal();
+
+        try {
+
+            vvc::NalUnit nal =
+                vvc::parse_nal_unit(bytes);
+
+            switch (nal.type()) {
+
+            case vvc::NalUnitType::OpiNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::Opi opi = vvc::parse_opi(r);
+                manager.store_opi(opi);
+                if (ph.opi) ph.opi(opi);
+                break;
+            }
+
+            case vvc::NalUnitType::DciNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::Dci dci = vvc::parse_dci(r);
+                manager.store_dci(dci);
+                if (ph.dci) ph.dci(dci);
+                break;
+            }
+
+            case vvc::NalUnitType::VpsNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::VideoParameterSet vps =
+                    vvc::parse_vps(r);
+                manager.store_vps(vps);
+                if (ph.vps) ph.vps(vps);
+                break;
+            }
+
+            case vvc::NalUnitType::SpsNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::SequenceParameterSet sps =
+                    vvc::parse_sps(r);
+                manager.store_sps(sps);
+                if (ph.sps) ph.sps(sps);
+                break;
+            }
+
+            case vvc::NalUnitType::PpsNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::PictureParameterSet pps =
+                    vvc::parse_pps(r);
+                manager.store_pps(pps);
+                if (ph.pps) ph.pps(pps);
+                break;
+            }
+
+            case vvc::NalUnitType::PhNut: {
+                RbspReader r(nal.payload_bytes());
+                vvc::PictureHeader phdr =
+                    vvc::parse_ph(r);
+                manager.store_ph(phdr);
+                if (ph.ph) ph.ph(phdr);
+                break;
+            }
+
+            default:
+                break;
+            }
+
+            if (ph.slice && nal.is_vcl()) {
+                try {
+                    RbspReader r1(nal.payload_bytes());
+                    const std::uint32_t pps_id =
+                        r1.read_ue();
+
+                    const auto resolved =
+                        manager.resolve(
+                            static_cast<std::uint8_t>(
+                                pps_id));
+
+                    if (resolved.pps != nullptr &&
+                        resolved.sps != nullptr) {
+                        RbspReader r2(nal.payload_bytes());
+                        vvc::SliceHeader hdr =
+                            vvc::parse_slice_header(r2);
+                        ph.slice(hdr);
+                    }
+                } catch (...) {
+                    /* malformed slice: skip */
+                }
+            }
+
+            ++parsed_count;
+
+        } catch (...) {
+            /* skip a NAL that cannot even be framed/parsed */
+        }
+
+        framer.next();
+    }
+
+    return parsed_count;
+}
+
+
+/*
+ * AV1 OBU framing + dispatch.
+ */
+template <typename Framer>
+inline std::size_t
+dispatch_state_av1(
+    StateImpl&,
+    Framer& framer,
+    const Av1ParsedHandlers& ph)
+{
+    std::size_t parsed_count = 0;
+
+    while (framer.valid()) {
+
+        const auto bytes = framer.obu();
+
+        try {
+
+            av1::Obu obu = av1::parse_obu(bytes);
+
+            switch (static_cast<int>(obu.type())) {
+
+            case static_cast<int>(av1::ObuType::SequenceHeader): {
+                if (ph.sequence_header) {
+                    av1::SequenceHeader sh =
+                        av1::parse_sequence_header(
+                            obu.payload_bytes());
+                    ph.sequence_header(sh);
+                }
+                break;
+            }
+
+            case static_cast<int>(av1::ObuType::FrameHeader):
+            case static_cast<int>(av1::ObuType::RedundantFrameHeader):
+            case static_cast<int>(av1::ObuType::Frame): {
+                if (ph.frame_header) {
+                    av1::FrameHeader fh =
+                        av1::parse_frame_header(
+                            obu.payload_bytes());
+                    ph.frame_header(fh);
+                }
+                break;
+            }
+
+            default:
+                break;
+            }
+
+            ++parsed_count;
+
+        } catch (...) {
+            /* skip a malformed OBU */
+        }
+
+        framer.next();
+    }
+
+    return parsed_count;
+}
+
+
+/*
+ * VP9 / VP8 IVF framing + dispatch.
+ */
+template <typename Framer, typename Header>
+inline std::size_t
+dispatch_state_vp_frame(
+    Framer& framer,
+    Header (*parse)(std::span<const std::uint8_t>),
+    void (*handler)(const Header&))
+{
+    std::size_t parsed_count = 0;
+
+    while (framer.valid()) {
+
+        const auto bytes = framer.frame();
+
+        try {
+
+            Header header = parse(bytes);
+
+            if (handler != nullptr) {
+                handler(header);
+            }
+
+            ++parsed_count;
+
+        } catch (...) {
+            /* skip a malformed frame */
+        }
+
+        framer.next();
+    }
+
+    return parsed_count;
+}
+
 } // namespace detail
 
 
@@ -641,6 +952,30 @@ public:
     }
 
 
+    /*
+     * VVC parameter-set manager, or nullptr when this is not a
+     * VVC state.
+     */
+    [[nodiscard]]
+    vvc::ParameterSetManager* vvc_sets() noexcept
+    {
+        return
+            impl_->codec() == Codec::Vvc
+                ? &impl_->vvc()
+                : nullptr;
+    }
+
+
+    [[nodiscard]]
+    const vvc::ParameterSetManager* vvc_sets() const noexcept
+    {
+        return
+            impl_->codec() == Codec::Vvc
+                ? &impl_->vvc()
+                : nullptr;
+    }
+
+
 private:
 
     std::unique_ptr<detail::StateImpl> impl_;
@@ -687,6 +1022,38 @@ private:
         std::span<const std::uint8_t>,
         NalFramingMode,
         StructReport&,
+        unsigned);
+
+    friend std::size_t
+    parse(
+        State&,
+        std::span<const std::uint8_t>,
+        NalFramingMode,
+        const VvcParsedHandlers&,
+        unsigned);
+
+    friend std::size_t
+    parse(
+        State&,
+        std::span<const std::uint8_t>,
+        NalFramingMode,
+        const Av1ParsedHandlers&,
+        unsigned);
+
+    friend std::size_t
+    parse(
+        State&,
+        std::span<const std::uint8_t>,
+        NalFramingMode,
+        const Vp9ParsedHandlers&,
+        unsigned);
+
+    friend std::size_t
+    parse(
+        State&,
+        std::span<const std::uint8_t>,
+        NalFramingMode,
+        const Vp8ParsedHandlers&,
         unsigned);
 };
 
@@ -744,6 +1111,9 @@ parse(
             framer,
             handlers);
     }
+
+    default:
+        break;
     }
 
     throw BsNalParseError(
@@ -790,6 +1160,9 @@ parse(
             framer,
             handlers);
     }
+
+    default:
+        break;
     }
 
     throw avc::NalParseError(
@@ -839,6 +1212,9 @@ parse(
             raw,
             handlers);
     }
+
+    default:
+        break;
     }
 
     throw BsNalParseError(
@@ -904,6 +1280,9 @@ parse(
             AvcParsedHandlers{},
             &report);
     }
+
+    default:
+        break;
     }
 
     if (state.codec() == Codec::Hevc) {
@@ -957,9 +1336,181 @@ parse(
             raw,
             handlers);
     }
+
+    default:
+        break;
     }
 
     throw avc::NalParseError(
+        "bs::parse: unsupported framing mode");
+}
+
+
+/*
+ * ===========================================================================
+ * Unified parse — VVC
+ * ===========================================================================
+ */
+[[nodiscard]]
+inline std::size_t
+parse(
+    State& state,
+    std::span<const std::uint8_t> data,
+    NalFramingMode mode,
+    const VvcParsedHandlers& handlers,
+    unsigned length_size = 4)
+{
+    if (state.codec() != Codec::Vvc) {
+        throw BsNalParseError(
+            "bs::parse: state is not a VVC state");
+    }
+
+    switch (mode) {
+
+    case NalFramingMode::AnnexB: {
+        AnnexBNalIterator framer{data};
+        return detail::dispatch_state_vvc(
+            *state.impl_,
+            framer,
+            handlers);
+    }
+
+    case NalFramingMode::LengthPrefixed: {
+        LengthPrefixedNalIterator framer{
+            data,
+            length_size
+        };
+        return detail::dispatch_state_vvc(
+            *state.impl_,
+            framer,
+            handlers);
+    }
+
+    default:
+        break;
+    }
+
+    throw BsNalParseError(
+        "bs::parse: unsupported framing mode");
+}
+
+
+/*
+ * ===========================================================================
+ * Unified parse — AV1
+ * ===========================================================================
+ */
+[[nodiscard]]
+inline std::size_t
+parse(
+    State& state,
+    std::span<const std::uint8_t> data,
+    NalFramingMode mode,
+    const Av1ParsedHandlers& handlers,
+    unsigned length_size = 4)
+{
+    (void)length_size;
+
+    if (state.codec() != Codec::Av1) {
+        throw BsNalParseError(
+            "bs::parse: state is not an AV1 state");
+    }
+
+    switch (mode) {
+
+    case NalFramingMode::Obu: {
+        av1::ObuFramer framer{data};
+        return detail::dispatch_state_av1(
+            *state.impl_,
+            framer,
+            handlers);
+    }
+
+    default:
+        break;
+    }
+
+    throw BsNalParseError(
+        "bs::parse: unsupported framing mode");
+}
+
+
+/*
+ * ===========================================================================
+ * Unified parse — VP9
+ * ===========================================================================
+ */
+[[nodiscard]]
+inline std::size_t
+parse(
+    State& state,
+    std::span<const std::uint8_t> data,
+    NalFramingMode mode,
+    const Vp9ParsedHandlers& handlers,
+    unsigned length_size = 4)
+{
+    (void)length_size;
+
+    if (state.codec() != Codec::Vp9) {
+        throw BsNalParseError(
+            "bs::parse: state is not a VP9 state");
+    }
+
+    switch (mode) {
+
+    case NalFramingMode::Ivf: {
+        IvfFramer framer{data};
+        return detail::dispatch_state_vp_frame(
+            framer,
+            vp9::parse_frame_header,
+            handlers.frame_header);
+    }
+
+    default:
+        break;
+    }
+
+    throw BsNalParseError(
+        "bs::parse: unsupported framing mode");
+}
+
+
+/*
+ * ===========================================================================
+ * Unified parse — VP8
+ * ===========================================================================
+ */
+[[nodiscard]]
+inline std::size_t
+parse(
+    State& state,
+    std::span<const std::uint8_t> data,
+    NalFramingMode mode,
+    const Vp8ParsedHandlers& handlers,
+    unsigned length_size = 4)
+{
+    (void)length_size;
+
+    if (state.codec() != Codec::Vp8) {
+        throw BsNalParseError(
+            "bs::parse: state is not a VP8 state");
+    }
+
+    switch (mode) {
+
+    case NalFramingMode::Ivf: {
+        IvfFramer framer{data};
+        return detail::dispatch_state_vp_frame(
+            framer,
+            vp8::parse_frame_header,
+            handlers.frame_header);
+    }
+
+    default:
+        break;
+    }
+
+    throw BsNalParseError(
         "bs::parse: unsupported framing mode");
 }
 
