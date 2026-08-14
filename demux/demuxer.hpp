@@ -3,6 +3,7 @@
 #include "stream.hpp"
 #include "avi_demuxer.hpp"
 #include "flv_demuxer.hpp"
+#include "mkv_demuxer.hpp"
 #include "mp4_demuxer.hpp"
 #include "ts_demuxer.hpp"
 
@@ -32,6 +33,11 @@ inline Container sniff(std::span<const std::uint8_t> data) {
     if (data.size() >= 12 && std::memcmp(data.data(), "RIFF", 4) == 0 &&
         std::memcmp(data.data() + 8, "AVI ", 4) == 0) {
         return Container::Avi;
+    }
+
+    if (data.size() >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF &&
+        data[3] == 0xA3) {
+        return Container::Mkv;
     }
 
     /*
@@ -95,6 +101,9 @@ inline ElementaryStream demux(Container container, std::span<const std::uint8_t>
             out.ok = true;
             return out;
         }
+
+        case Container::Mkv:
+            return mkv::demux_mkv(data);
 
         default:
             return out;

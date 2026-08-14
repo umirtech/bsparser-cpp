@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
             codec = es.codec;
             mode = es.framing;
 
-            static const char* container_names[] = {"?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF"};
+            static const char* container_names[] = {"?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF", "MKV"};
 
             std::cout << "container=" << container_names[static_cast<unsigned>(container)]
                       << " codec=" << es.codec_name << " " << es.width << "x" << es.height

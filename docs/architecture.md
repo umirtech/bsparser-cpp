@@ -689,12 +689,17 @@ bs::parse(state, es.bytes, es.framing, handlers)   (existing path)
   AV1 → OBUs, VP8/VP9 → IVF.
 - **AVI** (`avi_demuxer.hpp`): reads `hdrl`/`strh`/`strf` + `movi` chunks;
   H.26x chunks (Annex-B or length-prefixed) → Annex-B, VP8/VP9 → IVF, AV1 → OBUs.
+- **MKV / WebM** (`mkv_demuxer.hpp`): parses the EBML element stream
+  (vint IDs/sizes), finds the first video `TrackEntry` (CodecID/CodecPrivate/
+  dimensions) and extracts `SimpleBlock`/`BlockGroup` frames from every
+  Cluster; AVC/HEVC/VVC → Annex-B (length-prefixed NALs with the CodecPrivate
+  length size, sanity-checked), AV1 → OBUs, VP8/VP9 → IVF.
 - **IVF** passes through as the VP8/VP9 elementary stream.
 
 The CLI calls `demux::sniff` + `demux::demux` automatically, so
 `bs_cli input.mp4` works without `--codec`/`--format`. The demux layer is
 deliberately limited: single video track, no fragmented MP4 (`moof`), no
-MKV/WebM (EBML), no subtitles/audio.
+laced MKV blocks, no subtitles/audio.
 
 ---
 
@@ -768,6 +773,8 @@ bsparser/
 │   ├── ts_demuxer.hpp           MPEG-TS (PAT/PMT/PES → Annex-B)
 │   ├── flv_demuxer.hpp          FLV video tags → ES
 │   ├── avi_demuxer.hpp          RIFF/AVI → ES
+│   ├── mkv_demuxer.hpp          Matroska/WebM (EBML) → ES
+│   ├── es_reconstruct.hpp       shared Annex-B / IVF reconstruction
 │   └── stream.hpp               Container + ElementaryStream types
 ├── syntax/                        immutable parsed models
 │   ├── hevc_common.hpp                 shared enums/constants (HEVC)
