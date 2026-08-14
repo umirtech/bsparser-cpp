@@ -54,8 +54,8 @@ void print_help(const char* prog) {
  * Very small auto-detector: scan the first few NAL units.
  *
  * The very first NAL of a stream is not necessarily a parameter set
- * (an encoder may start with AUD or a VCL slice), so look at up to 16
- * leading Annex-B NALs and count HEVC vs AVC parameter-set types:
+ * (an encoder may start with AUD, SEI or a VCL slice), so look at up to
+ * 64 leading Annex-B NALs and count HEVC vs AVC parameter-set types:
  *
  *   HEVC  VPS=32, SPS=33, PPS=34
  *   AVC   SPS=7,  PPS=8
@@ -71,7 +71,7 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
     std::size_t i = 0;
     unsigned nal_count = 0;
 
-    while (i < data.size() && nal_count < 16) {
+    while (i < data.size() && nal_count < 64) {
         if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 &&
             data[i + 3] == 0x01) {
             i += 4;
@@ -87,14 +87,28 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
         }
 
         const std::uint8_t b0 = data[i];
-        const unsigned hevc_type = (b0 >> 1) & 0x3F;
-        const unsigned avc_type = b0 & 0x1F;
+        const std::uint8_t b1 = (i + 1 < data.size()) ? data[i + 1] : 0;
 
-        if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34) {
+        /*
+         * HEVC parameter sets: 2-byte NAL header.  For a base-layer
+         * (layer_id 0) temporal-0 set, byte1 == 0x01 (temporal_id_plus1).
+         * This distinguishes HEVC VPS/SPS/PPS from an AVC slice whose
+         * first byte could alias the same HEVC type (e.g. AVC type-1
+         * 0x41 -> HEVC type 32).
+         */
+        const unsigned hevc_type = (b0 >> 1) & 0x3F;
+
+        if ((hevc_type == 32 || hevc_type == 33 || hevc_type == 34) && (b1 >> 3) == 0 &&
+            (b1 & 0x07) != 0) {
             ++hevc_ps;
         }
 
-        if (avc_type == 7 || avc_type == 8) {
+        /*
+         * AVC parameter sets: SPS = 0x67 / 0x27, PPS = 0x68 / 0x28.
+         */
+        const unsigned avc_type = b0 & 0x1F;
+
+        if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28) {
             ++avc_ps;
         }
 
@@ -286,7 +300,11 @@ int main(int argc, char** argv) {
     } else if (codec_arg == "vp8") {
         codec = Codec::Vp8;
     } else if (codec_arg == "auto") {
-        const std::vector<std::uint8_t> head = read_file(input_path, 1024);
+        /*
+         * Probe a generous prefix: parameter sets can appear hundreds of
+         * KB in when a stream starts with large SEI messages.
+         */
+        const std::vector<std::uint8_t> head = read_file(input_path, 512 * 1024);
 
         if (head.empty()) {
             std::cerr << "error: cannot open '" << input_path << "'\n";

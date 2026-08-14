@@ -382,7 +382,25 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
 
         if (track.codec_id == "V_MPEG4/ISO/AVC" || track.codec_id == "V_MPEGH/ISO/HEVC" ||
             track.codec_id == "V_VVC") {
-            es::emit_length_prefixed(out, frame, track.length_size);
+            /*
+             * Blocks are length-prefixed with ls bytes, but some muxers
+             * write raw Annex-B frames (start-coded NALs).  Detect that
+             * and copy them through directly.  A frame that starts with a
+             * start code but also parses cleanly as length-prefixed (e.g.
+             * a 1-byte first NAL) is kept on the length-prefixed path.
+             */
+            const bool starts_annex_b =
+                frame.size() >= 4 && frame[0] == 0x00 && frame[1] == 0x00 &&
+                (frame[2] == 0x01 || (frame[2] == 0x00 && frame[3] == 0x01));
+
+            const bool annex_b =
+                starts_annex_b && !es::fully_length_prefixed(frame, track.length_size);
+
+            if (annex_b) {
+                out.bytes.insert(out.bytes.end(), frame.begin(), frame.end());
+            } else {
+                es::emit_length_prefixed(out, frame, track.length_size);
+            }
         } else if (track.codec_id == "V_VP9" || track.codec_id == "V_VP8") {
             es::append_ivf_frame(out, frame, frame_ts++);
         } else {
@@ -435,8 +453,7 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
 
                 if (cid == detail::kSimpleBlock) {
                     block_data = element.subspan(q, static_cast<std::size_t>(csize));
-                } else if (cid == detail::kBlockGroup) {
-                    std::size_t b = 0;
+                } else if (cid == detail::kBlockGroup) {                    std::size_t b = 0;
                     std::uint64_t bid, bsize, blen;
 
                     if (detail::read_vint(
