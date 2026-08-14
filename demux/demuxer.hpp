@@ -73,40 +73,46 @@ inline Container sniff(std::span<const std::uint8_t> data) {
 inline ElementaryStream demux(Container container, std::span<const std::uint8_t> data) {
     ElementaryStream out;
 
-    switch (container) {
-        case Container::Mp4:
-            return mp4::demux_mp4(data);
+    try {
+        switch (container) {
+            case Container::Mp4:
+                return mp4::demux_mp4(data);
 
-        case Container::MpegTs:
-            return ts::demux_ts(data);
+            case Container::MpegTs:
+                return ts::demux_ts(data);
 
-        case Container::Flv:
-            return flv::demux_flv(data);
+            case Container::Flv:
+                return flv::demux_flv(data);
 
-        case Container::Avi:
-            return avi::demux_avi(data);
+            case Container::Avi:
+                return avi::demux_avi(data);
 
-        case Container::Ivf: {
-            if (data.size() < 32) {
+            case Container::Ivf: {
+                if (data.size() < 32) {
+                    return out;
+                }
+
+                const bool vp9 =
+                    data[8] == 'V' && data[9] == 'P' && data[10] == '9' && data[11] == '0';
+
+                out.codec = vp9 ? Codec::Vp9 : Codec::Vp8;
+                out.framing = NalFramingMode::Ivf;
+                out.bytes.assign(data.begin(), data.end());
+                out.width = static_cast<std::uint16_t>(data[12] | (data[13] << 8));
+                out.height = static_cast<std::uint16_t>(data[14] | (data[15] << 8));
+                out.ok = true;
                 return out;
             }
 
-            const bool vp9 = data[8] == 'V' && data[9] == 'P' && data[10] == '9' && data[11] == '0';
+            case Container::Mkv:
+                return mkv::demux_mkv(data);
 
-            out.codec = vp9 ? Codec::Vp9 : Codec::Vp8;
-            out.framing = NalFramingMode::Ivf;
-            out.bytes.assign(data.begin(), data.end());
-            out.width = static_cast<std::uint16_t>(data[12] | (data[13] << 8));
-            out.height = static_cast<std::uint16_t>(data[14] | (data[15] << 8));
-            out.ok = true;
-            return out;
+            default:
+                return out;
         }
-
-        case Container::Mkv:
-            return mkv::demux_mkv(data);
-
-        default:
-            return out;
+    } catch (...) {
+        /* malformed container: fail gracefully */
+        return out;
     }
 }
 

@@ -33,11 +33,17 @@ namespace mp4 {
 namespace detail {
 
 inline std::uint32_t read_u32(std::span<const std::uint8_t> d, std::size_t p) {
+    if (p + 4 > d.size()) {
+        throw std::out_of_range("MP4: truncated box field");
+    }
     return (static_cast<std::uint32_t>(d[p]) << 24) | (static_cast<std::uint32_t>(d[p + 1]) << 16) |
            (static_cast<std::uint32_t>(d[p + 2]) << 8) | static_cast<std::uint32_t>(d[p + 3]);
 }
 
 inline std::uint64_t read_u64(std::span<const std::uint8_t> d, std::size_t p) {
+    if (p + 8 > d.size()) {
+        throw std::out_of_range("MP4: truncated box field");
+    }
     return (static_cast<std::uint64_t>(read_u32(d, p)) << 32) | read_u32(d, p + 4);
 }
 
@@ -353,7 +359,18 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
             return out;
         }
         const std::uint32_t sample_size = detail::read_u32(data, b.data + 4);
-        const std::uint32_t sample_count = detail::read_u32(data, b.data + 8);
+        std::uint32_t sample_count = detail::read_u32(data, b.data + 8);
+
+        /*
+         * Guard against a malicious sample_count causing a huge
+         * allocation (CWE-400). A million samples per stsz far
+         * exceeds any real media file.
+         */
+        constexpr std::uint32_t kMaxSamples = 1000000u;
+
+        if (sample_count > kMaxSamples) {
+            sample_count = kMaxSamples;
+        }
 
         if (sample_size != 0) {
             t.sizes.assign(sample_count, sample_size);

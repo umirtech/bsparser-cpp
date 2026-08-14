@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,9 @@ namespace avi {
 namespace detail {
 
 inline std::uint32_t read_u32(std::span<const std::uint8_t> d, std::size_t p) {
+    if (p + 4 > d.size()) {
+        throw std::out_of_range("AVI: truncated chunk field");
+    }
     /* RIFF/AVI sizes are little-endian. */
     return static_cast<std::uint32_t>(d[p]) | (static_cast<std::uint32_t>(d[p + 1]) << 8) |
            (static_cast<std::uint32_t>(d[p + 2]) << 16) |

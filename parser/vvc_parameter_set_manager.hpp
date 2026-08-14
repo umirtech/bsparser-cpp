@@ -33,15 +33,21 @@ class ParameterSetManager {
     }
 
     void store_vps(const VideoParameterSet& vps) {
-        vps_[vps.vps_id] = vps;
+        if (vps.vps_id < vps_.size()) {
+            vps_[vps.vps_id] = vps;
+        }
     }
 
     void store_sps(const SequenceParameterSet& sps) {
-        sps_[sps.sps_id] = sps;
+        if (sps.sps_id < sps_.size()) {
+            sps_[sps.sps_id] = sps;
+        }
     }
 
     void store_pps(const PictureParameterSet& pps) {
-        pps_[pps.pps_id] = pps;
+        if (pps.pps_id < pps_.size()) {
+            pps_[pps.pps_id] = pps;
+        }
     }
 
     void store_ph(const PictureHeader& ph) {
@@ -65,17 +71,17 @@ class ParameterSetManager {
 
     [[nodiscard]]
     const VideoParameterSet* find_vps(std::uint8_t id) const noexcept {
-        return vps_[id] ? &vps_[id].value() : nullptr;
+        return id < vps_.size() && vps_[id] ? &vps_[id].value() : nullptr;
     }
 
     [[nodiscard]]
     const SequenceParameterSet* find_sps(std::uint8_t id) const noexcept {
-        return sps_[id] ? &sps_[id].value() : nullptr;
+        return id < sps_.size() && sps_[id] ? &sps_[id].value() : nullptr;
     }
 
     [[nodiscard]]
     const PictureParameterSet* find_pps(std::uint8_t id) const noexcept {
-        return pps_[id] ? &pps_[id].value() : nullptr;
+        return id < pps_.size() && pps_[id] ? &pps_[id].value() : nullptr;
     }
 
     /*

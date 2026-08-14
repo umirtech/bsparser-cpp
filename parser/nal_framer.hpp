@@ -231,47 +231,49 @@ class AnnexBNalIterator {
      * Locate the next NAL after current_.
      */
     void locate_next() {
-        const auto start = find_start_code(current_);
+        for (;;) {
+            const auto start = find_start_code(current_);
 
-        if (start == data_.size()) {
-            finished_ = true;
-            nal_begin_ = data_.size();
-            nal_end_ = data_.size();
-            return;
-        }
+            if (start == data_.size()) {
+                finished_ = true;
+                nal_begin_ = data_.size();
+                nal_end_ = data_.size();
+                return;
+            }
 
-        const auto prefix_size = annex_b_start_code_size(data_, start);
+            const auto prefix_size = annex_b_start_code_size(data_, start);
 
-        const auto begin = start + prefix_size;
+            const auto begin = start + prefix_size;
 
-        const auto next = find_start_code(begin);
+            const auto next = find_start_code(begin);
 
-        /*
-         * Annex-B permits trailing_zero_8bits between the end
-         * of a NAL and the next start code.
-         *
-         * Remove those trailing zero bytes from the NAL span.
-         */
-        std::size_t end = next;
+            /*
+             * Annex-B permits trailing_zero_8bits between the end
+             * of a NAL and the next start code.
+             *
+             * Remove those trailing zero bytes from the NAL span.
+             */
+            std::size_t end = next;
 
-        while (end > begin && data_[end - 1] == 0x00) {
-            --end;
-        }
+            while (end > begin && data_[end - 1] == 0x00) {
+                --end;
+            }
 
-        /*
-         * Empty NAL units are not useful to the syntax layer.
-         * Skip them.
-         */
-        if (begin >= end) {
+            /*
+             * Empty NAL units are not useful to the syntax layer.
+             * Skip them (iteratively, to avoid unbounded recursion).
+             */
+            if (begin >= end) {
+                current_ = next;
+                continue;
+            }
+
+            nal_begin_ = begin;
+            nal_end_ = end;
             current_ = next;
-            locate_next();
+            finished_ = false;
             return;
         }
-
-        nal_begin_ = begin;
-        nal_end_ = end;
-        current_ = next;
-        finished_ = false;
     }
 
    public:
@@ -406,42 +408,45 @@ class LengthPrefixedNalIterator {
     bool finished_ = true;
 
     void locate_next() {
-        if (current_ >= data_.size()) {
-            finished_ = true;
-            nal_begin_ = data_.size();
-            nal_end_ = data_.size();
-            return;
-        }
+        for (;;) {
+            if (current_ >= data_.size()) {
+                finished_ = true;
+                nal_begin_ = data_.size();
+                nal_end_ = data_.size();
+                return;
+            }
 
-        if (current_ + length_size_ > data_.size()) {
-            throw NalFramingError("length-prefixed NAL: truncated length");
-        }
+            if (current_ + length_size_ > data_.size()) {
+                throw NalFramingError("length-prefixed NAL: truncated length");
+            }
 
-        const auto length = read_big_endian_length(data_, current_, length_size_);
+            const auto length = read_big_endian_length(data_, current_, length_size_);
 
-        const auto payload_begin = current_ + length_size_;
+            const auto payload_begin = current_ + length_size_;
 
-        const auto payload_end = payload_begin + static_cast<std::size_t>(length);
+            const auto payload_end = payload_begin + static_cast<std::size_t>(length);
 
-        if (payload_end > data_.size()) {
-            throw NalFramingError("length-prefixed NAL: NAL exceeds input");
-        }
+            if (payload_end > data_.size()) {
+                throw NalFramingError("length-prefixed NAL: NAL exceeds input");
+            }
 
-        /*
-         * Zero-length NAL units are ignored.
-         */
-        if (length == 0) {
+            /*
+             * Zero-length NAL units are ignored (iteratively, to
+             * avoid unbounded recursion).
+             */
+            if (length == 0) {
+                current_ = payload_end;
+                continue;
+            }
+
+            nal_begin_ = payload_begin;
+            nal_end_ = payload_end;
+
             current_ = payload_end;
-            locate_next();
+
+            finished_ = false;
             return;
         }
-
-        nal_begin_ = payload_begin;
-        nal_end_ = payload_end;
-
-        current_ = payload_end;
-
-        finished_ = false;
     }
 
    public:
