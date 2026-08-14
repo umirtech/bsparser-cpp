@@ -343,10 +343,6 @@ add_test(
 #Additional codecs : VVC / AV1 / VP9 / VP8
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-#Additional codecs : VVC / AV1 / VP9 / VP8
-#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
 set(BS_NEW_CODEC_TESTS
     Vvc  vvc_sample.266
     Av1  av1_sample.obu
@@ -357,8 +353,7 @@ set(BS_NEW_CODEC_TESTS
 list(LENGTH BS_NEW_CODEC_TESTS BS_NEW_CODEC_TEST_COUNT)
 math(EXPR BS_NEW_CODEC_TEST_MAX "${BS_NEW_CODEC_TEST_COUNT} - 1")
 
-foreach(idx RANGE 0 ${
-    BS_NEW_CODEC_TEST_MAX} 2)
+foreach(idx RANGE 0 ${BS_NEW_CODEC_TEST_MAX} 2)
 
     list(GET BS_NEW_CODEC_TESTS ${idx} codec)
     math(EXPR nxt "${idx} + 1")

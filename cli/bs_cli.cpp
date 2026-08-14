@@ -93,6 +93,41 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
 
 enum class OutputKind { Json, Html };
 
+/*
+ * Read a file in a single seek + read. std::istreambuf_iterator<char> walks
+ * the input character-by-character and is unusably slow for multi-hundred-MB
+ * streams (a 467MB MKV took ~3s just to load).
+ */
+[[nodiscard]]
+std::vector<std::uint8_t> read_file(const std::string& path, std::streamsize limit = -1) {
+    std::ifstream in(path, std::ios::binary);
+
+    if (!in) {
+        return {};
+    }
+
+    in.seekg(0, std::ios::end);
+    const std::streamoff n = in.tellg();
+    in.seekg(0, std::ios::beg);
+
+    if (n <= 0) {
+        return {};
+    }
+
+    std::vector<std::uint8_t> buf(
+        static_cast<std::size_t>(limit >= 0 ? std::min<std::streamoff>(n, limit) : n)
+    );
+
+    if (buf.empty()) {
+        return buf;
+    }
+
+    in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+    buf.resize(static_cast<std::size_t>(in.gcount()));
+
+    return buf;
+}
+
 [[nodiscard]]
 OutputKind infer_kind(const std::string& path) {
     const auto pos = path.find_last_of('.');
@@ -194,14 +229,13 @@ int main(int argc, char** argv) {
     } else if (codec_arg == "vp8") {
         codec = Codec::Vp8;
     } else if (codec_arg == "auto") {
-        std::ifstream probe(input_path, std::ios::binary);
-        if (!probe) {
+        const std::vector<std::uint8_t> head = read_file(input_path, 1024);
+
+        if (head.empty()) {
             std::cerr << "error: cannot open '" << input_path << "'\n";
             return 1;
         }
-        const std::vector<std::uint8_t> head(
-            (std::istreambuf_iterator<char>(probe)), std::istreambuf_iterator<char>()
-        );
+
         codec = detect_codec(std::span<const std::uint8_t>(head.data(), head.size()));
     } else {
         std::cerr << "error: unknown --codec '" << codec_arg << "'\n";
@@ -230,16 +264,12 @@ int main(int argc, char** argv) {
     /*
      * Load the stream.
      */
-    std::ifstream in(input_path, std::ios::binary);
+    std::vector<std::uint8_t> bytes = read_file(input_path);
 
-    if (!in) {
+    if (bytes.empty()) {
         std::cerr << "error: cannot open '" << input_path << "'\n";
         return 1;
     }
-
-    const std::vector<std::uint8_t> bytes(
-        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()
-    );
 
     if (bytes.size() < 3) {
         std::cerr << "error: input too small\n";
