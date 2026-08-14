@@ -5,11 +5,17 @@ project(bsparser
     LANGUAGES C CXX
 )
 
-# Detect whether the building compiler actually supports C++20.  This gates
-# which headers get installed: the C++20 template headers (bsparser.hpp and
-# the core bitstream/parser/syntax/logging tree) are only shipped when the
-# compiler can compile them.  Otherwise only the C-API headers are installed,
-# which is the only path a non-C++20 consumer can use.
+#Default to an optimized build when the user did not pick a build type.
+#Without an optimization level the template - heavy parsers are ~100x slower.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+#Detect whether the building compiler actually supports C++ 20. This gates
+#which headers get installed : the C++ 20 template headers(bsparser.hpp and
+#the core bitstream / parser / syntax / logging tree) are only shipped when the
+#compiler can compile them.Otherwise only the C - API headers are installed,
+#which is the only path a non - C++ 20 consumer can use.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -21,7 +27,10 @@ check_cxx_source_compiles("
 #if __cplusplus < 202002L
 #error requires C++20
 #endif
-int main() { std::span<int> s; (void)s; return 0; }
+int main() {
+    std::span<int> s;
+    (void)s;
+    return 0; }
 " BS_CXX20_SUPPORTED)
 
 add_library(bs
@@ -37,13 +46,13 @@ target_include_directories(bs
         ${CMAKE_CURRENT_SOURCE_DIR}/syntax/
 )
 
-# ---------------------------------------------------------------------------
-# Compiler selection
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Compiler selection
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
-# The project is designed to build with both GCC and Clang (and MSVC).
-# Compiler warning flags are attached to the interface library so every
-# consumer inherits them.
+#The project is designed to build with both GCC and Clang(and MSVC).
+#Compiler warning flags are attached to the interface library so every
+#consumer inherits them.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
 
     target_compile_options(bs
@@ -63,16 +72,15 @@ elseif(MSVC)
 
 endif()
 
-
-# ---------------------------------------------------------------------------
-# Trace logging
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Trace logging
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
-# OFF (default): Debug/Trace logging statements are compiled out.
-#                The library is silent.
-# ON:            Debug/Trace statements are compiled in.  The default
-#                runtime threshold becomes Trace; use
-#                bs::log::set_level() to filter.
+#OFF(default) : Debug / Trace logging statements are compiled out.
+#The library is silent.
+#ON : Debug / Trace statements are compiled in.The default
+#runtime threshold becomes Trace; use
+#bs::log::set_level() to filter.
 option(BS_ENABLE_TRACE
     "Compile in verbose parser trace logging"
     OFF
@@ -88,10 +96,9 @@ target_compile_features(bs
         cxx_std_20
 )
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Tests
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 enable_testing()
 
 add_executable(
@@ -111,10 +118,9 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-
-# ---------------------------------------------------------------------------
-# Command-line parser / report exporter
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Command - line parser / report exporter
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 add_executable(
     bs_cli
@@ -142,16 +148,15 @@ add_test(
         --out ${CMAKE_CURRENT_BINARY_DIR}/cli_avc.html
 )
 
-
-# ---------------------------------------------------------------------------
-# C public API (stable ABI → compiled STATIC / SHARED library)
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#C public API(stable ABI → compiled STATIC / SHARED library)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
-# The C++20 core stays header-only; this single translation unit is the only
-# thing that gets compiled, giving C / older-toolchain / FFI consumers a
-# stable, versionable ABI they can link against.
+#The C++ 20 core stays header - only; this single translation unit is the only
+#thing that gets compiled, giving C / older - toolchain / FFI consumers a
+#stable, versionable ABI they can link against.
 #
-#   cmake -DBS_CAPI_SHARED=ON ..   → build a shared library
+#cmake - DBS_CAPI_SHARED = ON..   → build a shared library
 
 option(BS_CAPI_SHARED
     "Build the C API as a shared library (default: static)"
@@ -193,8 +198,8 @@ install(
     RUNTIME DESTINATION bin
 )
 
-# C-API headers are always installed: the umbrella selects them for any
-# non-C++20 (or C) consumer, and they back the bs_capi library.
+#C - API headers are always installed : the umbrella selects them for any
+#non - C++ 20(or C) consumer, and they back the bs_capi library.
 install(
     FILES bsparser.h
     DESTINATION include
@@ -205,9 +210,9 @@ install(
     DESTINATION include
 )
 
-# The C++20 template headers are only shipped when the building compiler
-# supports C++20.  A pre-C++20 (or C) consumer cannot use them header-only,
-# so installing them would be misleading; the C-API library covers that case.
+#The C++ 20 template headers are only shipped when the building compiler
+#supports C++ 20. A pre - C++ 20(or C) consumer cannot use them header - only,
+#so installing them would be misleading; the C - API library covers that case.
 if(BS_CXX20_SUPPORTED)
     install(
         FILES bsparser.hpp
@@ -221,10 +226,9 @@ if(BS_CXX20_SUPPORTED)
     )
 endif()
 
-
-# ---------------------------------------------------------------------------
-# C API test (compiled as C, linked against the C++ runtime)
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#C API test(compiled as C, linked against the C++ runtime)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 add_executable(
     bs_capi_test
@@ -237,8 +241,8 @@ target_link_libraries(
         bs_capi
 )
 
-# The only translation unit is C, but it links a C++ static lib, so link
-# with the C++ driver to pull in the C++ runtime.
+#The only translation unit is C, but it links a C++ static lib, so link
+#with the C++ driver to pull in the C++ runtime.
 set_target_properties(
     bs_capi_test
     PROPERTIES
@@ -270,10 +274,9 @@ add_test(
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
 )
 
-
-# ---------------------------------------------------------------------------
-# AVC / H.264 parser demo
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#AVC / H.264 parser demo
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 add_executable(
     bs_avc_test
@@ -336,14 +339,13 @@ add_test(
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/hevc_hdr10.txt
 )
 
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Additional codecs : VVC / AV1 / VP9 / VP8
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-# ---------------------------------------------------------------------------
-# Additional codecs: VVC / AV1 / VP9 / VP8
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Additional codecs: VVC / AV1 / VP9 / VP8
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Additional codecs : VVC / AV1 / VP9 / VP8
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 set(BS_NEW_CODEC_TESTS
     Vvc  vvc_sample.266
@@ -355,7 +357,8 @@ set(BS_NEW_CODEC_TESTS
 list(LENGTH BS_NEW_CODEC_TESTS BS_NEW_CODEC_TEST_COUNT)
 math(EXPR BS_NEW_CODEC_TEST_MAX "${BS_NEW_CODEC_TEST_COUNT} - 1")
 
-foreach(idx RANGE 0 ${BS_NEW_CODEC_TEST_MAX} 2)
+foreach(idx RANGE 0 ${
+    BS_NEW_CODEC_TEST_MAX} 2)
 
     list(GET BS_NEW_CODEC_TESTS ${idx} codec)
     math(EXPR nxt "${idx} + 1")
@@ -382,10 +385,9 @@ foreach(idx RANGE 0 ${BS_NEW_CODEC_TEST_MAX} 2)
 
 endforeach()
 
-
-# ---------------------------------------------------------------------------
-# Container demux tests (muxed samples -> elementary stream)
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Container demux tests(muxed samples->elementary stream)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 add_executable(
     bs_demux_test
@@ -430,29 +432,28 @@ foreach(pair IN ITEMS
 
 endforeach()
 
-
-# ---------------------------------------------------------------------------
-# Fuzzing
-# ---------------------------------------------------------------------------
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Fuzzing
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
-# bs_fuzz            libFuzzer target.  Clang only (GCC does not ship
-#                    the -fsanitize=fuzzer runtime).
+#bs_fuzz libFuzzer target.Clang only(GCC does not ship
+#the - fsanitize = fuzzer runtime).
 #
-# bs_fuzz_driver     Standalone file-based runner over the same
-#                    LLVMFuzzerTestOneInput harness.  Builds with any
-#                    compiler (GCC, Clang, MSVC) and is the vehicle for
-#                    ASan/UBSan fuzzing on GCC.
+#bs_fuzz_driver Standalone file - based runner over the same
+#LLVMFuzzerTestOneInput harness.Builds with any
+#compiler(GCC, Clang, MSVC) and is the vehicle for
+#ASan / UBSan fuzzing on GCC.
 #
-# Usage:
+#Usage:
 #
-#     # libFuzzer (Clang)
-#     cmake -B build-fuzz -DCMAKE_CXX_COMPILER=clang++
-#     cmake --build build-fuzz --target bs_fuzz
-#     ./build-fuzz/bs_fuzz tests/fuzz/corpus -max_len=8192
+# #libFuzzer(Clang)
+#cmake - B build - fuzz - DCMAKE_CXX_COMPILER = clang++
+#cmake-- build build - fuzz-- target bs_fuzz
+#./ build - fuzz / bs_fuzz tests / fuzz / corpus - max_len = 8192
 #
-#     # Standalone driver (GCC or Clang)
-#     cmake --build build --target bs_fuzz_driver
-#     ./build/bs_fuzz_driver tests/fuzz/corpus/*.hevc
+# #Standalone driver(GCC or Clang)
+#cmake-- build build-- target bs_fuzz_driver
+#./ build / bs_fuzz_driver tests / fuzz / corpus/*.hevc
 #
 option(BS_ENABLE_FUZZING
     "Build fuzz harnesses"

@@ -489,7 +489,8 @@ inline Report build_report(
             std::string summary = "Slice (" + name + ")";
             std::vector<std::pair<std::string, std::string>> fields;
             try {
-                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                /* RbspReader: no per-slice logical-map build over the payload */
+                RbspReader reader(nal.payload_bytes());
                 auto sh =
                     parse_slice_segment_header(reader, {}, {}, nal.nal_type(), nal.temporal_id());
                 static const char* st[] = {"B", "P", "I"};
@@ -613,7 +614,7 @@ inline Report build_report(
             std::string summary = "Slice (" + name + ")";
             std::vector<std::pair<std::string, std::string>> fields;
             try {
-                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                RbspReader reader(nal.payload_bytes());
                 auto sh =
                     avc::parse_slice_header(reader, {}, {}, nal.type(), nal.header.nal_ref_idc);
                 static const char* st[] = {"P", "B", "I", "SP", "SI"};
