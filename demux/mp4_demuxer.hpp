@@ -1,5 +1,6 @@
 #pragma once
 
+#include "es_reconstruct.hpp"
 #include "stream.hpp"
 
 #include <cstdint>
@@ -160,13 +161,18 @@ inline VideoEntry parse_stsd(std::span<const std::uint8_t> d, std::size_t stsd_p
             }
 
             /*
-             * Codec-config box follows the 78-byte visual sample
-             * entry header.
+             * Locate the codec-config box (avcC/hvcC/vvcC/av1C).
+             * Its offset within the sample entry varies between
+             * muxers, so scan for the fourcc.
              */
-            if (p + 78 + 8 <= entry.end) {
-                Box cfg = box_at(d, p + 78);
-                e.config_offset = cfg.data;
-                e.config_size = cfg.end - cfg.data;
+            for (std::size_t q = p + 8; q + 8 <= entry.end; ++q) {
+                if (is_fourcc(d, q + 4, "hvcC") || is_fourcc(d, q + 4, "avcC") ||
+                    is_fourcc(d, q + 4, "vvcC") || is_fourcc(d, q + 4, "av1C")) {
+                    Box cfg = box_at(d, q);
+                    e.config_offset = cfg.data;
+                    e.config_size = cfg.end - cfg.data;
+                    break;
+                }
             }
 
             return e;
@@ -185,6 +191,28 @@ struct SampleTable {
     std::vector<std::uint32_t> stsc_count;
     std::uint32_t length_size = 4;
 };
+
+/*
+ * Some muxers write a config length size that disagrees with the
+ * actual sample framing. Fall back to 4 bytes when implausible.
+ */
+inline std::uint32_t effective_length_size(
+    const std::vector<std::vector<std::uint8_t>>& samples, std::uint32_t configured
+) {
+    if (samples.empty() || samples.front().size() <= configured) {
+        return 4;
+    }
+
+    const auto& s0 = samples.front();
+
+    std::uint32_t first_len = 0;
+
+    for (std::uint32_t i = 0; i < configured; ++i) {
+        first_len = (first_len << 8) | s0[i];
+    }
+
+    return (first_len == 0 || first_len > s0.size()) ? 4 : configured;
+}
 
 inline std::uint32_t samples_per_chunk(const SampleTable& t, std::uint32_t chunk /* 1-based */) {
     std::uint32_t count = 1;
@@ -477,6 +505,7 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
 
         out.codec = Codec::Avc;
         out.framing = NalFramingMode::AnnexB;
+        t.length_size = detail::effective_length_size(samples, t.length_size);
         detail::emit_annex_b(out, samples, t.length_size, param_sets);
         out.ok = true;
         return out;
@@ -495,52 +524,17 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
             t.length_size = static_cast<std::uint32_t>(data[entry.config_offset + lso] & 3u) + 1u;
         }
 
-        /* numOfArrays: hvcC byte 19, vvcC after sub-profiles. */
-        std::size_t p;
-        if (is_hvc) {
-            p = entry.config_offset + 19;
-        } else {
-            std::size_t q = entry.config_offset + 15;
-            if (entry.config_size > 15) {
-                const std::uint8_t nsub = (data[entry.config_offset + 15] >> 3) & 0x1Fu;
-                q += 4u * (static_cast<std::size_t>(nsub) + 1u);
-            }
-            p = q;
-        }
-
-        if (p < data.size()) {
-            const std::uint8_t num_arrays = data[p++];
-
-            for (std::uint8_t i = 0; i < num_arrays && p + 3 <= data.size(); ++i) {
-                ++p; /* array_completeness + NAL unit type */
-
-                const std::uint16_t num_nalus =
-                    static_cast<std::uint16_t>((data[p] << 8) | data[p + 1]);
-
-                p += 2;
-
-                for (std::uint16_t j = 0; j < num_nalus && p + 2 <= data.size(); ++j) {
-                    const std::uint16_t len =
-                        static_cast<std::uint16_t>((data[p] << 8) | data[p + 1]);
-
-                    p += 2;
-
-                    if (p + len > data.size()) {
-                        break;
-                    }
-
-                    param_sets.push_back(0x00);
-                    param_sets.push_back(0x00);
-                    param_sets.push_back(0x01);
-                    param_sets.insert(param_sets.end(), data.begin() + p, data.begin() + p + len);
-                    p += len;
-                }
-            }
-        }
+        t.length_size = detail::effective_length_size(samples, t.length_size);
 
         out.codec = is_hvc ? Codec::Hevc : Codec::Vvc;
         out.framing = NalFramingMode::AnnexB;
-        detail::emit_annex_b(out, samples, t.length_size, param_sets);
+
+        es::prepend_param_sets(out, data.subspan(entry.config_offset, entry.config_size), true);
+
+        for (const auto& sample : samples) {
+            es::emit_length_prefixed(out, sample, t.length_size);
+        }
+
         out.ok = true;
         return out;
     }

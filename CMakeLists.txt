@@ -411,6 +411,10 @@ foreach(pair IN ITEMS
     "hevc.mkv hevc"
     "h264.mkv avc"
     "av1.mkv av1"
+    "multi.mkv hevc"
+    "multi.mp4 hevc"
+    "multi.ts avc"
+    "multi.flv avc"
 )
 
     string(REPLACE " " ";" parts "${pair}")

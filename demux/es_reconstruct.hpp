@@ -24,6 +24,69 @@ inline void annex_b_nal(ElementaryStream& out, std::span<const std::uint8_t> nal
 }
 
 /*
+ * Attempt to parse hvcC/vvcC NAL arrays starting at
+ * `num_arrays_offset`. On success the parameter sets are emitted
+ * and true is returned; on failure the output is rolled back.
+ */
+inline bool try_prepend_hvc_arrays(
+    ElementaryStream& out, std::span<const std::uint8_t> cfg, std::size_t num_arrays_offset
+) {
+    if (num_arrays_offset >= cfg.size()) {
+        return false;
+    }
+
+    std::size_t p = num_arrays_offset;
+
+    const std::uint8_t num_arrays = cfg[p++];
+
+    if (num_arrays == 0 || num_arrays > 32) {
+        return false;
+    }
+
+    const std::size_t saved = out.bytes.size();
+
+    for (std::uint8_t a = 0; a < num_arrays; ++a) {
+        if (p + 3 > cfg.size()) {
+            out.bytes.resize(saved);
+            return false;
+        }
+
+        ++p; /* array_completeness + NAL unit type */
+
+        const std::uint16_t num_nalus = static_cast<std::uint16_t>((cfg[p] << 8) | cfg[p + 1]);
+
+        p += 2;
+
+        if (num_nalus > 64) {
+            out.bytes.resize(saved);
+            return false;
+        }
+
+        for (std::uint16_t i = 0; i < num_nalus; ++i) {
+            if (p + 2 > cfg.size()) {
+                out.bytes.resize(saved);
+                return false;
+            }
+
+            const std::uint16_t len = static_cast<std::uint16_t>((cfg[p] << 8) | cfg[p + 1]);
+
+            p += 2;
+
+            if (p + len > cfg.size()) {
+                out.bytes.resize(saved);
+                return false;
+            }
+
+            annex_b_nal(out, cfg.subspan(p, len));
+
+            p += len;
+        }
+    }
+
+    return true;
+}
+
+/*
  * Prepend the parameter-set NALs from avcC / hvcC / vvcC.
  */
 inline void prepend_param_sets(
@@ -34,33 +97,13 @@ inline void prepend_param_sets(
     }
 
     if (is_hvc_or_vvc) {
-        std::size_t p = 19;
-
-        if (cfg.size() <= p) {
-            return;
-        }
-
-        const std::uint8_t num_arrays = cfg[p++];
-
-        for (std::uint8_t a = 0; a < num_arrays && p + 3 <= cfg.size(); ++a) {
-            ++p;
-
-            const std::uint16_t num_nalus = static_cast<std::uint16_t>((cfg[p] << 8) | cfg[p + 1]);
-
-            p += 2;
-
-            for (std::uint16_t i = 0; i < num_nalus && p + 2 <= cfg.size(); ++i) {
-                const std::uint16_t len = static_cast<std::uint16_t>((cfg[p] << 8) | cfg[p + 1]);
-
-                p += 2;
-
-                if (p + len > cfg.size()) {
-                    return;
-                }
-
-                annex_b_nal(out, cfg.subspan(p, len));
-
-                p += len;
+        /*
+         * The numOfArrays field position varies between muxers
+         * (and hvcC vs vvcC), so probe a small window.
+         */
+        for (std::size_t off = 19; off <= 23; ++off) {
+            if (try_prepend_hvc_arrays(out, cfg, off)) {
+                return;
             }
         }
 
