@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 /*
  * ===========================================================================
@@ -561,14 +561,111 @@ inline Report build_report(
                     try {
                         auto nal = vvc::parse_nal_unit(span);
                         const std::string name = detail::vvc_type_name(nal.type());
+                        std::string summary = name;
+                        std::vector<std::pair<std::string, std::string>> fields;
+
+                        if (nal.is_vcl()) {
+                            try {
+                                RbspReader r(nal.payload_bytes());
+                                auto sh = vvc::parse_slice_header(r);
+                                static const char* st[] = {"B", "P", "I"};
+                                const char* stn = static_cast<unsigned>(sh.slice_type) <= 2u
+                                                      ? st[static_cast<unsigned>(sh.slice_type)]
+                                                      : "?";
+                                summary = "Slice pps=" + std::to_string(sh.pps_id) + " type=" + stn;
+                                fields = {
+                                    {"pps_id", std::to_string(sh.pps_id)},
+                                    {"slice_type", stn},
+                                };
+                            } catch (...) {
+                                summary = "Slice (unparsable)";
+                            }
+                        } else {
+                            try {
+                                RbspReader r(nal.payload_bytes());
+                                switch (nal.type()) {
+                                    case vvc::NalUnitType::VpsNut: {
+                                        auto vps = vvc::parse_vps(r);
+                                        summary = "VPS id=" + std::to_string(vps.vps_id);
+                                        fields = {
+                                            {"vps_id", std::to_string(vps.vps_id)},
+                                            {"max_layers",
+                                             std::to_string(vps.max_layers_minus1 + 1)},
+                                            {"max_sublayers",
+                                             std::to_string(vps.max_sublayers_minus1 + 1)},
+                                            {"num_ptls", std::to_string(vps.num_ptls_minus1 + 1)},
+                                        };
+                                        break;
+                                    }
+                                    case vvc::NalUnitType::SpsNut: {
+                                        auto sps = vvc::parse_sps(r);
+                                        summary = "SPS id=" + std::to_string(sps.sps_id);
+                                        fields = {
+                                            {"sps_id", std::to_string(sps.sps_id)},
+                                            {"vps_id", std::to_string(sps.vps_id)},
+                                            {"max_sublayers",
+                                             std::to_string(sps.max_sublayers_minus1 + 1)},
+                                            {"chroma_format",
+                                             std::to_string(sps.chroma_format_idc)},
+                                            {"log2_ctu_size",
+                                             std::to_string(sps.log2_ctu_size_minus5 + 5)},
+                                        };
+                                        break;
+                                    }
+                                    case vvc::NalUnitType::PpsNut: {
+                                        auto pps = vvc::parse_pps(r);
+                                        summary = "PPS id=" + std::to_string(pps.pps_id) + " " +
+                                                  std::to_string(pps.pic_width_in_luma_samples) +
+                                                  "x" +
+                                                  std::to_string(pps.pic_height_in_luma_samples);
+                                        fields = {
+                                            {"pps_id", std::to_string(pps.pps_id)},
+                                            {"sps_id", std::to_string(pps.sps_id)},
+                                            {"width",
+                                             std::to_string(pps.pic_width_in_luma_samples)},
+                                            {"height",
+                                             std::to_string(pps.pic_height_in_luma_samples)},
+                                        };
+                                        break;
+                                    }
+                                    case vvc::NalUnitType::PhNut: {
+                                        auto ph = vvc::parse_ph(r);
+                                        summary =
+                                            "Picture Header pps_id=" + std::to_string(ph.pps_id);
+                                        fields = {{"pps_id", std::to_string(ph.pps_id)}};
+                                        break;
+                                    }
+                                    case vvc::NalUnitType::DciNut: {
+                                        auto dci = vvc::parse_dci(r);
+                                        summary = "DCI sps=" + std::to_string(dci.num_sps + 1);
+                                        fields = {{"num_sps", std::to_string(dci.num_sps + 1)}};
+                                        break;
+                                    }
+                                    case vvc::NalUnitType::OpiNut: {
+                                        auto opi = vvc::parse_opi(r);
+                                        summary = "OPI";
+                                        fields = {
+                                            {"ols_info_present", opi.ols_info_present ? "1" : "0"},
+                                            {"ptl_present", opi.ptl_present ? "1" : "0"},
+                                        };
+                                        break;
+                                    }
+                                    default:
+                                        break;
+                                }
+                            } catch (...) {
+                                summary = name + " (unparsable)";
+                            }
+                        }
+
                         detail::add_entry(
                             name,
                             nal.nal_type(),
                             nal.is_vcl(),
                             nal.payload_bytes().data(),
                             nal.payload_bytes().size(),
-                            name,
-                            {}
+                            summary,
+                            std::move(fields)
                         );
                     } catch (...) {
                         detail::add_entry(
@@ -595,17 +692,99 @@ inline Report build_report(
                 try {
                     auto obu = av1::parse_obu(span);
                     const std::string name = detail::av1_type_name(obu.type());
+                    std::string summary = name;
+                    std::vector<std::pair<std::string, std::string>> fields;
+
+                    if (obu.type() == static_cast<std::uint8_t>(av1::ObuType::SequenceHeader)) {
+                        auto sh = av1::parse_sequence_header(obu.payload_bytes());
+                        summary = "Sequence Header profile=" + std::to_string(sh.seq_profile);
+                        fields = {
+                            {"seq_profile", std::to_string(sh.seq_profile)},
+                            {"still_picture", sh.still_picture ? "1" : "0"},
+                            {"reduced_still_picture_header",
+                             sh.reduced_still_picture_header ? "1" : "0"},
+                        };
+                        if (sh.dimensions_present) {
+                            fields.emplace_back(
+                                "max_frame_width", std::to_string(sh.max_frame_width)
+                            );
+                            fields.emplace_back(
+                                "max_frame_height", std::to_string(sh.max_frame_height)
+                            );
+                            summary += " " + std::to_string(sh.max_frame_width) + "x" +
+                                       std::to_string(sh.max_frame_height);
+                        }
+                    } else if (
+                        obu.type() == static_cast<std::uint8_t>(av1::ObuType::FrameHeader) ||
+                        obu.type() ==
+                            static_cast<std::uint8_t>(av1::ObuType::RedundantFrameHeader) ||
+                        obu.type() == static_cast<std::uint8_t>(av1::ObuType::Frame)
+                    ) {
+                        auto fh = av1::parse_frame_header(obu.payload_bytes());
+                        static const char* ft[] = {"KEY", "INTER", "INTRA_ONLY", "SWITCH"};
+                        const char* ftn = static_cast<unsigned>(fh.frame_type) <= 3u
+                                              ? ft[static_cast<unsigned>(fh.frame_type)]
+                                              : "?";
+                        summary = "Frame Header " + std::string(ftn);
+                        fields = {
+                            {"frame_type", ftn},
+                            {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"error_resilient_mode", fh.error_resilient_mode ? "1" : "0"},
+                            {"disable_cdf_update", fh.disable_cdf_update ? "1" : "0"},
+                            {"allow_screen_content_tools",
+                             fh.allow_screen_content_tools ? "1" : "0"},
+                        };
+                    }
+
                     detail::add_entry(
                         name,
                         obu.type(),
                         false,
                         obu.payload_bytes().data(),
                         obu.payload_bytes().size(),
-                        name,
-                        {}
+                        summary,
+                        std::move(fields)
                     );
                 } catch (...) {
                     detail::add_entry("bad", 0, false, span.data(), span.size(), "unparsable", {});
+                }
+                framer.next();
+                ++i;
+            }
+            report.parsed = i;
+
+        } else if (codec == Codec::Vp9) {
+            IvfFramer framer{data};
+            std::size_t i = 0;
+            while (framer.valid()) {
+                const auto frame = framer.frame();
+                try {
+                    auto fh = vp9::parse_frame_header(frame);
+                    const bool key = fh.frame_type == vp9::FrameType::KeyFrame;
+                    const std::string summary = std::string(key ? "Key" : "Inter") + " frame " +
+                                                std::to_string(fh.width) + "x" +
+                                                std::to_string(fh.height);
+                    detail::add_entry(
+                        "frame",
+                        0,
+                        false,
+                        frame.data(),
+                        frame.size(),
+                        summary,
+                        {
+                            {"frame_marker", std::to_string(fh.frame_marker)},
+                            {"profile", std::to_string(fh.profile)},
+                            {"frame_type", key ? "KEY" : "INTER"},
+                            {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"error_resilient_mode", fh.error_resilient_mode ? "1" : "0"},
+                            {"width", std::to_string(fh.width)},
+                            {"height", std::to_string(fh.height)},
+                        }
+                    );
+                } catch (...) {
+                    detail::add_entry(
+                        "frame", 0, false, frame.data(), frame.size(), "unparsable", {}
+                    );
                 }
                 framer.next();
                 ++i;
@@ -617,15 +796,32 @@ inline Report build_report(
             std::size_t i = 0;
             while (framer.valid()) {
                 const auto frame = framer.frame();
-                detail::add_entry(
-                    "frame",
-                    0,
-                    false,
-                    frame.data(),
-                    frame.size(),
-                    std::to_string(frame.size()) + " bytes",
-                    {}
-                );
+                try {
+                    auto fh = vp8::parse_frame_header(frame);
+                    const std::string summary = std::string(fh.key_frame ? "Key" : "Inter") +
+                                                " frame " + std::to_string(fh.width) + "x" +
+                                                std::to_string(fh.height);
+                    detail::add_entry(
+                        "frame",
+                        0,
+                        false,
+                        frame.data(),
+                        frame.size(),
+                        summary,
+                        {
+                            {"key_frame", fh.key_frame ? "1" : "0"},
+                            {"version", std::to_string(fh.version)},
+                            {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"first_part_size", std::to_string(fh.first_part_size)},
+                            {"width", std::to_string(fh.width)},
+                            {"height", std::to_string(fh.height)},
+                        }
+                    );
+                } catch (...) {
+                    detail::add_entry(
+                        "frame", 0, false, frame.data(), frame.size(), "unparsable", {}
+                    );
+                }
                 framer.next();
                 ++i;
             }
@@ -753,7 +949,7 @@ inline std::string to_html(const Report& report) {
     os << "<meta charset=\"utf-8\">\n";
     os << "<meta name=\"viewport\" "
           "content=\"width=device-width, initial-scale=1\">\n";
-    os << "<title>bsparser report — " << json_escape(report.codec) << "</title>\n";
+    os << "<title>bsparser report - " << json_escape(report.codec) << "</title>\n";
     os << "<style>\n";
     os << "body{font-family:system-ui,Segoe UI,Roboto,sans-serif;"
           "margin:0;background:#0f1115;color:#e6e6e6}\n";
@@ -783,13 +979,13 @@ inline std::string to_html(const Report& report) {
     os << "</head>\n";
     os << "<body>\n";
     os << "<header>\n";
-    os << "<h1>bsparser — " << json_escape(report.codec) << " bitstream report</h1>\n";
+    os << "<h1>bsparser - " << json_escape(report.codec) << " bitstream report</h1>\n";
     os << "<div class=\"meta\">framing: " << json_escape(report.framing)
        << " &middot; NAL units: " << report.entries.size() << " &middot; parsed: " << report.parsed
        << "</div>\n";
     os << "<div class=\"controls\">\n";
     os << "<input id=\"search\" type=\"text\" "
-          "placeholder=\"filter by type / summary…\" "
+          "placeholder=\"filter by type / summary...\" "
           "style=\"min-width:240px\">\n";
     os << "<select id=\"typeFilter\"><option value=\"\">"
           "All types</option></select>\n";
