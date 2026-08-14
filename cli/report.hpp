@@ -489,10 +489,43 @@ inline Report build_report(
             std::string summary = "Slice (" + name + ")";
             std::vector<std::pair<std::string, std::string>> fields;
             try {
-                /* RbspReader: no per-slice logical-map build over the payload */
-                RbspReader reader(nal.payload_bytes());
-                auto sh =
-                    parse_slice_segment_header(reader, {}, {}, nal.nal_type(), nal.temporal_id());
+                /*
+                 * Resolve the slice's PPS/SPS (read pps_id from the front
+                 * of the RBSP) so the header is parsed with the stream's
+                 * real parameter sets.  Parsing with empty sets uses the
+                 * wrong POC width and skips feature bits (SAO, temporal
+                 * MVP, weight tables, ...) which desyncs the header.
+                 */
+                const std::uint8_t nut = static_cast<std::uint8_t>(nal.nal_type());
+                auto parse_with = [&](const SequenceParameterSet& sps,
+                                      const PictureParameterSet& pps) {
+                    RbspReader reader(nal.payload_bytes());
+                    return parse_slice_segment_header(reader, sps, pps, nut, nal.temporal_id());
+                };
+
+                SliceSegmentHeader sh;
+                bool resolved = false;
+
+                if (detail::g_state) {
+                    if (auto* mgr = detail::g_state->hevc_sets()) {
+                        RbspReader r1(nal.payload_bytes());
+                        (void)r1.read_bit();
+                        if (is_irap_nal_unit(nut)) {
+                            (void)r1.read_bit();
+                        }
+                        const std::uint32_t pps_id = r1.read_ue();
+                        const auto sets = mgr->resolve_pps(static_cast<std::uint8_t>(pps_id));
+                        if (sets.pps != nullptr && sets.sps != nullptr) {
+                            sh = parse_with(*sets.sps, *sets.pps);
+                            resolved = true;
+                        }
+                    }
+                }
+
+                if (!resolved) {
+                    sh = parse_with({}, {});
+                }
+
                 static const char* st[] = {"B", "P", "I"};
                 const char* stn = static_cast<unsigned>(sh.slice_type) <= 2u
                                       ? st[static_cast<unsigned>(sh.slice_type)]
@@ -614,9 +647,40 @@ inline Report build_report(
             std::string summary = "Slice (" + name + ")";
             std::vector<std::pair<std::string, std::string>> fields;
             try {
-                RbspReader reader(nal.payload_bytes());
-                auto sh =
-                    avc::parse_slice_header(reader, {}, {}, nal.type(), nal.header.nal_ref_idc);
+                /*
+                 * Resolve the slice's SPS/PPS (read pps_id from the front
+                 * of the RBSP) so the header is parsed with the stream's
+                 * real parameter sets instead of empty ones.
+                 */
+                auto parse_with = [&](const avc::SequenceParameterSet& sps,
+                                      const avc::PictureParameterSet& pps) {
+                    RbspReader reader(nal.payload_bytes());
+                    return avc::parse_slice_header(
+                        reader, sps, pps, nal.type(), nal.header.nal_ref_idc
+                    );
+                };
+
+                avc::SliceHeader sh;
+                bool resolved = false;
+
+                if (detail::g_state) {
+                    if (auto* mgr = detail::g_state->avc_sets()) {
+                        RbspReader r1(nal.payload_bytes());
+                        (void)r1.read_ue();
+                        (void)r1.read_ue();
+                        const std::uint32_t pps_id = r1.read_ue();
+                        const auto sets = mgr->resolve(static_cast<std::uint8_t>(pps_id));
+                        if (sets.pps != nullptr && sets.sps != nullptr) {
+                            sh = parse_with(*sets.sps, *sets.pps);
+                            resolved = true;
+                        }
+                    }
+                }
+
+                if (!resolved) {
+                    sh = parse_with({}, {});
+                }
+
                 static const char* st[] = {"P", "B", "I", "SP", "SI"};
                 const char* stn = static_cast<unsigned>(sh.slice_type) <= 4u
                                       ? st[static_cast<unsigned>(sh.slice_type)]
