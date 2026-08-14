@@ -180,6 +180,42 @@ inline void emit_length_prefixed(
     }
 }
 
+/*
+ * True when `data` parses as a length-prefixed NAL stream that consumes
+ * the entire buffer (every length is valid and the last NAL ends exactly
+ * at the end).  Used to disambiguate a frame that starts with an Annex-B
+ * start code from a length-prefixed frame whose first length happens to
+ * be 1 (00 00 00 01).
+ */
+[[nodiscard]]
+inline bool fully_length_prefixed(std::span<const std::uint8_t> data, std::uint32_t length_size) {
+    if (data.size() < length_size) {
+        return false;
+    }
+
+    std::size_t pos = 0;
+    unsigned nals = 0;
+
+    while (pos + length_size <= data.size()) {
+        std::uint32_t nal_size = 0;
+
+        for (std::uint32_t i = 0; i < length_size; ++i) {
+            nal_size = (nal_size << 8) | data[pos + i];
+        }
+
+        pos += length_size;
+
+        if (nal_size == 0 || nal_size > data.size() - pos) {
+            return false;
+        }
+
+        pos += nal_size;
+        ++nals;
+    }
+
+    return nals > 0 && pos == data.size();
+}
+
 inline void append_ivf_header(
     ElementaryStream& out, const char* fourcc, std::uint32_t width, std::uint32_t height
 ) {

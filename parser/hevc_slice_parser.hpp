@@ -998,37 +998,6 @@ inline SliceSegmentHeader parse_slice_segment_header(
             header.slice_temporal_mvp_enabled_flag = read_flag(reader);
         }
 
-        BS_LOG_TRACE("BITPOS before SAO = " << reader.position() << '\n');
-
-        /*
-         * =======================================================
-         * Sample Adaptive Offset
-         * =======================================================
-         *
-         * H.265:
-         *s
-         * if( slice_sao_luma_flag )
-         * if( slice_sao_chroma_flag )
-         *
-         * These flags are present when SAO is enabled in the SPS.
-         */
-        if (sps.sample_adaptive_offset_enabled_flag) {
-            header.slice_sao_luma_flag = read_flag(reader);
-
-            if (sps.chroma_format != ChromaFormat::Monochrome) {
-                header.slice_sao_chroma_flag = read_flag(reader);
-            }
-        }
-
-        BS_LOG_TRACE("BITPOS after SAO = " << reader.position() << '\n');
-
-        BS_LOG_TRACE(
-            "DEBUG SAO\n"
-            << "  sao_enabled = " << sps.sample_adaptive_offset_enabled_flag << '\n'
-            << "  slice_sao_luma_flag = " << header.slice_sao_luma_flag << '\n'
-            << "  slice_sao_chroma_flag = " << header.slice_sao_chroma_flag << '\n'
-        );
-
         BS_LOG_TRACE(
             "DEBUG temporal MVP\n"
             << "  sps_temporal_mvp_enabled_flag = " << sps.sps_temporal_mvp_enabled_flag << '\n'
@@ -1036,6 +1005,31 @@ inline SliceSegmentHeader parse_slice_segment_header(
             << '\n'
         );
     }
+
+    /*
+     * =======================================================
+     * Sample Adaptive Offset
+     * =======================================================
+     *
+     * H.265 7.3.6.1: the SAO flags sit OUTSIDE the
+     * "nal_unit_type != IDR" block, so they are present for
+     * IDR pictures too.  Keeping them nested inside would
+     * desync the remainder of the header for IDR slices.
+     */
+    if (sps.sample_adaptive_offset_enabled_flag) {
+        header.slice_sao_luma_flag = read_flag(reader);
+
+        if (sps.chroma_format != ChromaFormat::Monochrome) {
+            header.slice_sao_chroma_flag = read_flag(reader);
+        }
+    }
+
+    BS_LOG_TRACE(
+        "DEBUG SAO\n"
+        << "  sao_enabled = " << sps.sample_adaptive_offset_enabled_flag << '\n'
+        << "  slice_sao_luma_flag = " << header.slice_sao_luma_flag << '\n'
+        << "  slice_sao_chroma_flag = " << header.slice_sao_chroma_flag << '\n'
+    );
 
     /*
      * =======================================================
