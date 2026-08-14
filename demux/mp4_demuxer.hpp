@@ -203,7 +203,7 @@ struct SampleTable {
  * actual sample framing. Fall back to 4 bytes when implausible.
  */
 inline std::uint32_t effective_length_size(
-    const std::vector<std::vector<std::uint8_t>>& samples, std::uint32_t configured
+    const std::vector<std::span<const std::uint8_t>>& samples, std::uint32_t configured
 ) {
     if (samples.empty() || samples.front().size() <= configured) {
         return 4;
@@ -238,7 +238,7 @@ inline std::uint32_t samples_per_chunk(const SampleTable& t, std::uint32_t chunk
  */
 inline void emit_annex_b(
     ElementaryStream& out,
-    const std::vector<std::vector<std::uint8_t>>& samples,
+    const std::vector<std::span<const std::uint8_t>>& samples,
     std::uint32_t length_size,
     const std::vector<std::uint8_t>& parameter_sets
 ) {
@@ -433,7 +433,7 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
     /*
      * Extract the samples.
      */
-    std::vector<std::vector<std::uint8_t>> samples;
+    std::vector<std::span<const std::uint8_t>> samples;
 
     std::uint32_t sample_index = 0;
 
@@ -453,10 +453,8 @@ inline ElementaryStream demux_mp4(std::span<const std::uint8_t> data) {
                 continue;
             }
 
-            samples.emplace_back(
-                data.begin() + static_cast<std::ptrdiff_t>(off),
-                data.begin() + static_cast<std::ptrdiff_t>(off + size)
-            );
+            /* reference the input buffer; no per-sample copy */
+            samples.push_back(data.subspan(static_cast<std::size_t>(off), size));
 
             off += size;
         }
