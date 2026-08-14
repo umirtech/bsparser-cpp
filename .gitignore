@@ -113,6 +113,7 @@ Desktop.ini
 # -----------------------------------------------------------------------------
 real_big.mkv
 
-
-tests/real/
+# Downloaded real-world test samples (track the manifest, not the media)
+tests/real/*
 !tests/real/manifest.json
+
