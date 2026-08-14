@@ -212,6 +212,116 @@ inline std::string av1_type_name(unsigned type) noexcept {
     }
 }
 
+/*
+ * Full field dumps for the parsed parameter-set structs.
+ */
+inline std::vector<std::pair<std::string, std::string>> hevc_vps_fields(
+    const VideoParameterSet& v
+) {
+    return {
+        {"vps_id", std::to_string(v.vps_video_parameter_set_id)},
+        {"max_layers", std::to_string(v.max_layers())},
+        {"max_sub_layers", std::to_string(v.max_sub_layers())},
+        {"max_layer_id", std::to_string(v.vps_max_layer_id)},
+        {"num_layer_sets", std::to_string(v.vps_num_layer_sets_minus1 + 1)},
+    };
+}
+
+inline std::vector<std::pair<std::string, std::string>> hevc_sps_fields(
+    const SequenceParameterSet& s
+) {
+    return {
+        {"sps_id", std::to_string(s.sps_seq_parameter_set_id)},
+        {"vps_id", std::to_string(s.sps_video_parameter_set_id)},
+        {"max_sub_layers", std::to_string(s.sps_max_sub_layers_minus1 + 1)},
+        {"temporal_id_nesting", s.sps_temporal_id_nesting_flag ? "1" : "0"},
+        {"profile_idc", std::to_string(s.profile_tier_level.general_profile_idc)},
+        {"tier", s.profile_tier_level.general_tier_flag ? "1" : "0"},
+        {"level_idc", std::to_string(s.profile_tier_level.general_level_idc)},
+        {"width", std::to_string(s.pic_width_in_luma_samples)},
+        {"height", std::to_string(s.pic_height_in_luma_samples)},
+        {"chroma_format", std::to_string(static_cast<unsigned>(s.chroma_format))},
+        {"bit_depth_luma", std::to_string(s.bit_depth_luma_minus8 + 8)},
+        {"bit_depth_chroma", std::to_string(s.bit_depth_chroma_minus8 + 8)},
+        {"log2_max_poc_lsb", std::to_string(s.log2_max_pic_order_cnt_lsb_minus4 + 4)},
+        {"min_cb_size", std::to_string(s.coding_blocks.min_luma_coding_block_size())},
+        {"max_cb_size", std::to_string(s.coding_blocks.max_luma_coding_block_size())},
+        {"min_tb_size", std::to_string(s.coding_blocks.min_luma_transform_block_size())},
+        {"max_tb_size", std::to_string(s.coding_blocks.max_luma_transform_block_size())},
+        {"max_transform_hierarchy_inter",
+         std::to_string(s.coding_blocks.max_transform_hierarchy_depth_inter)},
+        {"max_transform_hierarchy_intra",
+         std::to_string(s.coding_blocks.max_transform_hierarchy_depth_intra)},
+        {"num_short_term_rps",
+         std::to_string(s.reference_picture_sets.num_short_term_ref_pic_sets)},
+        {"long_term_refs_present",
+         s.reference_picture_sets.long_term_ref_pics_present_flag ? "1" : "0"},
+        {"num_long_term_refs", std::to_string(s.reference_picture_sets.num_long_term_ref_pics_sps)},
+    };
+}
+
+inline std::vector<std::pair<std::string, std::string>> hevc_pps_fields(
+    const PictureParameterSet& p
+) {
+    return {
+        {"pps_id", std::to_string(p.pps_pic_parameter_set_id)},
+        {"sps_id", std::to_string(p.pps_seq_parameter_set_id)},
+        {"dependent_slice_segments", p.dependent_slice_segments_enabled_flag ? "1" : "0"},
+        {"output_flag_present", p.output_flag_present_flag ? "1" : "0"},
+        {"num_extra_slice_header_bits", std::to_string(p.num_extra_slice_header_bits)},
+        {"sign_data_hiding", p.sign_data_hiding_enabled_flag ? "1" : "0"},
+        {"cabac_init_present", p.cabac_init_present_flag ? "1" : "0"},
+        {"num_ref_idx_l0_default", std::to_string(p.num_ref_idx_l0_default_active_minus1 + 1)},
+        {"num_ref_idx_l1_default", std::to_string(p.num_ref_idx_l1_default_active_minus1 + 1)},
+        {"init_qp_minus26", std::to_string(p.init_qp_minus26)},
+        {"constrained_intra_pred", p.constrained_intra_pred_flag ? "1" : "0"},
+        {"transform_skip_enabled", p.transform_skip_enabled_flag ? "1" : "0"},
+        {"cu_qp_delta_enabled", p.cu_qp_delta_enabled_flag ? "1" : "0"},
+        {"cb_qp_offset", std::to_string(p.pps_cb_qp_offset)},
+        {"cr_qp_offset", std::to_string(p.pps_cr_qp_offset)},
+        {"deblocking_filter_control",
+         p.deblocking.deblocking_filter_control_present_flag ? "1" : "0"},
+        {"tiles_enabled", p.tiles.tiles_enabled_flag ? "1" : "0"},
+        {"loop_filter_across_tiles", p.tiles.loop_filter_across_tiles_enabled_flag ? "1" : "0"},
+    };
+}
+
+inline std::vector<std::pair<std::string, std::string>> avc_sps_fields(
+    const avc::SequenceParameterSet& s
+) {
+    return {
+        {"sps_id", std::to_string(s.seq_parameter_set_id)},
+        {"profile_idc", std::to_string(s.profile_idc)},
+        {"level_idc", std::to_string(s.level_idc)},
+        {"chroma_format_idc", std::to_string(s.chroma_format_idc)},
+        {"bit_depth_luma", std::to_string(s.bit_depth_luma_minus8 + 8)},
+        {"bit_depth_chroma", std::to_string(s.bit_depth_chroma_minus8 + 8)},
+        {"max_num_ref_frames", std::to_string(s.max_num_ref_frames)},
+        {"pic_order_cnt_type", std::to_string(s.pic_order_cnt_type)},
+        {"width", std::to_string(s.pic_width_in_luma_samples())},
+        {"height", std::to_string(s.pic_height_in_luma_samples())},
+        {"frame_mbs_only", s.frame_mbs_only_flag ? "1" : "0"},
+        {"direct_8x8_inference", s.direct_8x8_inference_flag ? "1" : "0"},
+    };
+}
+
+inline std::vector<std::pair<std::string, std::string>> avc_pps_fields(
+    const avc::PictureParameterSet& p
+) {
+    return {
+        {"pps_id", std::to_string(p.pic_parameter_set_id)},
+        {"sps_id", std::to_string(p.seq_parameter_set_id)},
+        {"entropy_coding_mode", p.entropy_coding_mode_flag ? "1" : "0"},
+        {"num_ref_idx_l0_default", std::to_string(p.num_ref_idx_l0_default_active_minus1 + 1)},
+        {"num_ref_idx_l1_default", std::to_string(p.num_ref_idx_l1_default_active_minus1 + 1)},
+        {"weighted_pred", p.weighted_pred_flag ? "1" : "0"},
+        {"weighted_bipred_idc", std::to_string(p.weighted_bipred_idc)},
+        {"pic_init_qp_minus26", std::to_string(p.pic_init_qp_minus26)},
+        {"deblocking_filter_control", p.deblocking_filter_control_present_flag ? "1" : "0"},
+        {"redundant_pic_cnt_present", p.redundant_pic_cnt_present_flag ? "1" : "0"},
+    };
+}
+
 inline void add_entry(
     std::string type,
     unsigned type_id,
@@ -268,11 +378,7 @@ inline Report build_report(
             try {
                 RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
                 auto vps = parse_video_parameter_set(reader);
-                fields.emplace_back(
-                    "vps_id", std::to_string(static_cast<unsigned>(vps.vps_video_parameter_set_id))
-                );
-                fields.emplace_back("max_layers", std::to_string(vps.max_layers()));
-                fields.emplace_back("max_sub_layers", std::to_string(vps.max_sub_layers()));
+                fields = detail::hevc_vps_fields(vps);
                 summary = "VPS id=" +
                           std::to_string(static_cast<unsigned>(vps.vps_video_parameter_set_id));
             } catch (...) {
@@ -295,20 +401,7 @@ inline Report build_report(
             try {
                 RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
                 auto sps = parse_sequence_parameter_set(reader);
-                fields.emplace_back(
-                    "sps_id", std::to_string(static_cast<unsigned>(sps.sps_seq_parameter_set_id))
-                );
-                fields.emplace_back(
-                    "vps_id", std::to_string(static_cast<unsigned>(sps.sps_video_parameter_set_id))
-                );
-                fields.emplace_back("width", std::to_string(sps.pic_width_in_luma_samples));
-                fields.emplace_back("height", std::to_string(sps.pic_height_in_luma_samples));
-                fields.emplace_back(
-                    "chroma_format", std::to_string(static_cast<unsigned>(sps.chroma_format))
-                );
-                fields.emplace_back(
-                    "luma_bit_depth", std::to_string(static_cast<unsigned>(sps.luma_bit_depth()))
-                );
+                fields = detail::hevc_sps_fields(sps);
                 summary = std::to_string(sps.pic_width_in_luma_samples) + "x" +
                           std::to_string(sps.pic_height_in_luma_samples) +
                           " chroma=" + std::to_string(static_cast<unsigned>(sps.chroma_format));
@@ -332,12 +425,7 @@ inline Report build_report(
             try {
                 RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
                 auto pps = parse_picture_parameter_set(reader);
-                fields.emplace_back(
-                    "pps_id", std::to_string(static_cast<unsigned>(pps.pps_pic_parameter_set_id))
-                );
-                fields.emplace_back(
-                    "sps_id", std::to_string(static_cast<unsigned>(pps.pps_seq_parameter_set_id))
-                );
+                fields = detail::hevc_pps_fields(pps);
                 summary =
                     "PPS id=" + std::to_string(static_cast<unsigned>(pps.pps_pic_parameter_set_id));
             } catch (...) {
@@ -398,14 +486,39 @@ inline Report build_report(
 
         handlers.slice = [](const NalUnit& nal) {
             const std::string name = detail::hevc_type_name(nal.type());
+            std::string summary = "Slice (" + name + ")";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto sh =
+                    parse_slice_segment_header(reader, {}, {}, nal.nal_type(), nal.temporal_id());
+                static const char* st[] = {"B", "P", "I"};
+                const char* stn = static_cast<unsigned>(sh.slice_type) <= 2u
+                                      ? st[static_cast<unsigned>(sh.slice_type)]
+                                      : "?";
+                summary = "Slice " + std::string(stn) +
+                          " pps=" + std::to_string(sh.slice_pic_parameter_set_id);
+                fields = {
+                    {"slice_type", stn},
+                    {"pps_id", std::to_string(sh.slice_pic_parameter_set_id)},
+                    {"first_slice", sh.first_slice_segment_in_pic_flag ? "1" : "0"},
+                    {"dependent_slice", sh.dependent_slice_segment_flag ? "1" : "0"},
+                    {"slice_qp_delta", std::to_string(sh.slice_qp_delta)},
+                    {"poc_lsb", std::to_string(sh.slice_pic_order_cnt_lsb)},
+                    {"sao_luma", sh.slice_sao_luma_flag ? "1" : "0"},
+                    {"sao_chroma", sh.slice_sao_chroma_flag ? "1" : "0"},
+                };
+            } catch (...) {
+                summary = "Slice (" + name + ")";
+            }
             detail::add_entry(
                 name,
                 static_cast<unsigned>(nal.type()),
                 true,
                 nal.payload_bytes().data(),
                 nal.payload_bytes().size(),
-                "Slice (" + name + ")",
-                {}
+                summary,
+                std::move(fields)
             );
         };
 
@@ -433,21 +546,7 @@ inline Report build_report(
             try {
                 RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
                 auto sps = avc::parse_sequence_parameter_set(reader);
-                fields.emplace_back(
-                    "sps_id", std::to_string(static_cast<unsigned>(sps.seq_parameter_set_id))
-                );
-                fields.emplace_back(
-                    "profile_idc", std::to_string(static_cast<unsigned>(sps.profile_idc))
-                );
-                fields.emplace_back(
-                    "level_idc", std::to_string(static_cast<unsigned>(sps.level_idc))
-                );
-                fields.emplace_back("width", std::to_string(sps.pic_width_in_luma_samples()));
-                fields.emplace_back("height", std::to_string(sps.pic_height_in_luma_samples()));
-                fields.emplace_back(
-                    "chroma_format_idc",
-                    std::to_string(static_cast<unsigned>(sps.chroma_format_idc))
-                );
+                fields = detail::avc_sps_fields(sps);
                 summary = std::to_string(sps.pic_width_in_luma_samples()) + "x" +
                           std::to_string(sps.pic_height_in_luma_samples()) +
                           " profile=" + std::to_string(static_cast<unsigned>(sps.profile_idc));
@@ -471,12 +570,7 @@ inline Report build_report(
             try {
                 RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
                 auto pps = avc::parse_picture_parameter_set(reader);
-                fields.emplace_back(
-                    "pps_id", std::to_string(static_cast<unsigned>(pps.pic_parameter_set_id))
-                );
-                fields.emplace_back(
-                    "sps_id", std::to_string(static_cast<unsigned>(pps.seq_parameter_set_id))
-                );
+                fields = detail::avc_pps_fields(pps);
                 summary =
                     "PPS id=" + std::to_string(static_cast<unsigned>(pps.pic_parameter_set_id));
             } catch (...) {
@@ -516,14 +610,38 @@ inline Report build_report(
 
         handlers.slice = [](const avc::NalUnit& nal) {
             const std::string name = detail::avc_type_name(nal.type());
+            std::string summary = "Slice (" + name + ")";
+            std::vector<std::pair<std::string, std::string>> fields;
+            try {
+                RbspBitstreamReader reader(detail::to_byte_span(nal.payload_bytes()));
+                auto sh =
+                    avc::parse_slice_header(reader, {}, {}, nal.type(), nal.header.nal_ref_idc);
+                static const char* st[] = {"P", "B", "I", "SP", "SI"};
+                const char* stn = static_cast<unsigned>(sh.slice_type) <= 4u
+                                      ? st[static_cast<unsigned>(sh.slice_type)]
+                                      : "?";
+                summary =
+                    "Slice " + std::string(stn) + " pps=" + std::to_string(sh.pic_parameter_set_id);
+                fields = {
+                    {"slice_type", stn},
+                    {"pps_id", std::to_string(sh.pic_parameter_set_id)},
+                    {"first_mb", std::to_string(sh.first_mb_in_slice)},
+                    {"frame_num", std::to_string(sh.frame_num)},
+                    {"idr_pic_id", std::to_string(sh.idr_pic_id)},
+                    {"pic_order_cnt_lsb", std::to_string(sh.pic_order_cnt_lsb)},
+                    {"slice_qp_delta", std::to_string(sh.slice_qp_delta)},
+                };
+            } catch (...) {
+                summary = "Slice (" + name + ")";
+            }
             detail::add_entry(
                 name,
                 static_cast<unsigned>(nal.type()),
                 true,
                 nal.payload_bytes().data(),
                 nal.payload_bytes().size(),
-                "Slice (" + name + ")",
-                {}
+                summary,
+                std::move(fields)
             );
         };
 
