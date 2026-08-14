@@ -102,27 +102,29 @@ class ObuFramer {
     }
 
     void locate_next_annex_b() {
-        const std::size_t start = find_start_code(data_, current_);
+        for (;;) {
+            const std::size_t start = find_start_code(data_, current_);
 
-        if (start == data_.size()) {
-            finished_ = true;
-            return;
-        }
+            if (start == data_.size()) {
+                finished_ = true;
+                return;
+            }
 
-        const std::size_t begin = start + 3;
+            const std::size_t begin = start + 3;
 
-        const std::size_t next = find_start_code(data_, begin);
+            const std::size_t next = find_start_code(data_, begin);
 
-        if (begin >= next) {
+            if (begin >= next) {
+                current_ = next;
+                continue;
+            }
+
+            obu_begin_ = begin;
+            obu_end_ = next;
             current_ = next;
-            locate_next_annex_b();
+            finished_ = false;
             return;
         }
-
-        obu_begin_ = begin;
-        obu_end_ = next;
-        current_ = next;
-        finished_ = false;
     }
 
     void locate_next_low_overhead() {
