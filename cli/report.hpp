@@ -1158,32 +1158,58 @@ function matches(n, q, type, vc, nv) {
   return true;
 }
 
+const BATCH = 300;
+let renderList = [];
+let renderPos = 0;
+
+function makeRow(n) {
+  const tr = document.createElement('tr');
+  const cls = n.vcl ? 'vcl' : 'nonvcl';
+  tr.innerHTML =
+    '<td>' + n.index + '</td>' +
+    '<td>0x' + n.offset.toString(16) + '</td>' +
+    '<td class="' + cls + '">' + esc(n.type) + '</td>' +
+    '<td>' + n.size + '</td>' +
+    '<td class="summary">' + esc(n.summary) + '</td>' +
+    '<td><details><summary>fields</summary>' +
+    '<div class="fields"></div></details></td>';
+  const d = tr.querySelector('details');
+  const div = tr.querySelector('.fields');
+  d.addEventListener('toggle', () => {
+    if (!d.open || div.childElementCount) return;
+    let html = '';
+    for (const [k, v] of Object.entries(n.fields)) {
+      html += esc(k) + ': ' + esc(v) + '<br>';
+    }
+    div.innerHTML = html;
+  });
+  return tr;
+}
+
+function renderChunk() {
+  const end = Math.min(renderPos + BATCH, renderList.length);
+  for (let k = renderPos; k < end; k++) {
+    tbody.appendChild(makeRow(REPORT.nals[renderList[k]]));
+  }
+  renderPos = end;
+  count.textContent = renderPos + ' / ' + REPORT.nals.length + ' shown';
+  if (renderPos < renderList.length) {
+    requestAnimationFrame(renderChunk);
+  }
+}
+
 function render() {
   const q = search.value.trim().toLowerCase();
   const type = typeFilter.value;
   const vc = vclOnly.checked;
   const nv = nonVclOnly.checked;
   tbody.innerHTML = '';
-  let shown = 0;
-  REPORT.nals.forEach(n => {
-    if (!matches(n, q, type, vc, nv)) return;
-    shown++;
-    const tr = document.createElement('tr');
-    const cls = n.vcl ? 'vcl' : 'nonvcl';
-    let details = '';
-    for (const [k, v] of Object.entries(n.fields)) {
-      details += esc(k) + ': ' + esc(v) + '<br>';
-    }
-    tr.innerHTML =
-      '<td>' + n.index + '</td>' +
-      '<td>0x' + n.offset.toString(16) + '</td>' +
-      '<td class="' + cls + '">' + esc(n.type) + '</td>' +
-      '<td>' + n.size + '</td>' +
-      '<td class="summary">' + esc(n.summary) + '</td>' +
-      '<td><details><summary>fields</summary>' + details + '</details></td>';
-    tbody.appendChild(tr);
+  renderList = [];
+  REPORT.nals.forEach((n, i) => {
+    if (matches(n, q, type, vc, nv)) renderList.push(i);
   });
-  count.textContent = shown + ' / ' + REPORT.nals.length + ' shown';
+  renderPos = 0;
+  renderChunk();
 }
 
 [search, typeFilter, vclOnly, nonVclOnly].forEach(el =>
