@@ -115,3 +115,4 @@ real_big.mkv
 
 
 tests/real/
+!tests/real/manifest.json
