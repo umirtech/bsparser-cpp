@@ -1070,76 +1070,149 @@ inline std::string to_html(const Report& report) {
           "content=\"width=device-width, initial-scale=1\">\n";
     os << "<title>bsparser report - " << json_escape(report.codec) << "</title>\n";
     os << "<style>\n";
-    os << "body{font-family:system-ui,Segoe UI,Roboto,sans-serif;"
-          "margin:0;background:#0f1115;color:#e6e6e6}\n";
-    os << "header{padding:16px 20px;background:#171a21;"
-          "border-bottom:1px solid #2a2f3a;position:sticky;top:0;z-index:1}\n";
-    os << "h1{font-size:18px;margin:0 0 4px}\n";
-    os << ".meta{font-size:13px;color:#9aa4b2}\n";
-    os << ".controls{display:flex;flex-wrap:wrap;gap:10px;"
-          "align-items:center;margin-top:12px}\n";
-    os << "input,select{background:#0f1115;color:#e6e6e6;"
-          "border:1px solid #2a2f3a;border-radius:6px;"
-          "padding:6px 8px;font-size:13px}\n";
-    os << "label{font-size:13px;color:#9aa4b2;display:flex;"
-          "gap:6px;align-items:center}\n";
-    os << "table{border-collapse:collapse;width:100%;"
-          "font-size:13px;margin-top:14px}\n";
-    os << "th,td{text-align:left;padding:8px 10px;border-bottom:"
-          "1px solid #20242d;vertical-align:top}\n";
-    os << "th{position:sticky;top:150px;background:#171a21;"
-          "color:#9aa4b2;font-weight:600}\n";
-    os << "tr:hover td{background:#1b1f27}\n";
-    os << ".vcl{color:#7ee787}.nonvcl{color:#79c0ff}\n";
-    os << ".summary{color:#d6c77e}\n";
-    os << ".count{font-size:13px;color:#9aa4b2;margin-left:auto}\n";
-    os << "details{font-size:12px;color:#9aa4b2}\n";
+    os << ":root{--bg:#0b0e13;--panel:#12161d;--panel2:#171c25;--border:#232a36;"
+          "--text:#e6edf3;--muted:#8b95a5;--accent:#58a6ff;--accent2:#3fb950;"
+          "--gold:#d9a851;--vcl:#3fb950;--nonvcl:#58a6ff;"
+          "--mono:ui-monospace,Consolas,'Cascadia Code',monospace}\n";
+    os << "*{box-sizing:border-box}\n";
+    os << "body{font-family:system-ui,Segoe UI,Roboto,sans-serif;margin:0;"
+          "background:var(--bg);color:var(--text)}\n";
+    os << "header{padding:16px 20px 0;background:var(--bg)}\n";
+    os << "h1{font-size:17px;margin:0 0 8px;letter-spacing:.2px}\n";
+    os << "h1 .dot{color:var(--accent2)}\n";
+    os << "h1 .codec{color:var(--accent)}\n";
+    os << ".meta{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;"
+          "gap:6px;margin-bottom:14px}\n";
+    os << ".chip{background:var(--panel);border:1px solid var(--border);"
+          "border-radius:999px;padding:3px 11px;font-size:12px;color:var(--muted)}\n";
+    os << ".chip b{color:var(--text);font-weight:600}\n";
+    os << ".stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));"
+          "gap:10px;padding:0 20px 14px}\n";
+    os << ".card{background:var(--panel);border:1px solid var(--border);"
+          "border-radius:10px;padding:10px 14px}\n";
+    os << ".card .n{font-size:22px;font-weight:700;line-height:1.1;"
+          "font-variant-numeric:tabular-nums}\n";
+    os << ".card .l{font-size:11px;color:var(--muted);text-transform:uppercase;"
+          "letter-spacing:.6px;margin-top:3px}\n";
+    os << ".card.v .n{color:var(--vcl)}.card.nv .n{color:var(--nonvcl)}"
+          ".card.p .n{color:var(--gold)}\n";
+    os << ".controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;"
+          "padding:0 20px 14px}\n";
+    os << ".searchwrap{position:relative;flex:1;min-width:220px;max-width:380px}\n";
+    os << "#search{width:100%;background:var(--panel);color:var(--text);"
+          "border:1px solid var(--border);border-radius:8px;"
+          "padding:8px 30px 8px 10px;font-size:13px;outline:none;"
+          "transition:border-color .15s}\n";
+    os << "#search:focus{border-color:var(--accent)}\n";
+    os << "#searchClear{position:absolute;right:8px;top:50%;transform:translateY(-50%);"
+          "background:none;border:none;color:var(--muted);cursor:pointer;"
+          "font-size:14px;display:none;padding:0}\n";
+    os << "select{background:var(--panel);color:var(--text);border:1px solid var(--border);"
+          "border-radius:8px;padding:8px 10px;font-size:13px;outline:none;max-width:220px}\n";
+    os << ".toggle{display:flex;gap:6px;align-items:center;font-size:12.5px;"
+          "color:var(--muted);cursor:pointer;user-select:none}\n";
+    os << ".toggle input{accent-color:var(--accent)}\n";
+    os << ".count{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}\n";
+    os << ".count b{color:var(--text)}\n";
+    os << ".layout{display:flex;align-items:flex-start;border-top:1px solid var(--border)}\n";
+    os << ".tablewrap{flex:1;min-width:0;overflow-x:auto}\n";
+    os << "table{border-collapse:collapse;width:100%;font-size:13px}\n";
+    os << "thead th{position:sticky;top:0;background:#0f131a;color:var(--muted);"
+          "font-weight:600;text-align:left;padding:10px 12px;"
+          "border-bottom:1px solid var(--border);white-space:nowrap;z-index:5}\n";
+    os << "tbody td{padding:8px 12px;border-bottom:1px solid #1a2029;vertical-align:top}\n";
+    os << "tbody tr{cursor:pointer}\n";
+    os << "tbody tr:hover td{background:#131922}\n";
+    os << "tbody tr.sel td{background:#16233a}\n";
+    os << "tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}\n";
+    os << "td.idx,td.off,td.sz{color:var(--muted);font-family:var(--mono);"
+          "font-size:12px;white-space:nowrap}\n";
+    os << "td.t{white-space:nowrap;font-weight:600}\n";
+    os << "td.vcl{color:var(--vcl)}td.nonvcl{color:var(--nonvcl)}\n";
+    os << "td.sum{color:var(--gold);max-width:600px;overflow-wrap:anywhere}\n";
+    os << "#drawer{width:430px;max-width:90vw;background:var(--panel);"
+          "border-left:1px solid var(--border);position:sticky;top:0;"
+          "height:100vh;overflow:auto;display:none}\n";
+    os << "#drawer.open{display:block}\n";
+    os << ".drawer-head{position:sticky;top:0;background:var(--panel2);"
+          "padding:12px 16px;border-bottom:1px solid var(--border);"
+          "display:flex;align-items:center;gap:8px;z-index:6}\n";
+    os << ".drawer-head h2{font-size:13.5px;margin:0;flex:1;color:var(--muted);font-weight:600}\n";
+    os << "#drawerClose{background:none;border:none;color:var(--muted);"
+          "font-size:15px;cursor:pointer;padding:0 4px}\n";
+    os << ".drawer-body{padding:14px 16px;font-family:var(--mono);font-size:12.5px;"
+          "line-height:1.55}\n";
+    os << ".drawer-body .row{display:flex;gap:10px;padding:4px 0;"
+          "border-bottom:1px dashed #1e242e}\n";
+    os << ".drawer-body .k{color:var(--accent);flex:0 0 42%;overflow-wrap:anywhere}\n";
+    os << ".drawer-body .v{color:var(--text);flex:1;overflow-wrap:anywhere}\n";
+    os << ".drawer-body .muted{color:var(--muted);padding:8px 0}\n";
+    os << "#topBtn{position:fixed;right:18px;bottom:18px;background:var(--panel2);"
+          "border:1px solid var(--border);color:var(--text);border-radius:50%;"
+          "width:38px;height:38px;font-size:15px;cursor:pointer;display:none;z-index:30}\n";
+    os << "@media (max-width:900px){#drawer{width:100vw;max-width:100vw;position:fixed;"
+          "z-index:40}.layout{display:block}}\n";
     os << "</style>\n";
     os << "</head>\n";
     os << "<body>\n";
     os << "<header>\n";
-    os << "<h1>bsparser - " << json_escape(report.codec) << " bitstream report</h1>\n";
-    os << "<div class=\"meta\">framing: " << json_escape(report.framing)
-       << " &middot; NAL units: " << report.entries.size() << " &middot; parsed: " << report.parsed
-       << "</div>\n";
-    os << "<div class=\"controls\">\n";
-    os << "<input id=\"search\" type=\"text\" "
-          "placeholder=\"filter by type / summary...\" "
-          "style=\"min-width:240px\">\n";
-    os << "<select id=\"typeFilter\"><option value=\"\">"
-          "All types</option></select>\n";
-    os << "<label><input id=\"vclOnly\" type=\"checkbox\"> "
-          "VCL only</label>\n";
-    os << "<label><input id=\"nonVclOnly\" type=\"checkbox\"> "
-          "Non-VCL only</label>\n";
-    os << "<span class=\"count\" id=\"count\"></span>\n";
+    os << "<h1>bsparser <span class=\"dot\">&bull;</span> "
+          "<span class=\"codec\">" << json_escape(report.codec) << "</span> bitstream report</h1>\n";
+    os << "<div class=\"meta\">\n";
+    os << "<span class=\"chip\">framing: <b>" << json_escape(report.framing) << "</b></span>\n";
+    os << "<span class=\"chip\">NAL units: <b>" << report.entries.size() << "</b></span>\n";
+    os << "<span class=\"chip\">parsed: <b>" << report.parsed << "</b></span>\n";
     os << "</div>\n";
     os << "</header>\n";
+    os << "<section class=\"stats\" id=\"stats\"></section>\n";
+    os << "<div class=\"controls\">\n";
+    os << "<div class=\"searchwrap\">\n";
+    os << "<input id=\"search\" type=\"text\" "
+          "placeholder=\"filter by type, summary or field value...\" "
+          "autocomplete=\"off\">\n";
+    os << "<button id=\"searchClear\" title=\"clear search\">&times;</button>\n";
+    os << "</div>\n";
+    os << "<select id=\"typeFilter\"><option value=\"\">All types</option></select>\n";
+    os << "<label class=\"toggle\"><input id=\"vclOnly\" type=\"checkbox\"> VCL only</label>\n";
+    os << "<label class=\"toggle\"><input id=\"nonVclOnly\" type=\"checkbox\"> Non-VCL only</label>\n";
+    os << "<span class=\"count\" id=\"count\"></span>\n";
+    os << "</div>\n";
+    os << "<div class=\"layout\">\n";
+    os << "<div class=\"tablewrap\">\n";
     os << "<table>\n";
     os << "<thead><tr><th>#</th><th>Offset</th><th>Type</th>"
-          "<th>Size</th><th>Summary</th><th>Details</th>"
-          "</tr></thead>\n";
+          "<th>Size</th><th>Summary</th></tr></thead>\n";
     os << "<tbody id=\"rows\"></tbody>\n";
     os << "</table>\n";
+    os << "</div>\n";
+    os << "<aside id=\"drawer\">\n";
+    os << "<div class=\"drawer-head\"><h2 id=\"drawerTitle\">NAL details</h2>"
+          "<button id=\"drawerClose\" title=\"close\">&times;</button></div>\n";
+    os << "<div class=\"drawer-body\" id=\"drawerBody\"></div>\n";
+    os << "</aside>\n";
+    os << "</div>\n";
+    os << "<button id=\"topBtn\" title=\"back to top\">&uarr;</button>\n";
     os << "<script>\n";
     os << "const REPORT = " << safe << ";\n";
     os << R"JS(
 const tbody = document.getElementById('rows');
 const search = document.getElementById('search');
+const searchClear = document.getElementById('searchClear');
 const typeFilter = document.getElementById('typeFilter');
 const vclOnly = document.getElementById('vclOnly');
 const nonVclOnly = document.getElementById('nonVclOnly');
 const count = document.getElementById('count');
+const drawer = document.getElementById('drawer');
+const drawerBody = document.getElementById('drawerBody');
+const drawerClose = document.getElementById('drawerClose');
+const topBtn = document.getElementById('topBtn');
 
-function buildTypeOptions() {
-  const seen = new Set();
-  REPORT.nals.forEach(n => { seen.add(n.type); });
-  [...seen].sort().forEach(t => {
-    const o = document.createElement('option');
-    o.value = t; o.textContent = t;
-    typeFilter.appendChild(o);
-  });
-}
+const BATCH = 300;
+let renderList = [];
+let renderPos = 0;
+let selIndex = -1;
+const rowEls = [];
+const hayCache = new Array(REPORT.nals.length);
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({
@@ -1147,55 +1220,111 @@ function esc(s) {
   }[c]));
 }
 
-function matches(n, q, type, vc, nv) {
+function hayOf(n, i) {
+  if (!hayCache[i]) {
+    hayCache[i] = (n.type + ' ' + n.summary + ' ' +
+      JSON.stringify(n.fields)).toLowerCase();
+  }
+  return hayCache[i];
+}
+
+function buildStats() {
+  let vcl = 0, non = 0, bytes = 0;
+  REPORT.nals.forEach(n => {
+    if (n.vcl) vcl++; else non++;
+    bytes += n.size || 0;
+  });
+  const mb = (bytes / (1024 * 1024)).toFixed(1);
+  const stats = [
+    ['Total NALs', REPORT.nals.length, ''],
+    ['VCL', vcl, 'v'],
+    ['Non-VCL', non, 'nv'],
+    ['Parsed', REPORT.parsed, 'p'],
+    ['Stream size', mb + ' MB', '']
+  ];
+  document.getElementById('stats').innerHTML = stats.map(s =>
+    '<div class="card ' + s[2] + '"><div class="n">' + s[1] +
+    '</div><div class="l">' + s[0] + '</div></div>'
+  ).join('');
+}
+
+function buildTypeOptions() {
+  const counts = new Map();
+  REPORT.nals.forEach(n => counts.set(n.type, (counts.get(n.type) || 0) + 1));
+  [...counts.keys()].sort().forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t + ' (' + counts.get(t) + ')';
+    typeFilter.appendChild(o);
+  });
+}
+
+function matches(n, i, q, type, vc, nv) {
   if (type && n.type !== type) return false;
   if (vc && !n.vcl) return false;
   if (nv && n.vcl) return false;
-  if (q) {
-    const hay = (n.type + ' ' + n.summary + ' ' + JSON.stringify(n.fields)).toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
+  if (q && !hayOf(n, i).includes(q)) return false;
   return true;
 }
 
-const BATCH = 300;
-let renderList = [];
-let renderPos = 0;
-
-function makeRow(n) {
+function makeRow(n, idx) {
   const tr = document.createElement('tr');
   const cls = n.vcl ? 'vcl' : 'nonvcl';
   tr.innerHTML =
-    '<td>' + n.index + '</td>' +
-    '<td>0x' + n.offset.toString(16) + '</td>' +
-    '<td class="' + cls + '">' + esc(n.type) + '</td>' +
-    '<td>' + n.size + '</td>' +
-    '<td class="summary">' + esc(n.summary) + '</td>' +
-    '<td><details><summary>fields</summary>' +
-    '<div class="fields"></div></details></td>';
-  const d = tr.querySelector('details');
-  const div = tr.querySelector('.fields');
-  d.addEventListener('toggle', () => {
-    if (!d.open || div.childElementCount) return;
-    let html = '';
-    for (const [k, v] of Object.entries(n.fields)) {
-      html += esc(k) + ': ' + esc(v) + '<br>';
-    }
-    div.innerHTML = html;
-  });
+    '<td class="idx">' + n.index + '</td>' +
+    '<td class="off">0x' + n.offset.toString(16) + '</td>' +
+    '<td class="t ' + cls + '">' + esc(n.type) + '</td>' +
+    '<td class="sz">' + n.size + '</td>' +
+    '<td class="sum">' + esc(n.summary) + '</td>';
+  tr.addEventListener('click', () => selectRow(idx));
   return tr;
 }
 
+function renderUntil(k) {
+  while (renderPos <= k && renderPos < renderList.length) {
+    const end = Math.min(renderPos + BATCH, renderList.length);
+    for (let j = renderPos; j < end; j++) {
+      rowEls[j] = tbody.appendChild(makeRow(REPORT.nals[renderList[j]], j));
+    }
+    renderPos = end;
+    count.innerHTML = '<b>' + renderPos + '</b> / ' + renderList.length +
+      ' of ' + REPORT.nals.length + ' shown';
+  }
+}
+
 function renderChunk() {
-  const end = Math.min(renderPos + BATCH, renderList.length);
-  for (let k = renderPos; k < end; k++) {
-    tbody.appendChild(makeRow(REPORT.nals[renderList[k]]));
+  renderUntil(renderPos + BATCH - 1);
+  if (renderPos < renderList.length) requestAnimationFrame(renderChunk);
+}
+
+function openDrawer(n) {
+  const entries = Object.entries(n.fields);
+  let html = '<div class="muted">#' + n.index + ' &middot; ' + esc(n.type) +
+    ' &middot; 0x' + n.offset.toString(16) + ' &middot; ' + n.size + ' bytes</div>';
+  if (entries.length) {
+    for (const [k, v] of entries) {
+      html += '<div class="row"><span class="k">' + esc(k) +
+        '</span><span class="v">' + esc(v) + '</span></div>';
+    }
+  } else {
+    html += '<div class="muted">(no parsed fields)</div>';
   }
-  renderPos = end;
-  count.textContent = renderPos + ' / ' + REPORT.nals.length + ' shown';
-  if (renderPos < renderList.length) {
-    requestAnimationFrame(renderChunk);
-  }
+  drawerBody.innerHTML = html;
+  drawer.classList.add('open');
+}
+
+function selectRow(k) {
+  if (selIndex >= 0 && rowEls[selIndex]) rowEls[selIndex].classList.remove('sel');
+  selIndex = k;
+  const tr = rowEls[selIndex];
+  if (!tr) return;
+  tr.classList.add('sel');
+  tr.scrollIntoView({ block: 'nearest' });
+  openDrawer(REPORT.nals[renderList[selIndex]]);
+}
+
+function clearSelection() {
+  if (selIndex >= 0 && rowEls[selIndex]) rowEls[selIndex].classList.remove('sel');
+  selIndex = -1;
 }
 
 function render() {
@@ -1206,14 +1335,53 @@ function render() {
   tbody.innerHTML = '';
   renderList = [];
   REPORT.nals.forEach((n, i) => {
-    if (matches(n, q, type, vc, nv)) renderList.push(i);
+    if (matches(n, i, q, type, vc, nv)) renderList.push(i);
   });
   renderPos = 0;
+  rowEls.length = 0;
+  clearSelection();
   renderChunk();
 }
 
-[search, typeFilter, vclOnly, nonVclOnly].forEach(el =>
+search.addEventListener('input', () => {
+  searchClear.style.display = search.value ? 'block' : 'none';
+  render();
+});
+searchClear.addEventListener('click', () => {
+  search.value = '';
+  searchClear.style.display = 'none';
+  render();
+});
+[typeFilter, vclOnly, nonVclOnly].forEach(el =>
   el.addEventListener('input', render));
+drawerClose.addEventListener('click', () => {
+  drawer.classList.remove('open');
+  clearSelection();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    drawer.classList.remove('open');
+    clearSelection();
+    return;
+  }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const dir = e.key === 'ArrowDown' ? 1 : -1;
+  const target = selIndex < 0
+    ? 0
+    : Math.min(Math.max(selIndex + dir, 0), renderList.length - 1);
+  renderUntil(target);
+  if (rowEls[target]) selectRow(target);
+});
+
+window.addEventListener('scroll', () => {
+  topBtn.style.display = window.scrollY > 600 ? 'block' : 'none';
+});
+topBtn.addEventListener('click', () =>
+  window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+buildStats();
 buildTypeOptions();
 render();
 )JS";
