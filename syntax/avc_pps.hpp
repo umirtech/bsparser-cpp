@@ -13,7 +13,6 @@ namespace avc {
  * Slice group map (7.3.2.2).
  */
 struct SliceGroupMap {
-
     std::uint8_t slice_group_map_type = 0;
 
     std::array<std::uint32_t, 8> run_length_minus1{};
@@ -32,12 +31,10 @@ struct SliceGroupMap {
     std::vector<std::uint8_t> slice_group_id{};
 };
 
-
 /*
  * H.264 / AVC picture parameter set (7.3.2.2).
  */
 struct PictureParameterSet {
-
     std::uint8_t pic_parameter_set_id = 0;
     std::uint8_t seq_parameter_set_id = 0;
 
@@ -66,15 +63,11 @@ struct PictureParameterSet {
     ScalingList pic_scaling_lists{};
     std::int32_t second_chroma_qp_index_offset = 0;
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    num_slice_groups() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            num_slice_groups_minus1 + 1);
+    constexpr std::uint8_t num_slice_groups() const noexcept {
+        return static_cast<std::uint8_t>(num_slice_groups_minus1 + 1);
     }
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

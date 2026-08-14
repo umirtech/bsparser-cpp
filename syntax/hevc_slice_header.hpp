@@ -10,7 +10,6 @@
 
 namespace bs {
 
-
 /*
  * -----------------------------------------------------------
  * Reference picture list modification
@@ -19,12 +18,10 @@ namespace bs {
  * ref_pic_list_modification()
  */
 
-
 /*
  * List modification information for one reference list.
  */
 struct RefPicListModification {
-
     /*
      * ref_pic_list_modification_flag_l0/l1
      */
@@ -39,45 +36,34 @@ struct RefPicListModification {
      */
     std::vector<std::uint32_t> list_entry;
 
-
     [[nodiscard]]
-    std::size_t size() const noexcept
-    {
+    std::size_t size() const noexcept {
         return list_entry.size();
     }
 
-
     [[nodiscard]]
-    bool empty() const noexcept
-    {
+    bool empty() const noexcept {
         return list_entry.empty();
     }
 };
-
 
 /*
  * Complete reference picture list modification.
  */
 struct RefPicListModificationData {
-
     RefPicListModification list0{};
     RefPicListModification list1{};
 
-
     [[nodiscard]]
-    bool modifies_l0() const noexcept
-    {
+    bool modifies_l0() const noexcept {
         return list0.modification_flag;
     }
 
-
     [[nodiscard]]
-    bool modifies_l1() const noexcept
-    {
+    bool modifies_l1() const noexcept {
         return list1.modification_flag;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -86,7 +72,6 @@ struct RefPicListModificationData {
  */
 
 struct SliceLongTermReference {
-
     /*
      * lt_idx_sps
      *
@@ -116,7 +101,6 @@ struct SliceLongTermReference {
     std::uint32_t delta_poc_msb_cycle_lt = 0;
 };
 
-
 /*
  * -----------------------------------------------------------
  * Prediction weight table
@@ -125,12 +109,10 @@ struct SliceLongTermReference {
  * pred_weight_table()
  */
 
-
 /*
  * Weight information for one reference picture.
  */
 struct PredictionWeight {
-
     /*
      * luma_log2_weight_denom is shared by the complete
      * prediction-weight table.
@@ -145,19 +127,15 @@ struct PredictionWeight {
 
     bool chroma_weight_flag = false;
 
-    std::array<std::int32_t, 2>
-        delta_chroma_weight{};
+    std::array<std::int32_t, 2> delta_chroma_weight{};
 
-    std::array<std::int32_t, 2>
-        delta_chroma_offset{};
+    std::array<std::int32_t, 2> delta_chroma_offset{};
 };
-
 
 /*
  * Complete prediction weight table.
  */
 struct PredictionWeightTable {
-
     /*
      * luma_log2_weight_denom
      */
@@ -175,21 +153,14 @@ struct PredictionWeightTable {
 
     std::vector<PredictionWeight> l1;
 
-
     [[nodiscard]]
-    std::uint32_t chroma_log2_weight_denom() const noexcept
-    {
+    std::uint32_t chroma_log2_weight_denom() const noexcept {
         const auto value =
-            static_cast<std::int32_t>(
-                luma_log2_weight_denom) +
-            delta_chroma_log2_weight_denom;
+            static_cast<std::int32_t>(luma_log2_weight_denom) + delta_chroma_log2_weight_denom;
 
-        return value < 0
-            ? 0
-            : static_cast<std::uint32_t>(value);
+        return value < 0 ? 0 : static_cast<std::uint32_t>(value);
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -198,7 +169,6 @@ struct PredictionWeightTable {
  */
 
 struct SliceDeblockingFilter {
-
     /*
      * deblocking_filter_override_flag
      */
@@ -220,7 +190,6 @@ struct SliceDeblockingFilter {
     std::int32_t tc_offset_div2 = 0;
 };
 
-
 /*
  * -----------------------------------------------------------
  * Entry-point offsets
@@ -230,7 +199,6 @@ struct SliceDeblockingFilter {
  */
 
 struct SliceEntryPointOffsets {
-
     /*
      * num_entry_point_offsets
      */
@@ -244,25 +212,18 @@ struct SliceEntryPointOffsets {
     /*
      * entry_point_offset_minus1[]
      */
-    std::vector<std::uint32_t>
-        entry_point_offset_minus1;
-
+    std::vector<std::uint32_t> entry_point_offset_minus1;
 
     [[nodiscard]]
-    unsigned offset_bits() const noexcept
-    {
-        return static_cast<unsigned>(
-            offset_len_minus1 + 1);
+    unsigned offset_bits() const noexcept {
+        return static_cast<unsigned>(offset_len_minus1 + 1);
     }
 
-
     [[nodiscard]]
-    std::size_t count() const noexcept
-    {
+    std::size_t count() const noexcept {
         return entry_point_offset_minus1.size();
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -271,7 +232,6 @@ struct SliceEntryPointOffsets {
  */
 
 struct SliceHeaderExtension {
-
     /*
      * slice_header_extension_length
      */
@@ -283,7 +243,6 @@ struct SliceHeaderExtension {
     std::vector<std::uint8_t> data;
 };
 
-
 /*
  * -----------------------------------------------------------
  * Slice reference picture information
@@ -291,7 +250,6 @@ struct SliceHeaderExtension {
  */
 
 struct SliceReferencePictureInfo {
-
     /*
      * num_ref_idx_active_override_flag
      */
@@ -310,8 +268,7 @@ struct SliceReferencePictureInfo {
     /*
      * ref_pic_list_modification()
      */
-    RefPicListModificationData
-        list_modification{};
+    RefPicListModificationData list_modification{};
 
     /*
      * Number of short/long-term references used by the
@@ -322,7 +279,6 @@ struct SliceReferencePictureInfo {
     std::uint32_t num_poc_total_curr = 0;
 };
 
-
 /*
  * -----------------------------------------------------------
  * Slice segment address
@@ -330,7 +286,6 @@ struct SliceReferencePictureInfo {
  */
 
 struct SliceSegmentAddress {
-
     /*
      * slice_segment_address
      *
@@ -343,14 +298,11 @@ struct SliceSegmentAddress {
      */
     std::uint32_t bit_width = 0;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return bit_width <= 32;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -359,7 +311,6 @@ struct SliceSegmentAddress {
  */
 
 struct SliceSegmentHeader {
-
     /*
      * =======================================================
      * NAL context
@@ -379,7 +330,6 @@ struct SliceSegmentHeader {
      * Also supplied by the NAL header.
      */
     std::uint8_t temporal_id = 0;
-
 
     /*
      * =======================================================
@@ -414,7 +364,6 @@ struct SliceSegmentHeader {
      */
     SliceSegmentAddress slice_segment_address{};
 
-
     /*
      * =======================================================
      * Reserved slice header bits
@@ -429,7 +378,6 @@ struct SliceSegmentHeader {
      *     num_extra_slice_header_bits
      */
     std::vector<bool> slice_reserved_flag;
-
 
     /*
      * =======================================================
@@ -449,7 +397,6 @@ struct SliceSegmentHeader {
      */
     std::uint8_t colour_plane_id = 0;
 
-
     /*
      * =======================================================
      * Picture order count
@@ -460,7 +407,6 @@ struct SliceSegmentHeader {
      * slice_pic_order_cnt_lsb
      */
     std::uint32_t slice_pic_order_cnt_lsb = 0;
-
 
     /*
      * short_term_ref_pic_set_sps_flag
@@ -481,7 +427,6 @@ struct SliceSegmentHeader {
      */
     ShortTermRefPicSet short_term_ref_pic_set{};
 
-
     /*
      * =======================================================
      * Long-term references
@@ -498,9 +443,7 @@ struct SliceSegmentHeader {
      */
     std::uint32_t num_long_term_pics = 0;
 
-    std::vector<SliceLongTermReference>
-        long_term_references;
-
+    std::vector<SliceLongTermReference> long_term_references;
 
     /*
      * =======================================================
@@ -527,16 +470,13 @@ struct SliceSegmentHeader {
      */
     std::uint32_t collocated_ref_idx = 0;
 
-
     /*
      * =======================================================
      * Reference picture lists
      * =======================================================
      */
 
-    SliceReferencePictureInfo
-        reference_pictures{};
-
+    SliceReferencePictureInfo reference_pictures{};
 
     /*
      * =======================================================
@@ -559,7 +499,6 @@ struct SliceSegmentHeader {
      */
     std::uint32_t five_minus_max_num_merge_cand = 0;
 
-
     /*
      * =======================================================
      * Prediction weights
@@ -568,9 +507,7 @@ struct SliceSegmentHeader {
 
     bool prediction_weight_table_present = false;
 
-    PredictionWeightTable
-        prediction_weight_table{};
-
+    PredictionWeightTable prediction_weight_table{};
 
     /*
      * =======================================================
@@ -593,16 +530,13 @@ struct SliceSegmentHeader {
      */
     std::int32_t slice_cr_qp_offset = 0;
 
-
     /*
      * =======================================================
      * Deblocking
      * =======================================================
      */
 
-    SliceDeblockingFilter
-        deblocking{};
-
+    SliceDeblockingFilter deblocking{};
 
     /*
      * =======================================================
@@ -613,9 +547,7 @@ struct SliceSegmentHeader {
     /*
      * slice_loop_filter_across_slices_enabled_flag
      */
-    bool slice_loop_filter_across_slices_enabled_flag =
-        false;
-
+    bool slice_loop_filter_across_slices_enabled_flag = false;
 
     /*
      * =======================================================
@@ -623,9 +555,7 @@ struct SliceSegmentHeader {
      * =======================================================
      */
 
-    SliceEntryPointOffsets
-        entry_points{};
-
+    SliceEntryPointOffsets entry_points{};
 
     /*
      * =======================================================
@@ -633,9 +563,7 @@ struct SliceSegmentHeader {
      * =======================================================
      */
 
-    SliceHeaderExtension
-        extension{};
-
+    SliceHeaderExtension extension{};
 
     /*
      * =======================================================
@@ -661,7 +589,6 @@ struct SliceSegmentHeader {
      */
     std::uint32_t effective_num_ref_idx_l1 = 1;
 
-
     /*
      * =======================================================
      * Helpers
@@ -669,130 +596,90 @@ struct SliceSegmentHeader {
      */
 
     [[nodiscard]]
-    constexpr bool is_first_slice() const noexcept
-    {
+    constexpr bool is_first_slice() const noexcept {
         return first_slice_segment_in_pic_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool is_dependent_slice() const noexcept
-    {
+    constexpr bool is_dependent_slice() const noexcept {
         return dependent_slice_segment_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool is_independent_slice() const noexcept
-    {
+    constexpr bool is_independent_slice() const noexcept {
         return !dependent_slice_segment_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool is_irap() const noexcept
-    {
+    constexpr bool is_irap() const noexcept {
         return is_irap_nal_unit(nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool is_idr() const noexcept
-    {
+    constexpr bool is_idr() const noexcept {
         return is_idr_nal_unit(nal_unit_type);
     }
 
-
     [[nodiscard]]
-    constexpr bool is_intra() const noexcept
-    {
+    constexpr bool is_intra() const noexcept {
         return slice_type == SliceType::I;
     }
 
-
     [[nodiscard]]
-    constexpr bool is_predictive() const noexcept
-    {
+    constexpr bool is_predictive() const noexcept {
         return slice_type == SliceType::P;
     }
 
-
     [[nodiscard]]
-    constexpr bool is_b_slice() const noexcept
-    {
+    constexpr bool is_b_slice() const noexcept {
         return slice_type == SliceType::B;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    active_l0_count() const noexcept
-    {
+    constexpr std::uint32_t active_l0_count() const noexcept {
         return effective_num_ref_idx_l0;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    active_l1_count() const noexcept
-    {
+    constexpr std::uint32_t active_l1_count() const noexcept {
         return effective_num_ref_idx_l1;
     }
 
-
     [[nodiscard]]
-    constexpr std::int32_t
-    effective_qp(std::int32_t pps_base_qp) const noexcept
-    {
+    constexpr std::int32_t effective_qp(std::int32_t pps_base_qp) const noexcept {
         return pps_base_qp + slice_qp_delta;
     }
 
-
     [[nodiscard]]
-    constexpr std::int32_t
-    effective_cb_qp_offset(
-        std::int32_t pps_offset) const noexcept
-    {
+    constexpr std::int32_t effective_cb_qp_offset(std::int32_t pps_offset) const noexcept {
         return pps_offset + slice_cb_qp_offset;
     }
 
-
     [[nodiscard]]
-    constexpr std::int32_t
-    effective_cr_qp_offset(
-        std::int32_t pps_offset) const noexcept
-    {
+    constexpr std::int32_t effective_cr_qp_offset(std::int32_t pps_offset) const noexcept {
         return pps_offset + slice_cr_qp_offset;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    max_merge_candidates() const noexcept
-    {
+    constexpr std::uint32_t max_merge_candidates() const noexcept {
         if (five_minus_max_num_merge_cand > 4) {
             return 0;
         }
 
-        return 5 -
-            five_minus_max_num_merge_cand;
+        return 5 - five_minus_max_num_merge_cand;
     }
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         if (slice_pic_parameter_set_id > 63) {
             return false;
         }
 
-        if (static_cast<std::uint8_t>(
-                slice_type) > 2) {
+        if (static_cast<std::uint8_t>(slice_type) > 2) {
             return false;
         }
 
-        if (is_dependent_slice() &&
-            first_slice_segment_in_pic_flag) {
+        if (is_dependent_slice() && first_slice_segment_in_pic_flag) {
             return false;
         }
 
@@ -800,16 +687,13 @@ struct SliceSegmentHeader {
     }
 };
 
-
 /*
  * -----------------------------------------------------------
  * Initialization
  * -----------------------------------------------------------
  */
 
-inline void initialize_slice_segment_header(
-    SliceSegmentHeader& header)
-{
+inline void initialize_slice_segment_header(SliceSegmentHeader& header) {
     header = {};
 
     header.pic_output_flag = true;
@@ -822,7 +706,6 @@ inline void initialize_slice_segment_header(
     header.slice_type = SliceType::P;
 }
 
-
 /*
  * -----------------------------------------------------------
  * Reference-count helpers
@@ -830,50 +713,36 @@ inline void initialize_slice_segment_header(
  */
 
 inline void derive_slice_reference_counts(
-    SliceSegmentHeader& header,
-    std::uint32_t pps_l0_default,
-    std::uint32_t pps_l1_default)
-{
-    if (header.reference_pictures
-            .num_ref_idx_active_override_flag) {
-
+    SliceSegmentHeader& header, std::uint32_t pps_l0_default, std::uint32_t pps_l1_default
+) {
+    if (header.reference_pictures.num_ref_idx_active_override_flag) {
         header.effective_num_ref_idx_l0 =
-            header.reference_pictures
-                .num_ref_idx_l0_active_minus1 + 1;
+            header.reference_pictures.num_ref_idx_l0_active_minus1 + 1;
 
         header.effective_num_ref_idx_l1 =
-            header.reference_pictures
-                .num_ref_idx_l1_active_minus1 + 1;
+            header.reference_pictures.num_ref_idx_l1_active_minus1 + 1;
 
     } else {
+        header.effective_num_ref_idx_l0 = pps_l0_default;
 
-        header.effective_num_ref_idx_l0 =
-            pps_l0_default;
-
-        header.effective_num_ref_idx_l1 =
-            pps_l1_default;
+        header.effective_num_ref_idx_l1 = pps_l1_default;
     }
-
 
     /*
      * I slices don't use reference lists.
      */
     if (header.slice_type == SliceType::I) {
-
         header.effective_num_ref_idx_l0 = 0;
         header.effective_num_ref_idx_l1 = 0;
     }
-
 
     /*
      * P slices only use L0.
      */
     if (header.slice_type == SliceType::P) {
-
         header.effective_num_ref_idx_l1 = 0;
     }
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -881,21 +750,14 @@ inline void derive_slice_reference_counts(
  * -----------------------------------------------------------
  */
 
-inline void initialize_slice_long_term_references(
-    SliceSegmentHeader& header)
-{
-    const auto count =
-        static_cast<std::size_t>(
-            header.num_long_term_sps) +
-        static_cast<std::size_t>(
-            header.num_long_term_pics);
+inline void initialize_slice_long_term_references(SliceSegmentHeader& header) {
+    const auto count = static_cast<std::size_t>(header.num_long_term_sps) +
+                       static_cast<std::size_t>(header.num_long_term_pics);
 
     header.long_term_references.clear();
 
-    header.long_term_references.resize(
-        count);
+    header.long_term_references.resize(count);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -904,56 +766,40 @@ inline void initialize_slice_long_term_references(
  */
 
 [[nodiscard]]
-constexpr bool validate_slice_type(
-    SliceType type) noexcept
-{
+constexpr bool validate_slice_type(SliceType type) noexcept {
     return static_cast<std::uint8_t>(type) <= 2;
 }
 
-
 [[nodiscard]]
-inline bool validate_slice_segment_header(
-    const SliceSegmentHeader& header) noexcept
-{
-    if (!validate_slice_type(
-            header.slice_type)) {
+inline bool validate_slice_segment_header(const SliceSegmentHeader& header) noexcept {
+    if (!validate_slice_type(header.slice_type)) {
         return false;
     }
-
 
     if (header.slice_pic_parameter_set_id > 63) {
         return false;
     }
 
-
-    if (header.first_slice_segment_in_pic_flag &&
-        header.dependent_slice_segment_flag) {
+    if (header.first_slice_segment_in_pic_flag && header.dependent_slice_segment_flag) {
         return false;
     }
-
 
     if (header.five_minus_max_num_merge_cand > 5) {
         return false;
     }
 
-
     if (header.entry_points.num_entry_point_offsets !=
-        header.entry_points
-            .entry_point_offset_minus1.size()) {
+        header.entry_points.entry_point_offset_minus1.size()) {
         return false;
     }
 
-
-    if (header.num_long_term_sps +
-        header.num_long_term_pics !=
+    if (header.num_long_term_sps + header.num_long_term_pics !=
         header.long_term_references.size()) {
         return false;
     }
 
-
     return true;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -961,70 +807,46 @@ inline bool validate_slice_segment_header(
  * -----------------------------------------------------------
  */
 
-
 /*
  * Return whether reference-list modification is active.
  */
 [[nodiscard]]
-constexpr bool
-reference_list_modification_enabled(
-    const SliceSegmentHeader& header) noexcept
-{
-    return
-        header.reference_pictures
-            .list_modification.modifies_l0() ||
-        header.reference_pictures
-            .list_modification.modifies_l1();
+constexpr bool reference_list_modification_enabled(const SliceSegmentHeader& header) noexcept {
+    return header.reference_pictures.list_modification.modifies_l0() ||
+           header.reference_pictures.list_modification.modifies_l1();
 }
-
 
 /*
  * Return whether weighted prediction is signaled for this
  * slice.
  */
 [[nodiscard]]
-constexpr bool
-weighted_prediction_present(
-    const SliceSegmentHeader& header) noexcept
-{
+constexpr bool weighted_prediction_present(const SliceSegmentHeader& header) noexcept {
     return header.prediction_weight_table_present;
 }
-
 
 /*
  * Return the number of long-term references.
  */
 [[nodiscard]]
-constexpr std::size_t
-long_term_reference_count(
-    const SliceSegmentHeader& header) noexcept
-{
+constexpr std::size_t long_term_reference_count(const SliceSegmentHeader& header) noexcept {
     return header.long_term_references.size();
 }
-
 
 /*
  * Return whether entry-point offsets are present.
  */
 [[nodiscard]]
-constexpr bool
-has_entry_points(
-    const SliceSegmentHeader& header) noexcept
-{
-    return
-        header.entry_points.num_entry_point_offsets != 0;
+constexpr bool has_entry_points(const SliceSegmentHeader& header) noexcept {
+    return header.entry_points.num_entry_point_offsets != 0;
 }
-
 
 /*
  * Return whether the slice header has an extension.
  */
 [[nodiscard]]
-constexpr bool
-has_slice_header_extension(
-    const SliceSegmentHeader& header) noexcept
-{
+constexpr bool has_slice_header_extension(const SliceSegmentHeader& header) noexcept {
     return header.extension.length != 0;
 }
 
-} // namespace bs
+}  // namespace bs

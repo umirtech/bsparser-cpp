@@ -27,30 +27,18 @@ namespace bs {
  * structure.
  */
 
-
 /*
  * -----------------------------------------------------------
  * Parser error
  * -----------------------------------------------------------
  */
 
-class NalUnitHeaderParseError
-    : public std::runtime_error
-{
-public:
-    explicit NalUnitHeaderParseError(
-        const char* message)
-        : std::runtime_error(message)
-    {
-    }
+class NalUnitHeaderParseError : public std::runtime_error {
+   public:
+    explicit NalUnitHeaderParseError(const char* message) : std::runtime_error(message) {}
 
-    explicit NalUnitHeaderParseError(
-        const std::string& message)
-        : std::runtime_error(message)
-    {
-    }
+    explicit NalUnitHeaderParseError(const std::string& message) : std::runtime_error(message) {}
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -75,48 +63,33 @@ public:
  * with the same reader interface used by the SPS/PPS parsers.
  */
 
-
 /*
  * Read one syntax flag.
  */
 template <typename Reader>
 [[nodiscard]]
-inline bool
-read_nal_flag(
-    Reader& reader)
-{
-    return
-        static_cast<bool>(
-            reader.read_bits(1));
+inline bool read_nal_flag(Reader& reader) {
+    return static_cast<bool>(reader.read_bits(1));
 }
-
 
 /*
  * Read an unsigned syntax field.
  */
 template <typename Reader>
 [[nodiscard]]
-inline std::uint32_t
-read_nal_bits(
-    Reader& reader,
-    unsigned width)
-{
+inline std::uint32_t read_nal_bits(Reader& reader, unsigned width) {
     if (width == 0) {
         return 0;
     }
 
     if (width > 32) {
-        throw NalUnitHeaderParseError(
-            "NAL header: invalid field width");
+        throw NalUnitHeaderParseError("NAL header: invalid field width");
     }
 
-    const auto value =
-        reader.read_bits(width);
+    const auto value = reader.read_bits(width);
 
-    return static_cast<std::uint32_t>(
-        value);
+    return static_cast<std::uint32_t>(value);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -126,46 +99,33 @@ read_nal_bits(
 
 template <typename Reader>
 [[nodiscard]]
-inline NalUnitHeader
-parse_nal_unit_header(
-    Reader& reader)
-{
+inline NalUnitHeader parse_nal_unit_header(Reader& reader) {
     NalUnitHeader header{};
 
     /*
      * forbidden_zero_bit
      */
-    header.forbidden_zero_bit =
-        read_nal_flag(reader);
+    header.forbidden_zero_bit = read_nal_flag(reader);
 
     /*
      * nal_unit_type
      *
      * u(6)
      */
-    const auto nal_type =
-        read_nal_bits(reader, 6);
+    const auto nal_type = read_nal_bits(reader, 6);
 
     if (nal_type > 63) {
-        throw NalUnitHeaderParseError(
-            "NAL header: invalid nal_unit_type");
+        throw NalUnitHeaderParseError("NAL header: invalid nal_unit_type");
     }
 
-    header.nal_unit_type =
-        nal_unit_type_from_value(
-            static_cast<std::uint8_t>(
-                nal_type));
-
+    header.nal_unit_type = nal_unit_type_from_value(static_cast<std::uint8_t>(nal_type));
 
     /*
      * nuh_layer_id
      *
      * u(6)
      */
-    header.nuh_layer_id =
-        static_cast<std::uint8_t>(
-            read_nal_bits(reader, 6));
-
+    header.nuh_layer_id = static_cast<std::uint8_t>(read_nal_bits(reader, 6));
 
     /*
      * nuh_temporal_id_plus1
@@ -174,32 +134,24 @@ parse_nal_unit_header(
      *
      * Zero is forbidden.
      */
-    header.nuh_temporal_id_plus1 =
-        static_cast<std::uint8_t>(
-            read_nal_bits(reader, 3));
-
+    header.nuh_temporal_id_plus1 = static_cast<std::uint8_t>(read_nal_bits(reader, 3));
 
     /*
      * forbidden_zero_bit must be zero.
      */
     if (header.forbidden_zero_bit) {
-        throw NalUnitHeaderParseError(
-            "NAL header: forbidden_zero_bit is non-zero");
+        throw NalUnitHeaderParseError("NAL header: forbidden_zero_bit is non-zero");
     }
-
 
     /*
      * nuh_temporal_id_plus1 must be in 1..7.
      */
     if (!header.valid_temporal_id()) {
-        throw NalUnitHeaderParseError(
-            "NAL header: nuh_temporal_id_plus1 is zero");
+        throw NalUnitHeaderParseError("NAL header: nuh_temporal_id_plus1 is zero");
     }
-
 
     return header;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -212,22 +164,15 @@ parse_nal_unit_header(
 
 template <typename Reader>
 [[nodiscard]]
-inline bool
-try_parse_nal_unit_header(
-    Reader& reader,
-    NalUnitHeader& header)
-{
+inline bool try_parse_nal_unit_header(Reader& reader, NalUnitHeader& header) {
     try {
-        header =
-            parse_nal_unit_header(reader);
+        header = parse_nal_unit_header(reader);
 
         return true;
-    }
-    catch (const NalUnitHeaderParseError&) {
+    } catch (const NalUnitHeaderParseError&) {
         return false;
     }
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -243,21 +188,15 @@ try_parse_nal_unit_header(
  */
 
 [[nodiscard]]
-constexpr NalUnitHeader
-parse_nal_unit_header_bytes(
-    std::uint8_t first_byte,
-    std::uint8_t second_byte)
-{
-    const auto raw =
-        static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(
-                first_byte) << 8) |
-            static_cast<std::uint16_t>(
-                second_byte));
+constexpr NalUnitHeader parse_nal_unit_header_bytes(
+    std::uint8_t first_byte, std::uint8_t second_byte
+) {
+    const auto raw = static_cast<std::uint16_t>(
+        (static_cast<std::uint16_t>(first_byte) << 8) | static_cast<std::uint16_t>(second_byte)
+    );
 
     return unpack_nal_unit_header(raw);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -266,13 +205,9 @@ parse_nal_unit_header_bytes(
  */
 
 [[nodiscard]]
-constexpr bool
-valid_nal_unit_header(
-    const NalUnitHeader& header) noexcept
-{
+constexpr bool valid_nal_unit_header(const NalUnitHeader& header) noexcept {
     return validate_nal_unit_header(header);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -281,29 +216,18 @@ valid_nal_unit_header(
  */
 
 [[nodiscard]]
-constexpr std::uint8_t
-nal_unit_type(
-    const NalUnitHeader& header) noexcept
-{
+constexpr std::uint8_t nal_unit_type(const NalUnitHeader& header) noexcept {
     return header.nal_type();
 }
 
-
 [[nodiscard]]
-constexpr std::uint8_t
-nal_temporal_id(
-    const NalUnitHeader& header) noexcept
-{
+constexpr std::uint8_t nal_temporal_id(const NalUnitHeader& header) noexcept {
     return header.temporal_id();
 }
 
-
 [[nodiscard]]
-constexpr std::uint8_t
-nal_layer_id(
-    const NalUnitHeader& header) noexcept
-{
+constexpr std::uint8_t nal_layer_id(const NalUnitHeader& header) noexcept {
     return header.nuh_layer_id;
 }
 
-} // namespace bs
+}  // namespace bs

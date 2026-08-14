@@ -19,16 +19,12 @@ namespace av1 {
  * OBU payload.
  */
 [[nodiscard]]
-inline FrameHeader
-parse_frame_header(
-    std::span<const std::uint8_t> payload)
-{
+inline FrameHeader parse_frame_header(std::span<const std::uint8_t> payload) {
     BooleanDecoder bd{payload};
 
     FrameHeader fh;
 
-    fh.frame_type =
-        static_cast<FrameType>(bd.read_literal(2));
+    fh.frame_type = static_cast<FrameType>(bd.read_literal(2));
 
     fh.show_frame = bd.read_bool(128);
 
@@ -41,5 +37,5 @@ parse_frame_header(
     return fh;
 }
 
-} // namespace av1
-} // namespace bs
+}  // namespace av1
+}  // namespace bs

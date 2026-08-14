@@ -51,27 +51,18 @@ extern "C" {
  * Codec selection.  BS_CODEC_AUTO probes the first NAL of the stream (only
  * meaningful for bs_parse_report, which accepts a NULL state).
  */
-typedef enum {
-    BS_CODEC_HEVC = 0,
-    BS_CODEC_AVC  = 1,
-    BS_CODEC_AUTO = 2
-} BsCodec;
+typedef enum { BS_CODEC_HEVC = 0, BS_CODEC_AVC = 1, BS_CODEC_AUTO = 2 } BsCodec;
 
 /*
  * NAL framing / container.
  */
-typedef enum {
-    BS_FRAMING_ANNEX_B = 0,
-    BS_FRAMING_LENGTH_PREFIXED = 1
-} BsFramingMode;
-
+typedef enum { BS_FRAMING_ANNEX_B = 0, BS_FRAMING_LENGTH_PREFIXED = 1 } BsFramingMode;
 
 /*
  * Opaque parser state.  Created/destroyed by the library; never inspected
  * by the caller.
  */
 typedef struct BsState BsState;
-
 
 /*
  * Non-owning view of one NAL unit, passed to every callback.  This mirrors
@@ -98,15 +89,11 @@ typedef struct BsNalUnit {
     size_t offset;
 } BsNalUnit;
 
-
 /*
  * Per-NAL callback invoked by bs_parse.  Mirrors the C++ handler callbacks,
  * which receive a const NalUnit&.
  */
-typedef void (*BsNalCallback)(
-    void* ctx,
-    const BsNalUnit* nal);
-
+typedef void (*BsNalCallback)(void* ctx, const BsNalUnit* nal);
 
 /*
  * Callback set for bs_parse.  Any member may be NULL; NULL callbacks are
@@ -114,14 +101,13 @@ typedef void (*BsNalCallback)(
  */
 typedef struct BsNalHandlers {
     void* ctx;
-    BsNalCallback vps;          /* HEVC only; NULL-safe for AVC */
+    BsNalCallback vps; /* HEVC only; NULL-safe for AVC */
     BsNalCallback sps;
     BsNalCallback pps;
-    BsNalCallback sei;          /* HEVC prefix/suffix SEI and AVC SEI */
+    BsNalCallback sei; /* HEVC prefix/suffix SEI and AVC SEI */
     BsNalCallback slice;
     BsNalCallback unsupported;
 } BsNalHandlers;
-
 
 /*
  * One NAL unit in a parsed report (mirrors bs::cli::NalEntry).  nal_type_name
@@ -136,7 +122,6 @@ typedef struct BsNalEntry {
     size_t size;
 } BsNalEntry;
 
-
 /*
  * Whole-stream report returned by bs_parse_report.  `nals` points at an array
  * of `nal_count` entries; free the whole report with bs_report_destroy.
@@ -147,7 +132,6 @@ typedef struct BsReport {
     size_t vcl_count;
     BsNalEntry* nals;
 } BsReport;
-
 
 /*
  * Create / destroy the opaque state.  An explicit codec (HEVC/AVC) is required;
@@ -162,7 +146,6 @@ void bs_state_destroy(BsState* state);
  */
 void bs_state_clear(BsState* state);
 
-
 /*
  * Frame + parse a buffer, dispatching each NAL to the matching callback.
  *
@@ -174,8 +157,8 @@ long bs_parse(
     size_t size,
     BsFramingMode mode,
     unsigned length_size,
-    const BsNalHandlers* handlers);
-
+    const BsNalHandlers* handlers
+);
 
 /*
  * Parse a buffer and return a structured report (an array of BsNalEntry).
@@ -187,17 +170,13 @@ long bs_parse(
  * Returns NULL on error.
  */
 BsReport* bs_parse_report(
-    BsState* state,
-    const unsigned char* data,
-    size_t size,
-    BsFramingMode mode,
-    unsigned length_size);
+    BsState* state, const unsigned char* data, size_t size, BsFramingMode mode, unsigned length_size
+);
 
 /*
  * Release a report previously returned by bs_parse_report.
  */
 void bs_report_destroy(BsReport* report);
-
 
 /*
  * ===========================================================================
@@ -228,10 +207,8 @@ typedef void (*BsAvcPpsCallback)(void* ctx, const BsAvcPictureParameterSet* pps)
  * valid only for the duration of the callback).
  */
 typedef void (*BsSeiCallback)(
-    void* ctx,
-    unsigned int payload_type,
-    const unsigned char* payload,
-    size_t payload_size);
+    void* ctx, unsigned int payload_type, const unsigned char* payload, size_t payload_size
+);
 
 /*
  * Slice headers: delivered as the fully-parsed mirror struct (owned by the
@@ -269,7 +246,8 @@ long bs_parse_hevc(
     size_t size,
     BsFramingMode mode,
     unsigned length_size,
-    const BsHevcHandlers* handlers);
+    const BsHevcHandlers* handlers
+);
 
 long bs_parse_avc(
     BsState* state,
@@ -277,8 +255,8 @@ long bs_parse_avc(
     size_t size,
     BsFramingMode mode,
     unsigned length_size,
-    const BsAvcHandlers* handlers);
-
+    const BsAvcHandlers* handlers
+);
 
 /*
  * Collected, value-copied snapshot of every parameter set seen during a parse
@@ -297,7 +275,7 @@ typedef enum {
 
 typedef struct BsStructEntry {
     BsStructKind kind;
-    const void* data;   /* a heap-allocated BsHevc* / BsAvc* struct */
+    const void* data; /* a heap-allocated BsHevc* / BsAvc* struct */
 } BsStructEntry;
 
 typedef struct BsStructReport {
@@ -311,23 +289,18 @@ typedef struct BsStructReport {
  * Returns NULL on error.
  */
 BsStructReport* bs_parse_struct_report(
-    BsState* state,
-    const unsigned char* data,
-    size_t size,
-    BsFramingMode mode,
-    unsigned length_size);
+    BsState* state, const unsigned char* data, size_t size, BsFramingMode mode, unsigned length_size
+);
 
 /*
  * Release a report previously returned by bs_parse_struct_report.
  */
 void bs_struct_report_destroy(BsStructReport* report);
 
-
 /*
  * Last error message (valid until the next API call on the same thread).
  */
 const char* bs_get_last_error(void);
-
 
 #ifdef __cplusplus
 }

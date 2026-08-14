@@ -12,9 +12,7 @@ namespace vvc {
  */
 template <typename Reader>
 [[nodiscard]]
-inline Opi
-parse_opi(Reader& r)
-{
+inline Opi parse_opi(Reader& r) {
     Opi opi;
 
     opi.ols_info_present = r.read_bit();
@@ -23,5 +21,5 @@ parse_opi(Reader& r)
     return opi;
 }
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

@@ -18,20 +18,13 @@ namespace bs {
  * verbatim.
  */
 class PlainBitReader {
-public:
-    explicit PlainBitReader(
-        std::span<const std::uint8_t> data) noexcept
-        : data_(data)
-    {
-    }
-
+   public:
+    explicit PlainBitReader(std::span<const std::uint8_t> data) noexcept : data_(data) {}
 
     [[nodiscard]]
-    bool read_bit()
-    {
+    bool read_bit() {
         if (bit_pos_ == 0 && byte_pos_ >= data_.size()) {
-            throw std::out_of_range(
-                "PlainBitReader: read past end");
+            throw std::out_of_range("PlainBitReader: read past end");
         }
 
         const std::uint8_t byte = data_[byte_pos_];
@@ -50,13 +43,10 @@ public:
         return value;
     }
 
-
     [[nodiscard]]
-    std::uint32_t read_bits(unsigned count)
-    {
+    std::uint32_t read_bits(unsigned count) {
         if (count > 32) {
-            throw std::invalid_argument(
-                "PlainBitReader: count > 32");
+            throw std::invalid_argument("PlainBitReader: count > 32");
         }
 
         std::uint32_t value = 0;
@@ -68,13 +58,11 @@ public:
         return value;
     }
 
-
     /*
      * Skip to the next byte boundary (consuming to the end of
      * the current byte).
      */
-    void byte_align()
-    {
+    void byte_align() {
         if (bit_pos_ != 0) {
             const unsigned skip = 8u - bit_pos_;
             for (unsigned i = 0; i < skip; ++i) {
@@ -83,22 +71,17 @@ public:
         }
     }
 
-
     [[nodiscard]]
-    bool byte_aligned() const noexcept
-    {
+    bool byte_aligned() const noexcept {
         return bit_pos_ == 0;
     }
 
-
     [[nodiscard]]
-    std::size_t byte_position() const noexcept
-    {
+    std::size_t byte_position() const noexcept {
         return byte_pos_;
     }
 
-
-private:
+   private:
     std::span<const std::uint8_t> data_{};
 
     std::size_t byte_pos_ = 0;
@@ -106,4 +89,4 @@ private:
     unsigned bit_pos_ = 0;
 };
 
-} // namespace bs
+}  // namespace bs

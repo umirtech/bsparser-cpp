@@ -12,22 +12,13 @@ namespace bs {
 namespace avc {
 
 class NalUnitParseError : public std::runtime_error {
-public:
-    explicit NalUnitParseError(const char* message)
-        : std::runtime_error(message)
-    {
-    }
+   public:
+    explicit NalUnitParseError(const char* message) : std::runtime_error(message) {}
 
-    explicit NalUnitParseError(const std::string& message)
-        : std::runtime_error(message)
-    {
-    }
+    explicit NalUnitParseError(const std::string& message) : std::runtime_error(message) {}
 };
 
-
-using NalUnitSpan =
-    std::span<const std::uint8_t>;
-
+using NalUnitSpan = std::span<const std::uint8_t>;
 
 /*
  * -----------------------------------------------------------
@@ -41,17 +32,12 @@ using NalUnitSpan =
  */
 
 [[nodiscard]]
-inline NalUnit
-parse_nal_unit(
-    NalUnitSpan bytes)
-{
+inline NalUnit parse_nal_unit(NalUnitSpan bytes) {
     if (bytes.size() < 1) {
-        throw NalUnitParseError(
-            "AVC NAL unit: truncated header");
+        throw NalUnitParseError("AVC NAL unit: truncated header");
     }
 
-    const std::uint8_t raw =
-        bytes[0];
+    const std::uint8_t raw = bytes[0];
 
     const NalUnitHeader header{
         static_cast<bool>((raw >> 7) & 1u),
@@ -60,15 +46,11 @@ parse_nal_unit(
     };
 
     if (header.forbidden_zero_bit) {
-        throw NalUnitParseError(
-            "AVC NAL unit: forbidden_zero_bit is non-zero");
+        throw NalUnitParseError("AVC NAL unit: forbidden_zero_bit is non-zero");
     }
 
-    return make_nal_unit(
-        header,
-        bytes.subspan(1));
+    return make_nal_unit(header, bytes.subspan(1));
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -77,19 +59,14 @@ parse_nal_unit(
  */
 
 [[nodiscard]]
-inline bool
-try_parse_nal_unit(
-    NalUnitSpan bytes,
-    NalUnit& output)
-{
+inline bool try_parse_nal_unit(NalUnitSpan bytes, NalUnit& output) {
     try {
         output = parse_nal_unit(bytes);
         return true;
-    }
-    catch (const NalUnitParseError&) {
+    } catch (const NalUnitParseError&) {
         return false;
     }
 }
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

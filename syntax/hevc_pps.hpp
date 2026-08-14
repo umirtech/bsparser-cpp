@@ -27,7 +27,6 @@ namespace bs {
  * No bitstream parsing is performed here.
  */
 
-
 /*
  * -----------------------------------------------------------
  * Tile configuration
@@ -45,7 +44,6 @@ namespace bs {
  */
 
 struct PpsTileConfiguration {
-
     bool tiles_enabled_flag = false;
 
     /*
@@ -67,8 +65,7 @@ struct PpsTileConfiguration {
      *
      * because the final column width is inferred.
      */
-    std::vector<std::uint32_t>
-        column_width_minus1;
+    std::vector<std::uint32_t> column_width_minus1;
 
     /*
      * Explicit:
@@ -81,46 +78,36 @@ struct PpsTileConfiguration {
      *
      * because the final row height is inferred.
      */
-    std::vector<std::uint32_t>
-        row_height_minus1;
+    std::vector<std::uint32_t> row_height_minus1;
 
     /*
      * loop_filter_across_tiles_enabled_flag
      */
     bool loop_filter_across_tiles_enabled_flag = false;
 
-
     [[nodiscard]]
-    constexpr std::size_t tile_column_count() const noexcept
-    {
+    constexpr std::size_t tile_column_count() const noexcept {
         if (!tiles_enabled_flag) {
             return 1;
         }
 
-        return static_cast<std::size_t>(
-            num_tile_columns_minus1) + 1;
+        return static_cast<std::size_t>(num_tile_columns_minus1) + 1;
     }
 
-
     [[nodiscard]]
-    constexpr std::size_t tile_row_count() const noexcept
-    {
+    constexpr std::size_t tile_row_count() const noexcept {
         if (!tiles_enabled_flag) {
             return 1;
         }
 
-        return static_cast<std::size_t>(
-            num_tile_rows_minus1) + 1;
+        return static_cast<std::size_t>(num_tile_rows_minus1) + 1;
     }
 
-
     [[nodiscard]]
-    bool uses_uniform_spacing() const noexcept
-    {
+    bool uses_uniform_spacing() const noexcept {
         return uniform_spacing_flag;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -129,7 +116,6 @@ struct PpsTileConfiguration {
  */
 
 struct PpsDeblockingFilter {
-
     /*
      * deblocking_filter_control_present_flag
      */
@@ -154,7 +140,6 @@ struct PpsDeblockingFilter {
     std::int32_t pps_tc_offset_div2 = 0;
 };
 
-
 /*
  * -----------------------------------------------------------
  * PPS scaling-list configuration
@@ -162,7 +147,6 @@ struct PpsDeblockingFilter {
  */
 
 struct PpsScalingListConfiguration {
-
     /*
      * pps_scaling_list_data_present_flag
      */
@@ -171,7 +155,6 @@ struct PpsScalingListConfiguration {
     ScalingListData scaling_list{};
 };
 
-
 /*
  * -----------------------------------------------------------
  * PPS extension flags
@@ -179,7 +162,6 @@ struct PpsScalingListConfiguration {
  */
 
 struct PpsExtension {
-
     /*
      * pps_extension_present_flag
      */
@@ -219,7 +201,6 @@ struct PpsExtension {
     bool extension_data_present = false;
 };
 
-
 /*
  * -----------------------------------------------------------
  * PPS range extension
@@ -233,7 +214,6 @@ struct PpsExtension {
  */
 
 struct PpsRangeExtension {
-
     /*
      * transform_skip_enabled_flag is actually a general
      * PPS field in the base syntax, but the range extension
@@ -243,8 +223,7 @@ struct PpsRangeExtension {
     /*
      * log2_max_transform_skip_block_size_minus2
      */
-    std::uint32_t
-        log2_max_transform_skip_block_size_minus2 = 0;
+    std::uint32_t log2_max_transform_skip_block_size_minus2 = 0;
 
     /*
      * cross_component_prediction_enabled_flag
@@ -269,14 +248,12 @@ struct PpsRangeExtension {
     /*
      * cb_qp_offset_list[]
      */
-    std::vector<std::int32_t>
-        cb_qp_offset_list;
+    std::vector<std::int32_t> cb_qp_offset_list;
 
     /*
      * cr_qp_offset_list[]
      */
-    std::vector<std::int32_t>
-        cr_qp_offset_list;
+    std::vector<std::int32_t> cr_qp_offset_list;
 
     /*
      * log2_sao_offset_scale_luma
@@ -288,14 +265,11 @@ struct PpsRangeExtension {
      */
     std::uint32_t log2_sao_offset_scale_chroma = 0;
 
-
     [[nodiscard]]
-    std::size_t chroma_qp_offset_count() const noexcept
-    {
+    std::size_t chroma_qp_offset_count() const noexcept {
         return chroma_qp_offset_list_len_minus1 + 1;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -309,7 +283,6 @@ struct PpsRangeExtension {
  */
 
 struct PpsSccExtension {
-
     /*
      * pps_curr_pic_ref_enabled_flag
      */
@@ -318,8 +291,7 @@ struct PpsSccExtension {
     /*
      * residual_adaptive_colour_transform_enabled_flag
      */
-    bool residual_adaptive_colour_transform_enabled_flag =
-        false;
+    bool residual_adaptive_colour_transform_enabled_flag = false;
 
     /*
      * Present only when the ACT flag is enabled.
@@ -340,11 +312,9 @@ struct PpsSccExtension {
     /*
      * Palette predictor initializers.
      */
-    bool pps_palette_predictor_initializers_present_flag =
-        false;
+    bool pps_palette_predictor_initializers_present_flag = false;
 
-    std::uint32_t
-        pps_num_palette_predictor_initializers = 0;
+    std::uint32_t pps_num_palette_predictor_initializers = 0;
 
     bool monochrome_palette_flag = false;
 
@@ -360,12 +330,9 @@ struct PpsSccExtension {
      *     8 + luma_bit_depth_entry_minus8   (comp == 0)
      *     8 + chroma_bit_depth_entry_minus8 (comp != 0)
      */
-    std::array<std::array<
-        std::uint32_t,
-        kMaxPalettePredictorSize>, 3>
+    std::array<std::array<std::uint32_t, kMaxPalettePredictorSize>, 3>
         pps_palette_predictor_initializer{};
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -378,7 +345,6 @@ struct PpsSccExtension {
  */
 
 struct PpsRefLocationOffset {
-
     std::uint32_t ref_loc_offset_layer_id = 0;
 
     bool scaled_ref_layer_offset_present_flag = false;
@@ -403,7 +369,6 @@ struct PpsRefLocationOffset {
     std::uint32_t phase_ver_chroma_plus8 = 0;
 };
 
-
 /*
  * One octant of the colour-mapping table.
  *
@@ -412,7 +377,6 @@ struct PpsRefLocationOffset {
  * their eight children.
  */
 struct PpsColourMappingOctant {
-
     bool split_octant_flag = false;
 
     /*
@@ -427,15 +391,13 @@ struct PpsColourMappingOctant {
 };
 
 struct PpsMultilayerExtension {
-
     bool poc_reset_info_present_flag = false;
 
     bool pps_infer_scaling_list_flag = false;
 
     std::uint32_t pps_scaling_list_ref_layer_id = 0;
 
-    std::vector<PpsRefLocationOffset>
-        ref_location_offsets;
+    std::vector<PpsRefLocationOffset> ref_location_offsets;
 
     /*
      * Colour-mapping table.
@@ -444,8 +406,7 @@ struct PpsMultilayerExtension {
 
     std::uint32_t num_cm_ref_layers_minus1 = 0;
 
-    std::vector<std::uint32_t>
-        cm_ref_layer_id;
+    std::vector<std::uint32_t> cm_ref_layer_id;
 
     std::uint32_t cm_octant_depth = 0;
 
@@ -466,10 +427,8 @@ struct PpsMultilayerExtension {
     /*
      * Octant tree in pre-order.
      */
-    std::vector<PpsColourMappingOctant>
-        colour_mapping_octants;
+    std::vector<PpsColourMappingOctant> colour_mapping_octants;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -482,7 +441,6 @@ struct PpsMultilayerExtension {
  */
 
 struct Pps3dExtension {
-
     /*
      * dlts_present_flag
      */
@@ -490,8 +448,7 @@ struct Pps3dExtension {
 
     std::uint32_t pps_depth_layers_minus1 = 0;
 
-    std::uint32_t
-        pps_bit_depth_for_depth_layers_minus8 = 0;
+    std::uint32_t pps_bit_depth_for_depth_layers_minus8 = 0;
 
     /*
      * Per depth layer:
@@ -508,10 +465,8 @@ struct Pps3dExtension {
         std::vector<bool> dlt_value_flag;
     };
 
-    std::vector<DepthLayerTransform>
-        depth_layer_transforms;
+    std::vector<DepthLayerTransform> depth_layer_transforms;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -520,7 +475,6 @@ struct Pps3dExtension {
  */
 
 struct PictureParameterSet {
-
     /*
      * =======================================================
      * Identification
@@ -542,7 +496,6 @@ struct PictureParameterSet {
      * ue(v)
      */
     std::uint32_t pps_seq_parameter_set_id = 0;
-
 
     /*
      * =======================================================
@@ -567,7 +520,6 @@ struct PictureParameterSet {
      */
     std::uint8_t num_extra_slice_header_bits = 0;
 
-
     /*
      * =======================================================
      * Entropy / QP configuration
@@ -584,7 +536,6 @@ struct PictureParameterSet {
      */
     bool cabac_init_present_flag = false;
 
-
     /*
      * =======================================================
      * Default reference picture counts
@@ -594,15 +545,12 @@ struct PictureParameterSet {
     /*
      * num_ref_idx_l0_default_active_minus1
      */
-    std::uint32_t
-        num_ref_idx_l0_default_active_minus1 = 0;
+    std::uint32_t num_ref_idx_l0_default_active_minus1 = 0;
 
     /*
      * num_ref_idx_l1_default_active_minus1
      */
-    std::uint32_t
-        num_ref_idx_l1_default_active_minus1 = 0;
-
+    std::uint32_t num_ref_idx_l1_default_active_minus1 = 0;
 
     /*
      * =======================================================
@@ -626,7 +574,6 @@ struct PictureParameterSet {
      * pps_cr_qp_offset
      */
     std::int32_t pps_cr_qp_offset = 0;
-
 
     /*
      * =======================================================
@@ -656,7 +603,6 @@ struct PictureParameterSet {
      */
     std::uint32_t diff_cu_qp_delta_depth = 0;
 
-
     /*
      * =======================================================
      * Chroma QP offsets
@@ -667,7 +613,6 @@ struct PictureParameterSet {
      * slice_chroma_qp_offsets_present_flag
      */
     bool slice_chroma_qp_offsets_present_flag = false;
-
 
     /*
      * =======================================================
@@ -685,7 +630,6 @@ struct PictureParameterSet {
      */
     bool weighted_bipred_flag = false;
 
-
     /*
      * =======================================================
      * Transquant bypass
@@ -696,7 +640,6 @@ struct PictureParameterSet {
      * transquant_bypass_enabled_flag
      */
     bool transquant_bypass_enabled_flag = false;
-
 
     /*
      * =======================================================
@@ -714,7 +657,6 @@ struct PictureParameterSet {
      */
     bool entropy_coding_sync_enabled_flag = false;
 
-
     /*
      * =======================================================
      * Loop filtering
@@ -728,16 +670,13 @@ struct PictureParameterSet {
 
     PpsDeblockingFilter deblocking{};
 
-
     /*
      * =======================================================
      * Scaling list
      * =======================================================
      */
 
-    PpsScalingListConfiguration
-        scaling_list_configuration{};
-
+    PpsScalingListConfiguration scaling_list_configuration{};
 
     /*
      * =======================================================
@@ -750,7 +689,6 @@ struct PictureParameterSet {
      */
     bool lists_modification_present_flag = false;
 
-
     /*
      * =======================================================
      * Merge / parallel processing
@@ -760,9 +698,7 @@ struct PictureParameterSet {
     /*
      * log2_parallel_merge_level_minus2
      */
-    std::uint32_t
-        log2_parallel_merge_level_minus2 = 0;
-
+    std::uint32_t log2_parallel_merge_level_minus2 = 0;
 
     /*
      * =======================================================
@@ -774,7 +710,6 @@ struct PictureParameterSet {
      * slice_segment_header_extension_present_flag
      */
     bool slice_segment_header_extension_present_flag = false;
-
 
     /*
      * =======================================================
@@ -792,7 +727,6 @@ struct PictureParameterSet {
 
     Pps3dExtension three_d_extension{};
 
-
     /*
      * =======================================================
      * Helpers
@@ -800,58 +734,37 @@ struct PictureParameterSet {
      */
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    pps_id() const noexcept
-    {
+    constexpr std::uint32_t pps_id() const noexcept {
         return pps_pic_parameter_set_id;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    sps_id() const noexcept
-    {
+    constexpr std::uint32_t sps_id() const noexcept {
         return pps_seq_parameter_set_id;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    num_ref_idx_l0_default_active() const noexcept
-    {
+    constexpr std::uint32_t num_ref_idx_l0_default_active() const noexcept {
         return num_ref_idx_l0_default_active_minus1 + 1;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    num_ref_idx_l1_default_active() const noexcept
-    {
+    constexpr std::uint32_t num_ref_idx_l1_default_active() const noexcept {
         return num_ref_idx_l1_default_active_minus1 + 1;
     }
 
-
     [[nodiscard]]
-    constexpr std::int32_t
-    initial_qp() const noexcept
-    {
+    constexpr std::int32_t initial_qp() const noexcept {
         return 26 + init_qp_minus26;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    parallel_merge_level() const noexcept
-    {
-        return std::uint32_t{1}
-            << (log2_parallel_merge_level_minus2 + 2);
+    constexpr std::uint32_t parallel_merge_level() const noexcept {
+        return std::uint32_t{1} << (log2_parallel_merge_level_minus2 + 2);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    cu_qp_delta_depth() const noexcept
-    {
+    constexpr std::uint32_t cu_qp_delta_depth() const noexcept {
         if (!cu_qp_delta_enabled_flag) {
             return 0;
         }
@@ -859,49 +772,33 @@ struct PictureParameterSet {
         return diff_cu_qp_delta_depth;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    has_scaling_list() const noexcept
-    {
-        return scaling_list_configuration
-            .scaling_list_data_present_flag;
+    constexpr bool has_scaling_list() const noexcept {
+        return scaling_list_configuration.scaling_list_data_present_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    has_range_extension() const noexcept
-    {
+    constexpr bool has_range_extension() const noexcept {
         return extension.range_extension_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    has_scc_extension() const noexcept
-    {
+    constexpr bool has_scc_extension() const noexcept {
         return extension.scc_extension_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
-        return
-            pps_pic_parameter_set_id <= 63 &&
-            pps_seq_parameter_set_id <= 15 &&
-            num_extra_slice_header_bits <= 2;
+    constexpr bool valid() const noexcept {
+        return pps_pic_parameter_set_id <= 63 && pps_seq_parameter_set_id <= 15 &&
+               num_extra_slice_header_bits <= 2;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
  * Tile helpers
  * -----------------------------------------------------------
  */
-
 
 /*
  * Initialize explicit tile arrays.
@@ -916,9 +813,7 @@ struct PictureParameterSet {
  *     for(i = 0; i < num_tile_rows_minus1; i++)
  *         row_height_minus1[i]
  */
-inline void initialize_pps_tiles(
-    PpsTileConfiguration& tiles)
-{
+inline void initialize_pps_tiles(PpsTileConfiguration& tiles) {
     if (!tiles.tiles_enabled_flag) {
         tiles.column_width_minus1.clear();
         tiles.row_height_minus1.clear();
@@ -931,47 +826,34 @@ inline void initialize_pps_tiles(
         return;
     }
 
-    tiles.column_width_minus1.resize(
-        tiles.num_tile_columns_minus1);
+    tiles.column_width_minus1.resize(tiles.num_tile_columns_minus1);
 
-    tiles.row_height_minus1.resize(
-        tiles.num_tile_rows_minus1);
+    tiles.row_height_minus1.resize(tiles.num_tile_rows_minus1);
 }
-
 
 /*
  * Number of explicit column widths.
  */
 [[nodiscard]]
-constexpr std::size_t
-explicit_tile_column_width_count(
-    const PpsTileConfiguration& tiles) noexcept
-{
-    if (!tiles.tiles_enabled_flag ||
-        tiles.uniform_spacing_flag) {
+constexpr std::size_t explicit_tile_column_width_count(const PpsTileConfiguration& tiles) noexcept {
+    if (!tiles.tiles_enabled_flag || tiles.uniform_spacing_flag) {
         return 0;
     }
 
     return tiles.num_tile_columns_minus1;
 }
 
-
 /*
  * Number of explicit row heights.
  */
 [[nodiscard]]
-constexpr std::size_t
-explicit_tile_row_height_count(
-    const PpsTileConfiguration& tiles) noexcept
-{
-    if (!tiles.tiles_enabled_flag ||
-        tiles.uniform_spacing_flag) {
+constexpr std::size_t explicit_tile_row_height_count(const PpsTileConfiguration& tiles) noexcept {
+    if (!tiles.tiles_enabled_flag || tiles.uniform_spacing_flag) {
         return 0;
     }
 
     return tiles.num_tile_rows_minus1;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -979,13 +861,9 @@ explicit_tile_row_height_count(
  * -----------------------------------------------------------
  */
 
-inline void initialize_pps_scaling_list(
-    PictureParameterSet& pps)
-{
-    initialize_scaling_list_data(
-        pps.scaling_list_configuration.scaling_list);
+inline void initialize_pps_scaling_list(PictureParameterSet& pps) {
+    initialize_scaling_list_data(pps.scaling_list_configuration.scaling_list);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -993,23 +871,18 @@ inline void initialize_pps_scaling_list(
  * -----------------------------------------------------------
  */
 
-inline void initialize_pps_range_extension(
-    PpsRangeExtension& extension)
-{
+inline void initialize_pps_range_extension(PpsRangeExtension& extension) {
     if (!extension.chroma_qp_offset_list_enabled_flag) {
         extension.cb_qp_offset_list.clear();
         extension.cr_qp_offset_list.clear();
         return;
     }
 
-    const auto count =
-        static_cast<std::size_t>(
-            extension.chroma_qp_offset_list_len_minus1) + 1;
+    const auto count = static_cast<std::size_t>(extension.chroma_qp_offset_list_len_minus1) + 1;
 
     extension.cb_qp_offset_list.resize(count);
     extension.cr_qp_offset_list.resize(count);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1017,35 +890,26 @@ inline void initialize_pps_range_extension(
  * -----------------------------------------------------------
  */
 
-
 /*
  * H.265 PPS ID range.
  */
-inline constexpr std::uint32_t
-    kMaxPpsPicParameterSetId = 63;
-
+inline constexpr std::uint32_t kMaxPpsPicParameterSetId = 63;
 
 /*
  * H.265 SPS ID range referenced by PPS.
  */
-inline constexpr std::uint32_t
-    kMaxPpsSequenceParameterSetId = 15;
-
+inline constexpr std::uint32_t kMaxPpsSequenceParameterSetId = 15;
 
 /*
  * Validate core PPS fields.
  */
 [[nodiscard]]
-constexpr bool validate_pps_base(
-    const PictureParameterSet& pps) noexcept
-{
-    if (pps.pps_pic_parameter_set_id >
-        kMaxPpsPicParameterSetId) {
+constexpr bool validate_pps_base(const PictureParameterSet& pps) noexcept {
+    if (pps.pps_pic_parameter_set_id > kMaxPpsPicParameterSetId) {
         return false;
     }
 
-    if (pps.pps_seq_parameter_set_id >
-        kMaxPpsSequenceParameterSetId) {
+    if (pps.pps_seq_parameter_set_id > kMaxPpsSequenceParameterSetId) {
         return false;
     }
 
@@ -1061,43 +925,29 @@ constexpr bool validate_pps_base(
     return true;
 }
 
-
 /*
  * Validate tile array dimensions.
  */
 [[nodiscard]]
-inline bool validate_pps_tiles(
-    const PpsTileConfiguration& tiles) noexcept
-{
+inline bool validate_pps_tiles(const PpsTileConfiguration& tiles) noexcept {
     if (!tiles.tiles_enabled_flag) {
-        return
-            tiles.column_width_minus1.empty() &&
-            tiles.row_height_minus1.empty();
+        return tiles.column_width_minus1.empty() && tiles.row_height_minus1.empty();
     }
 
     if (tiles.uniform_spacing_flag) {
-        return
-            tiles.column_width_minus1.empty() &&
-            tiles.row_height_minus1.empty();
+        return tiles.column_width_minus1.empty() && tiles.row_height_minus1.empty();
     }
 
-    return
-        tiles.column_width_minus1.size() ==
-            tiles.num_tile_columns_minus1 &&
-        tiles.row_height_minus1.size() ==
-            tiles.num_tile_rows_minus1;
+    return tiles.column_width_minus1.size() == tiles.num_tile_columns_minus1 &&
+           tiles.row_height_minus1.size() == tiles.num_tile_rows_minus1;
 }
-
 
 /*
  * Validate the deblocking configuration.
  */
 [[nodiscard]]
-constexpr bool validate_pps_deblocking(
-    const PpsDeblockingFilter& deblocking) noexcept
-{
-    if (!deblocking
-            .deblocking_filter_control_present_flag) {
+constexpr bool validate_pps_deblocking(const PpsDeblockingFilter& deblocking) noexcept {
+    if (!deblocking.deblocking_filter_control_present_flag) {
         return true;
     }
 
@@ -1105,8 +955,7 @@ constexpr bool validate_pps_deblocking(
      * If the filter is disabled, the offsets are not used
      * by the syntax.
      */
-    if (deblocking
-            .pps_deblocking_filter_disabled_flag) {
+    if (deblocking.pps_deblocking_filter_disabled_flag) {
         return true;
     }
 
@@ -1122,46 +971,35 @@ constexpr bool validate_pps_deblocking(
     return true;
 }
 
-
 /*
  * -----------------------------------------------------------
  * Semantic QP helpers
  * -----------------------------------------------------------
  */
 
-
 /*
  * Effective luma QP before slice/CU deltas.
  */
 [[nodiscard]]
-constexpr std::int32_t
-pps_base_qp(const PictureParameterSet& pps) noexcept
-{
+constexpr std::int32_t pps_base_qp(const PictureParameterSet& pps) noexcept {
     return pps.initial_qp();
 }
-
 
 /*
  * Effective Cb offset contributed by the PPS.
  */
 [[nodiscard]]
-constexpr std::int32_t
-pps_cb_offset(const PictureParameterSet& pps) noexcept
-{
+constexpr std::int32_t pps_cb_offset(const PictureParameterSet& pps) noexcept {
     return pps.pps_cb_qp_offset;
 }
-
 
 /*
  * Effective Cr offset contributed by the PPS.
  */
 [[nodiscard]]
-constexpr std::int32_t
-pps_cr_offset(const PictureParameterSet& pps) noexcept
-{
+constexpr std::int32_t pps_cr_offset(const PictureParameterSet& pps) noexcept {
     return pps.pps_cr_qp_offset;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1169,15 +1007,12 @@ pps_cr_offset(const PictureParameterSet& pps) noexcept
  * -----------------------------------------------------------
  */
 
-
 /*
  * Construct a PPS in its normal syntax defaults.
  *
  * This is useful before parsing conditional syntax.
  */
-inline void initialize_pps(
-    PictureParameterSet& pps)
-{
+inline void initialize_pps(PictureParameterSet& pps) {
     pps = {};
 
     pps.num_ref_idx_l0_default_active_minus1 = 0;
@@ -1190,10 +1025,8 @@ inline void initialize_pps(
 
     pps.log2_parallel_merge_level_minus2 = 0;
 
-    initialize_scaling_list_data(
-        pps.scaling_list_configuration.scaling_list);
+    initialize_scaling_list_data(pps.scaling_list_configuration.scaling_list);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1202,35 +1035,23 @@ inline void initialize_pps(
  */
 
 [[nodiscard]]
-constexpr bool tiles_enabled(
-    const PictureParameterSet& pps) noexcept
-{
+constexpr bool tiles_enabled(const PictureParameterSet& pps) noexcept {
     return pps.tiles.tiles_enabled_flag;
 }
 
-
 [[nodiscard]]
-constexpr bool entropy_coding_sync_enabled(
-    const PictureParameterSet& pps) noexcept
-{
+constexpr bool entropy_coding_sync_enabled(const PictureParameterSet& pps) noexcept {
     return pps.entropy_coding_sync_enabled_flag;
 }
 
-
 [[nodiscard]]
-constexpr bool deblocking_control_present(
-    const PictureParameterSet& pps) noexcept
-{
-    return pps.deblocking
-        .deblocking_filter_control_present_flag;
+constexpr bool deblocking_control_present(const PictureParameterSet& pps) noexcept {
+    return pps.deblocking.deblocking_filter_control_present_flag;
 }
 
-
 [[nodiscard]]
-constexpr bool dependent_slice_segments_enabled(
-    const PictureParameterSet& pps) noexcept
-{
+constexpr bool dependent_slice_segments_enabled(const PictureParameterSet& pps) noexcept {
     return pps.dependent_slice_segments_enabled_flag;
 }
 
-} // namespace bs
+}  // namespace bs

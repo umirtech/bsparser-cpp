@@ -13,7 +13,6 @@ namespace vvc {
  * H.266 §7.3.2.1
  */
 struct Dci {
-
     std::uint32_t num_sps = 0;
 
     std::vector<std::uint8_t> sps_ids;
@@ -22,13 +21,11 @@ struct Dci {
 
     bool pic_rate_present = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return num_sps <= 15;
     }
 };
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

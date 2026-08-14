@@ -13,28 +13,23 @@ struct BitWriter {
     std::vector<std::uint8_t> bytes{};
     unsigned bit_pos = 0;
 
-    void put(std::uint32_t value, unsigned nbits)
-    {
+    void put(std::uint32_t value, unsigned nbits) {
         for (int i = static_cast<int>(nbits) - 1; i >= 0; --i) {
             if (bit_pos == 0) {
                 bytes.push_back(0);
             }
-            bytes.back() |=
-                static_cast<std::uint8_t>(
-                    ((value >> i) & 1u) << (7u - bit_pos));
+            bytes.back() |= static_cast<std::uint8_t>(((value >> i) & 1u) << (7u - bit_pos));
             bit_pos = (bit_pos + 1u) % 8u;
         }
     }
 
-    void pad_to_byte()
-    {
+    void pad_to_byte() {
         while (bit_pos != 0) {
             put(0, 1);
         }
     }
 
-    void ue(std::uint32_t code_num)
-    {
+    void ue(std::uint32_t code_num) {
         std::uint32_t lz = 0;
         std::uint32_t v = code_num + 1u;
         while (v >>= 1) {
@@ -49,21 +44,16 @@ struct BitWriter {
         }
     }
 
-    std::vector<std::uint8_t> take()
-    {
+    std::vector<std::uint8_t> take() {
         pad_to_byte();
         return bytes;
     }
 };
 
-
 /*
  * Annex-B frame: prepend a start code and return as bytes.
  */
-inline std::vector<std::uint8_t>
-annex_b(
-    const std::vector<std::uint8_t>& nals)
-{
+inline std::vector<std::uint8_t> annex_b(const std::vector<std::uint8_t>& nals) {
     std::vector<std::uint8_t> out;
     out.push_back(0x00);
     out.push_back(0x00);
@@ -72,4 +62,4 @@ annex_b(
     return out;
 }
 
-} // namespace bstest
+}  // namespace bstest

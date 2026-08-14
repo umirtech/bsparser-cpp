@@ -21,8 +21,8 @@ namespace log {
 enum class Level : std::uint8_t {
     Trace = 0,
     Debug = 1,
-    Info  = 2,
-    Warn  = 3,
+    Info = 2,
+    Warn = 3,
     Error = 4,
 };
 
@@ -38,20 +38,23 @@ struct Sink {
 #endif
 };
 
-inline Sink& sink()
-{
+inline Sink& sink() {
     static Sink instance;
     return instance;
 }
 
-inline const char* level_name(Level level)
-{
+inline const char* level_name(Level level) {
     switch (level) {
-        case Level::Trace: return "TRACE";
-        case Level::Debug: return "DEBUG";
-        case Level::Info:  return "INFO";
-        case Level::Warn:  return "WARN";
-        case Level::Error: return "ERROR";
+        case Level::Trace:
+            return "TRACE";
+        case Level::Debug:
+            return "DEBUG";
+        case Level::Info:
+            return "INFO";
+        case Level::Warn:
+            return "WARN";
+        case Level::Error:
+            return "ERROR";
     }
     return "INFO";
 }
@@ -65,39 +68,33 @@ inline const char* level_name(Level level)
  * message is never written.
  */
 class Line {
-public:
+   public:
     explicit Line(Level level)
         : active_(level >= sink().threshold),
-          prefix_(level == Level::Trace || level == Level::Debug)
-    {
+          prefix_(level == Level::Trace || level == Level::Debug) {
         if (active_ && prefix_) {
-            *sink().stream
-                << '['
-                << level_name(level)
-                << "] ";
+            *sink().stream << '[' << level_name(level) << "] ";
         }
     }
 
     template <typename T>
-    Line& operator<<(const T& value)
-    {
+    Line& operator<<(const T& value) {
         if (active_) {
             *sink().stream << value;
         }
         return *this;
     }
 
-private:
+   private:
     bool active_;
     bool prefix_;
 };
 
-inline Line line(Level level)
-{
+inline Line line(Level level) {
     return Line(level);
 }
 
-} // namespace detail
+}  // namespace detail
 
 /*
  * Runtime configuration.
@@ -106,18 +103,15 @@ inline Line line(Level level)
  * BS_ENABLE_TRACE is not defined, Debug/Trace statements are
  * removed entirely and cannot be re-enabled at runtime.
  */
-inline void set_level(Level level)
-{
+inline void set_level(Level level) {
     detail::sink().threshold = level;
 }
 
-inline Level level()
-{
+inline Level level() {
     return detail::sink().threshold;
 }
 
-inline void set_stream(std::ostream* stream)
-{
+inline void set_stream(std::ostream* stream) {
     detail::sink().stream = stream;
 }
 
@@ -137,22 +131,17 @@ inline void set_stream(std::ostream* stream)
  * defined at build time.
  */
 
-#define BS_LOG_ERROR(expr) \
-    ::bs::log::detail::line(::bs::log::Level::Error) << expr
+#define BS_LOG_ERROR(expr) ::bs::log::detail::line(::bs::log::Level::Error) << expr
 
-#define BS_LOG_WARN(expr) \
-    ::bs::log::detail::line(::bs::log::Level::Warn) << expr
+#define BS_LOG_WARN(expr) ::bs::log::detail::line(::bs::log::Level::Warn) << expr
 
-#define BS_LOG_INFO(expr) \
-    ::bs::log::detail::line(::bs::log::Level::Info) << expr
+#define BS_LOG_INFO(expr) ::bs::log::detail::line(::bs::log::Level::Info) << expr
 
 #if defined(BS_ENABLE_TRACE)
 
-#define BS_LOG_DEBUG(expr) \
-    ::bs::log::detail::line(::bs::log::Level::Debug) << expr
+#define BS_LOG_DEBUG(expr) ::bs::log::detail::line(::bs::log::Level::Debug) << expr
 
-#define BS_LOG_TRACE(expr) \
-    ::bs::log::detail::line(::bs::log::Level::Trace) << expr
+#define BS_LOG_TRACE(expr) ::bs::log::detail::line(::bs::log::Level::Trace) << expr
 
 #else
 
@@ -162,5 +151,5 @@ inline void set_stream(std::ostream* stream)
 
 #endif
 
-} // namespace log
-} // namespace bs
+}  // namespace log
+}  // namespace bs

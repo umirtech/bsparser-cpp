@@ -131,7 +131,8 @@ typedef struct BsHevcTimingInfo {
 
 typedef struct BsHevcPpsColourMappingOctant {
     uint8_t split_octant_flag;
-    uint32_t partition_coded_res_flags_count; uint8_t* partition_coded_res_flags;
+    uint32_t partition_coded_res_flags_count;
+    uint8_t* partition_coded_res_flags;
 } BsHevcPpsColourMappingOctant;
 
 typedef struct BsHevcSpsExtension {
@@ -165,13 +166,16 @@ typedef struct BsHevcShortTermPositivePicture {
 } BsHevcShortTermPositivePicture;
 
 typedef struct BsHevcVpsLayerSet {
-    uint32_t layer_id_included_flag_count; uint8_t* layer_id_included_flag;
-    uint32_t layer_ids_count; uint8_t* layer_ids;
+    uint32_t layer_id_included_flag_count;
+    uint8_t* layer_id_included_flag;
+    uint32_t layer_ids_count;
+    uint8_t* layer_ids;
 } BsHevcVpsLayerSet;
 
 typedef struct BsHevcSliceHeaderExtension {
     uint32_t length;
-    uint32_t data_count; uint8_t* data;
+    uint32_t data_count;
+    uint8_t* data;
 } BsHevcSliceHeaderExtension;
 
 typedef struct BsHevcPictureStructure {
@@ -185,7 +189,8 @@ typedef struct BsHevcSampleAspectRatio {
 } BsHevcSampleAspectRatio;
 
 typedef struct BsHevcDerivedShortTermRefPicSet {
-    uint32_t references_count; struct BsHevcDerivedShortTermReference* references;
+    uint32_t references_count;
+    struct BsHevcDerivedShortTermReference* references;
     uint32_t num_negative_pics;
     uint32_t num_positive_pics;
 } BsHevcDerivedShortTermRefPicSet;
@@ -259,12 +264,14 @@ typedef struct BsHevcPps3dExtensionDepthLayerTransform {
     uint8_t dlt_flag;
     uint8_t dlt_pred_flag;
     uint8_t dlt_val_flags_present_flag;
-    uint32_t dlt_value_flag_count; uint8_t* dlt_value_flag;
+    uint32_t dlt_value_flag_count;
+    uint8_t* dlt_value_flag;
 } BsHevcPps3dExtensionDepthLayerTransform;
 
 typedef struct BsHevcRefPicListModification {
     uint8_t modification_flag;
-    uint32_t list_entry_count; uint32_t* list_entry;
+    uint32_t list_entry_count;
+    uint32_t* list_entry;
 } BsHevcRefPicListModification;
 
 typedef struct BsHevcPredictionWeight {
@@ -322,7 +329,8 @@ typedef struct BsAvcSliceGroupMap {
     uint8_t slice_group_change_direction_flag;
     uint32_t slice_group_change_rate_minus1;
     uint32_t pic_size_in_map_units_minus1;
-    uint32_t slice_group_id_count; uint8_t* slice_group_id;
+    uint32_t slice_group_id_count;
+    uint8_t* slice_group_id;
 } BsAvcSliceGroupMap;
 
 typedef struct BsHevcBitDepth {
@@ -339,10 +347,12 @@ typedef struct BsHevcPpsMultilayerExtension {
     uint8_t poc_reset_info_present_flag;
     uint8_t pps_infer_scaling_list_flag;
     uint32_t pps_scaling_list_ref_layer_id;
-    uint32_t ref_location_offsets_count; struct BsHevcPpsRefLocationOffset* ref_location_offsets;
+    uint32_t ref_location_offsets_count;
+    struct BsHevcPpsRefLocationOffset* ref_location_offsets;
     uint8_t colour_mapping_enabled_flag;
     uint32_t num_cm_ref_layers_minus1;
-    uint32_t cm_ref_layer_id_count; uint32_t* cm_ref_layer_id;
+    uint32_t cm_ref_layer_id_count;
+    uint32_t* cm_ref_layer_id;
     uint32_t cm_octant_depth;
     uint32_t cm_y_part_num_log2;
     uint32_t luma_bit_depth_cm_input_minus8;
@@ -353,7 +363,8 @@ typedef struct BsHevcPpsMultilayerExtension {
     uint32_t cm_delta_flc_bits_minus1;
     int32_t cm_adapt_threshold_u_delta;
     int32_t cm_adapt_threshold_v_delta;
-    uint32_t colour_mapping_octants_count; struct BsHevcPpsColourMappingOctant* colour_mapping_octants;
+    uint32_t colour_mapping_octants_count;
+    struct BsHevcPpsColourMappingOctant* colour_mapping_octants;
 } BsHevcPpsMultilayerExtension;
 
 typedef struct BsHevcSpsCodingBlockParameters {
@@ -395,8 +406,10 @@ typedef struct BsHevcSpsRangeExtension {
 typedef struct BsHevcSpsLongTermReferencePictures {
     uint8_t present;
     uint32_t count;
-    uint32_t poc_lsb_count; uint32_t* poc_lsb;
-    uint32_t used_by_curr_pic_count; uint8_t* used_by_curr_pic;
+    uint32_t poc_lsb_count;
+    uint32_t* poc_lsb;
+    uint32_t used_by_curr_pic_count;
+    uint8_t* used_by_curr_pic;
 } BsHevcSpsLongTermReferencePictures;
 
 typedef struct BsHevcVpsTimingInfo {
@@ -406,16 +419,20 @@ typedef struct BsHevcVpsTimingInfo {
     uint8_t poc_proportional_to_timing_flag;
     uint32_t num_ticks_poc_diff_one_minus1;
     uint32_t num_hrd_parameters;
-    uint32_t hrd_parameters_count; struct BsHevcVpsHrdParameter* hrd_parameters;
+    uint32_t hrd_parameters_count;
+    struct BsHevcVpsHrdParameter* hrd_parameters;
 } BsHevcVpsTimingInfo;
 
 typedef struct BsHevcSpsReferencePictureSetParameters {
     uint32_t num_short_term_ref_pic_sets;
-    uint32_t short_term_ref_pic_sets_count; struct BsHevcShortTermRefPicSet* short_term_ref_pic_sets;
+    uint32_t short_term_ref_pic_sets_count;
+    struct BsHevcShortTermRefPicSet* short_term_ref_pic_sets;
     uint8_t long_term_ref_pics_present_flag;
     uint32_t num_long_term_ref_pics_sps;
-    uint32_t lt_ref_pic_poc_lsb_sps_count; uint32_t* lt_ref_pic_poc_lsb_sps;
-    uint32_t used_by_curr_pic_lt_sps_flag_count; uint8_t* used_by_curr_pic_lt_sps_flag;
+    uint32_t lt_ref_pic_poc_lsb_sps_count;
+    uint32_t* lt_ref_pic_poc_lsb_sps;
+    uint32_t used_by_curr_pic_lt_sps_flag_count;
+    uint8_t* used_by_curr_pic_lt_sps_flag;
 } BsHevcSpsReferencePictureSetParameters;
 
 typedef struct BsHevcChromaLocationInfo {
@@ -431,7 +448,8 @@ typedef struct BsHevcInterRpsPrediction {
     uint8_t delta_rps_sign;
     uint32_t abs_delta_rps_minus1;
     int32_t delta_rps;
-    uint32_t entries_count; struct BsHevcInterRpsPredictionEntry* entries;
+    uint32_t entries_count;
+    struct BsHevcInterRpsPredictionEntry* entries;
 } BsHevcInterRpsPrediction;
 
 typedef struct BsHevcDerivedShortTermReference {
@@ -447,11 +465,13 @@ typedef struct BsHevcAlternativeTransferCharacteristics {
 typedef struct BsHevcSliceEntryPointOffsets {
     uint32_t num_entry_point_offsets;
     uint32_t offset_len_minus1;
-    uint32_t entry_point_offset_minus1_count; uint32_t* entry_point_offset_minus1;
+    uint32_t entry_point_offset_minus1_count;
+    uint32_t* entry_point_offset_minus1;
 } BsHevcSliceEntryPointOffsets;
 
 typedef struct BsHevcSubLayerHrdParameters {
-    uint32_t cpb_entries_count; struct BsHevcCpbEntry* cpb_entries;
+    uint32_t cpb_entries_count;
+    struct BsHevcCpbEntry* cpb_entries;
 } BsHevcSubLayerHrdParameters;
 
 typedef struct BsAvcVuiParameters {
@@ -495,8 +515,10 @@ typedef struct BsHevcPpsTileConfiguration {
     uint32_t num_tile_columns_minus1;
     uint32_t num_tile_rows_minus1;
     uint8_t uniform_spacing_flag;
-    uint32_t column_width_minus1_count; uint32_t* column_width_minus1;
-    uint32_t row_height_minus1_count; uint32_t* row_height_minus1;
+    uint32_t column_width_minus1_count;
+    uint32_t* column_width_minus1;
+    uint32_t row_height_minus1_count;
+    uint32_t* row_height_minus1;
     uint8_t loop_filter_across_tiles_enabled_flag;
 } BsHevcPpsTileConfiguration;
 
@@ -554,8 +576,10 @@ typedef struct BsHevcPpsRangeExtension {
     uint8_t chroma_qp_offset_list_enabled_flag;
     uint32_t diff_cu_chroma_qp_offset_depth;
     uint32_t chroma_qp_offset_list_len_minus1;
-    uint32_t cb_qp_offset_list_count; int32_t* cb_qp_offset_list;
-    uint32_t cr_qp_offset_list_count; int32_t* cr_qp_offset_list;
+    uint32_t cb_qp_offset_list_count;
+    int32_t* cb_qp_offset_list;
+    uint32_t cr_qp_offset_list_count;
+    int32_t* cr_qp_offset_list;
     uint32_t log2_sao_offset_scale_luma;
     uint32_t log2_sao_offset_scale_chroma;
 } BsHevcPpsRangeExtension;
@@ -598,7 +622,8 @@ typedef struct BsHevcWindow {
 
 typedef struct BsAvcRefPicListModification {
     uint8_t modification_flag;
-    uint32_t ops_count; struct BsAvcRefPicReorderingOp* ops;
+    uint32_t ops_count;
+    struct BsAvcRefPicReorderingOp* ops;
 } BsAvcRefPicListModification;
 
 typedef struct BsAvcMmcoOperation {
@@ -617,8 +642,10 @@ typedef struct BsHevcAspectRatio {
 } BsHevcAspectRatio;
 
 typedef struct BsAvcParsedSei {
-    uint32_t rbsp_storage_count; uint8_t* rbsp_storage;
-    uint32_t messages_count; struct BsAvcSeiMessage* messages;
+    uint32_t rbsp_storage_count;
+    uint8_t* rbsp_storage;
+    uint32_t messages_count;
+    struct BsAvcSeiMessage* messages;
 } BsAvcParsedSei;
 
 typedef struct BsHevcPocConfiguration {
@@ -713,8 +740,10 @@ typedef struct BsHevcCodingBlockGeometry {
 typedef struct BsHevcPredictionWeightTable {
     uint32_t luma_log2_weight_denom;
     int32_t delta_chroma_log2_weight_denom;
-    uint32_t l0_count; struct BsHevcPredictionWeight* l0;
-    uint32_t l1_count; struct BsHevcPredictionWeight* l1;
+    uint32_t l0_count;
+    struct BsHevcPredictionWeight* l0;
+    uint32_t l1_count;
+    struct BsHevcPredictionWeight* l1;
 } BsHevcPredictionWeightTable;
 
 typedef struct BsHevcDisplayDimensions {
@@ -739,7 +768,8 @@ typedef struct BsHevcPps3dExtension {
     uint8_t dlts_present_flag;
     uint32_t pps_depth_layers_minus1;
     uint32_t pps_bit_depth_for_depth_layers_minus8;
-    uint32_t depth_layer_transforms_count; struct BsHevcPps3dExtensionDepthLayerTransform* depth_layer_transforms;
+    uint32_t depth_layer_transforms_count;
+    struct BsHevcPps3dExtensionDepthLayerTransform* depth_layer_transforms;
 } BsHevcPps3dExtension;
 
 typedef struct BsHevcSpsGeometry {
@@ -807,7 +837,8 @@ typedef struct BsAvcSliceHeader {
     uint8_t no_output_of_prior_pics_flag;
     uint8_t long_term_reference_flag;
     uint8_t adaptive_ref_pic_marking_mode_flag;
-    uint32_t mmco_operations_count; struct BsAvcMmcoOperation* mmco_operations;
+    uint32_t mmco_operations_count;
+    struct BsAvcMmcoOperation* mmco_operations;
     uint8_t cabac_init_idc;
     int32_t slice_qp_delta;
     uint8_t disable_deblocking_filter_idc;
@@ -903,7 +934,8 @@ typedef struct BsHevcVideoParameterSet {
     struct BsHevcSubLayerOrderingInfo sub_layer_ordering_info[8];
     uint8_t vps_max_layer_id;
     uint32_t vps_num_layer_sets_minus1;
-    uint32_t layer_sets_count; struct BsHevcVpsLayerSet* layer_sets;
+    uint32_t layer_sets_count;
+    struct BsHevcVpsLayerSet* layer_sets;
     struct BsHevcVpsTimingInfo timing;
     struct BsHevcVpsExtension extension;
 } BsHevcVideoParameterSet;
@@ -913,8 +945,10 @@ typedef struct BsHevcShortTermRefPicSet {
     uint8_t inter_ref_pic_set_prediction_flag;
     uint32_t num_negative_pics;
     uint32_t num_positive_pics;
-    uint32_t negative_pics_count; struct BsHevcShortTermNegativePicture* negative_pics;
-    uint32_t positive_pics_count; struct BsHevcShortTermPositivePicture* positive_pics;
+    uint32_t negative_pics_count;
+    struct BsHevcShortTermNegativePicture* negative_pics;
+    uint32_t positive_pics_count;
+    struct BsHevcShortTermPositivePicture* positive_pics;
     struct BsHevcInterRpsPrediction inter_prediction;
     uint32_t num_delta_pocs;
 } BsHevcShortTermRefPicSet;
@@ -1061,7 +1095,8 @@ typedef struct BsHevcSliceSegmentHeader {
     uint32_t slice_pic_parameter_set_id;
     uint8_t dependent_slice_segment_flag;
     struct BsHevcSliceSegmentAddress slice_segment_address;
-    uint32_t slice_reserved_flag_count; uint8_t* slice_reserved_flag;
+    uint32_t slice_reserved_flag_count;
+    uint8_t* slice_reserved_flag;
     int slice_type;
     uint8_t pic_output_flag;
     uint8_t colour_plane_id;
@@ -1071,7 +1106,8 @@ typedef struct BsHevcSliceSegmentHeader {
     struct BsHevcShortTermRefPicSet short_term_ref_pic_set;
     uint32_t num_long_term_sps;
     uint32_t num_long_term_pics;
-    uint32_t long_term_references_count; struct BsHevcSliceLongTermReference* long_term_references;
+    uint32_t long_term_references_count;
+    struct BsHevcSliceLongTermReference* long_term_references;
     uint8_t slice_temporal_mvp_enabled_flag;
     uint8_t slice_sao_luma_flag;
     uint8_t slice_sao_chroma_flag;

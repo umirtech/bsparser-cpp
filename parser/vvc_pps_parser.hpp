@@ -14,27 +14,21 @@ namespace vvc {
  */
 template <typename Reader>
 [[nodiscard]]
-inline PictureParameterSet
-parse_pps(Reader& r)
-{
+inline PictureParameterSet parse_pps(Reader& r) {
     PictureParameterSet pps;
 
-    pps.pps_id =
-        static_cast<std::uint8_t>(r.read_bits(6));
+    pps.pps_id = static_cast<std::uint8_t>(r.read_bits(6));
 
-    pps.sps_id =
-        static_cast<std::uint8_t>(r.read_bits(4));
+    pps.sps_id = static_cast<std::uint8_t>(r.read_bits(4));
 
     pps.mixed_nalu_types_in_pic = r.read_bit();
 
-    pps.pic_width_in_luma_samples =
-        r.read_ue();
+    pps.pic_width_in_luma_samples = r.read_ue();
 
-    pps.pic_height_in_luma_samples =
-        r.read_ue();
+    pps.pic_height_in_luma_samples = r.read_ue();
 
     return pps;
 }
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

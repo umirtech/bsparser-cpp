@@ -13,7 +13,6 @@ namespace vvc {
  * modelled here (the full RBSP is far larger).
  */
 struct SequenceParameterSet {
-
     std::uint8_t sps_id = 0;
 
     std::uint8_t vps_id = 0;
@@ -26,14 +25,11 @@ struct SequenceParameterSet {
 
     bool ptl_dpb_hrd_params_present = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
-        return sps_id <= 15 &&
-               chroma_format_idc <= 3;
+    bool valid() const noexcept {
+        return sps_id <= 15 && chroma_format_idc <= 3;
     }
 };
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

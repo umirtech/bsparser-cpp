@@ -34,11 +34,9 @@ static int g_codec_hevc = 1;
 #define MAX_REF 64
 static char* ref_key[MAX_REF];
 static long ref_val[MAX_REF];
-static int   ref_n = 0;
+static int ref_n = 0;
 
-static void
-store_ref(const char* key, long val)
-{
+static void store_ref(const char* key, long val) {
     for (int i = 0; i < ref_n; ++i) {
         if (strcmp(ref_key[i], key) == 0) {
             ref_val[i] = val;
@@ -52,9 +50,7 @@ store_ref(const char* key, long val)
     }
 }
 
-static int
-load_reference(const char* path)
-{
+static int load_reference(const char* path) {
     FILE* f = fopen(path, "r");
     if (!f) {
         fprintf(stderr, "cannot open reference %s\n", path);
@@ -78,55 +74,49 @@ load_reference(const char* path)
 }
 
 /* ---- HEVC callbacks ---- */
-static void
-on_hevc_sps(void* ctx, const BsHevcSequenceParameterSet* sps)
-{
+static void on_hevc_sps(void* ctx, const BsHevcSequenceParameterSet* sps) {
     (void)ctx;
     g_profile_idc = sps->profile_tier_level.general_profile_idc;
-    g_level_idc   = sps->profile_tier_level.general_level_idc;
+    g_level_idc = sps->profile_tier_level.general_level_idc;
     g_coded_w = (int)sps->geometry.coded_width;
     g_coded_h = (int)sps->geometry.coded_height;
-    g_disp_w  = (int)sps->geometry.display_width;
-    g_disp_h  = (int)sps->geometry.display_height;
-    g_chroma  = sps->chroma_format;
+    g_disp_w = (int)sps->geometry.display_width;
+    g_disp_h = (int)sps->geometry.display_height;
+    g_chroma = sps->chroma_format;
     g_bd_luma = sps->bit_depth.luma;
     g_bd_chroma = sps->bit_depth.chroma;
 
-    if (sps->vui.video_signal.present &&
-        sps->vui.video_signal.colour.present) {
+    if (sps->vui.video_signal.present && sps->vui.video_signal.colour.present) {
         g_vui_colour_present = 1;
         g_colour_prim = sps->vui.video_signal.colour.colour_primaries;
-        g_transfer    = sps->vui.video_signal.colour.transfer_characteristics;
-        g_matrix      = sps->vui.video_signal.colour.matrix_coefficients;
+        g_transfer = sps->vui.video_signal.colour.transfer_characteristics;
+        g_matrix = sps->vui.video_signal.colour.matrix_coefficients;
     }
     if (sps->vui.video_signal.present) {
         g_full_range = sps->vui.video_signal.video_full_range_flag;
     }
 }
 
-static void
-on_hevc_sei(void* ctx, unsigned int payload_type,
-            const unsigned char* payload, size_t payload_size)
-{
+static void on_hevc_sei(
+    void* ctx, unsigned int payload_type, const unsigned char* payload, size_t payload_size
+) {
     (void)ctx;
     if (payload_type == 137 && payload_size >= 24) {
         g_mastering = 1;
     } else if (payload_type == 144 && payload_size >= 4) {
-        g_maxcll  = (payload[0] << 8) | payload[1];
+        g_maxcll = (payload[0] << 8) | payload[1];
         g_maxfall = (payload[2] << 8) | payload[3];
     }
 }
 
 /* ---- AVC callbacks ---- */
-static void
-on_avc_sps(void* ctx, const BsAvcSequenceParameterSet* sps)
-{
+static void on_avc_sps(void* ctx, const BsAvcSequenceParameterSet* sps) {
     (void)ctx;
     g_profile_idc = sps->profile_idc;
-    g_level_idc   = sps->level_idc;
-    g_chroma      = sps->chroma_format_idc;
-    g_bd_luma     = sps->bit_depth_luma_minus8 + 8;
-    g_bd_chroma   = sps->bit_depth_chroma_minus8 + 8;
+    g_level_idc = sps->level_idc;
+    g_chroma = sps->chroma_format_idc;
+    g_bd_luma = sps->bit_depth_luma_minus8 + 8;
+    g_bd_chroma = sps->bit_depth_chroma_minus8 + 8;
 
     int mb_w = sps->pic_width_in_mbs_minus1 + 1;
     int mb_h = sps->pic_height_in_map_units_minus1 + 1;
@@ -151,21 +141,20 @@ on_avc_sps(void* ctx, const BsAvcSequenceParameterSet* sps)
         if (sps->vui.colour_description_present_flag) {
             g_vui_colour_present = 1;
             g_colour_prim = sps->vui.colour_primaries;
-            g_transfer    = sps->vui.transfer_characteristics;
-            g_matrix      = sps->vui.matrix_coefficients;
+            g_transfer = sps->vui.transfer_characteristics;
+            g_matrix = sps->vui.matrix_coefficients;
         }
     }
 }
 
-static void
-on_avc_sei(void* ctx, unsigned int payload_type,
-           const unsigned char* payload, size_t payload_size)
-{
+static void on_avc_sei(
+    void* ctx, unsigned int payload_type, const unsigned char* payload, size_t payload_size
+) {
     (void)ctx;
     if (payload_type == 137 && payload_size >= 24) {
         g_mastering = 1;
     } else if (payload_type == 144 && payload_size >= 4) {
-        g_maxcll  = (payload[0] << 8) | payload[1];
+        g_maxcll = (payload[0] << 8) | payload[1];
         g_maxfall = (payload[2] << 8) | payload[3];
     }
 }
@@ -173,14 +162,11 @@ on_avc_sei(void* ctx, unsigned int payload_type,
 /* ---- comparison ---- */
 static int g_failures = 0;
 
-static void
-check_int(const char* key, int parsed)
-{
+static void check_int(const char* key, int parsed) {
     for (int i = 0; i < ref_n; ++i) {
         if (strcmp(ref_key[i], key) == 0) {
             if (parsed != ref_val[i]) {
-                printf("  FAIL %s: parser=%d reference=%ld\n",
-                       key, parsed, ref_val[i]);
+                printf("  FAIL %s: parser=%d reference=%ld\n", key, parsed, ref_val[i]);
                 ++g_failures;
             } else {
                 printf("  ok   %s = %d\n", key, parsed);
@@ -190,9 +176,7 @@ check_int(const char* key, int parsed)
     }
 }
 
-static int
-read_file(const char* path, unsigned char** out, size_t* out_size)
-{
+static int read_file(const char* path, unsigned char** out, size_t* out_size) {
     FILE* f = fopen(path, "rb");
     if (!f)
         return -1;
@@ -200,7 +184,10 @@ read_file(const char* path, unsigned char** out, size_t* out_size)
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     unsigned char* buf = (unsigned char*)malloc(sz ? (size_t)sz : 1);
-    if (!buf) { fclose(f); return -1; }
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
     size_t rd = fread(buf, 1, (size_t)sz, f);
     fclose(f);
     *out = buf;
@@ -208,8 +195,7 @@ read_file(const char* path, unsigned char** out, size_t* out_size)
     return 0;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     if (argc != 4) {
         fprintf(stderr, "usage: %s <stream> <reference.txt> <hevc|avc>\n", argv[0]);
         return 2;
@@ -227,22 +213,19 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    BsState* state = bs_state_create(
-        g_codec_hevc ? BS_CODEC_HEVC : BS_CODEC_AVC);
+    BsState* state = bs_state_create(g_codec_hevc ? BS_CODEC_HEVC : BS_CODEC_AVC);
 
     long nals = -1;
     if (g_codec_hevc) {
         BsHevcHandlers h = {0};
         h.sps = on_hevc_sps;
         h.sei = on_hevc_sei;
-        nals = bs_parse_hevc(state, data, size,
-                             BS_FRAMING_ANNEX_B, 4, &h);
+        nals = bs_parse_hevc(state, data, size, BS_FRAMING_ANNEX_B, 4, &h);
     } else {
         BsAvcHandlers h = {0};
         h.sps = on_avc_sps;
         h.sei = on_avc_sei;
-        nals = bs_parse_avc(state, data, size,
-                            BS_FRAMING_ANNEX_B, 4, &h);
+        nals = bs_parse_avc(state, data, size, BS_FRAMING_ANNEX_B, 4, &h);
     }
 
     if (nals < 0) {

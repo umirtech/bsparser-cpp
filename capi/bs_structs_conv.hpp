@@ -28,7 +28,8 @@
 #include <cstring>
 #include <new>
 
-namespace bs { namespace capi {
+namespace bs {
+namespace capi {
 
 inline void bs_conv(const ::bs::TimingInfo& src, BsHevcTimingInfo& dst);
 inline void bs_conv(const ::bs::PpsColourMappingOctant& src, BsHevcPpsColourMappingOctant& dst);
@@ -40,20 +41,27 @@ inline void bs_conv(const ::bs::VpsLayerSet& src, BsHevcVpsLayerSet& dst);
 inline void bs_conv(const ::bs::SliceHeaderExtension& src, BsHevcSliceHeaderExtension& dst);
 inline void bs_conv(const ::bs::PictureStructure& src, BsHevcPictureStructure& dst);
 inline void bs_conv(const ::bs::SampleAspectRatio& src, BsHevcSampleAspectRatio& dst);
-inline void bs_conv(const ::bs::DerivedShortTermRefPicSet& src, BsHevcDerivedShortTermRefPicSet& dst);
+inline void bs_conv(
+    const ::bs::DerivedShortTermRefPicSet& src, BsHevcDerivedShortTermRefPicSet& dst
+);
 inline void bs_conv(const ::bs::SliceLongTermReference& src, BsHevcSliceLongTermReference& dst);
 inline void bs_conv(const ::bs::SliceDeblockingFilter& src, BsHevcSliceDeblockingFilter& dst);
 inline void bs_conv(const ::bs::Sps3dViewExtension& src, BsHevcSps3dViewExtension& dst);
 inline void bs_conv(const ::bs::avc::HrdParameters& src, BsAvcHrdParameters& dst);
 inline void bs_conv(const ::bs::FramePackingArrangement& src, BsHevcFramePackingArrangement& dst);
-inline void bs_conv(const ::bs::Pps3dExtension::DepthLayerTransform& src, BsHevcPps3dExtensionDepthLayerTransform& dst);
+inline void bs_conv(
+    const ::bs::Pps3dExtension::DepthLayerTransform& src,
+    BsHevcPps3dExtensionDepthLayerTransform& dst
+);
 inline void bs_conv(const ::bs::RefPicListModification& src, BsHevcRefPicListModification& dst);
 inline void bs_conv(const ::bs::PredictionWeight& src, BsHevcPredictionWeight& dst);
 inline void bs_conv(const ::bs::ReferencePictureSetInfo& src, BsHevcReferencePictureSetInfo& dst);
 inline void bs_conv(const ::bs::Level& src, BsHevcLevel& dst);
 inline void bs_conv(const ::bs::ScalingListMatrix& src, BsHevcScalingListMatrix& dst);
 inline void bs_conv(const ::bs::SeiMessageHeader& src, BsHevcSeiMessageHeader& dst);
-inline void bs_conv(const ::bs::SampleAspectRatioTableEntry& src, BsHevcSampleAspectRatioTableEntry& dst);
+inline void bs_conv(
+    const ::bs::SampleAspectRatioTableEntry& src, BsHevcSampleAspectRatioTableEntry& dst
+);
 inline void bs_conv(const ::bs::ColourDescription& src, BsHevcColourDescription& dst);
 inline void bs_conv(const ::bs::avc::SliceGroupMap& src, BsAvcSliceGroupMap& dst);
 inline void bs_conv(const ::bs::BitDepth& src, BsHevcBitDepth& dst);
@@ -62,19 +70,31 @@ inline void bs_conv(const ::bs::PpsMultilayerExtension& src, BsHevcPpsMultilayer
 inline void bs_conv(const ::bs::SpsCodingBlockParameters& src, BsHevcSpsCodingBlockParameters& dst);
 inline void bs_conv(const ::bs::PpsSccExtension& src, BsHevcPpsSccExtension& dst);
 inline void bs_conv(const ::bs::SpsRangeExtension& src, BsHevcSpsRangeExtension& dst);
-inline void bs_conv(const ::bs::SpsLongTermReferencePictures& src, BsHevcSpsLongTermReferencePictures& dst);
+inline void bs_conv(
+    const ::bs::SpsLongTermReferencePictures& src, BsHevcSpsLongTermReferencePictures& dst
+);
 inline void bs_conv(const ::bs::VpsTimingInfo& src, BsHevcVpsTimingInfo& dst);
-inline void bs_conv(const ::bs::SpsReferencePictureSetParameters& src, BsHevcSpsReferencePictureSetParameters& dst);
+inline void bs_conv(
+    const ::bs::SpsReferencePictureSetParameters& src, BsHevcSpsReferencePictureSetParameters& dst
+);
 inline void bs_conv(const ::bs::ChromaLocationInfo& src, BsHevcChromaLocationInfo& dst);
 inline void bs_conv(const ::bs::InterRpsPrediction& src, BsHevcInterRpsPrediction& dst);
-inline void bs_conv(const ::bs::DerivedShortTermReference& src, BsHevcDerivedShortTermReference& dst);
-inline void bs_conv(const ::bs::AlternativeTransferCharacteristics& src, BsHevcAlternativeTransferCharacteristics& dst);
+inline void bs_conv(
+    const ::bs::DerivedShortTermReference& src, BsHevcDerivedShortTermReference& dst
+);
+inline void bs_conv(
+    const ::bs::AlternativeTransferCharacteristics& src,
+    BsHevcAlternativeTransferCharacteristics& dst
+);
 inline void bs_conv(const ::bs::SliceEntryPointOffsets& src, BsHevcSliceEntryPointOffsets& dst);
 inline void bs_conv(const ::bs::SubLayerHrdParameters& src, BsHevcSubLayerHrdParameters& dst);
 inline void bs_conv(const ::bs::avc::VuiParameters& src, BsAvcVuiParameters& dst);
 inline void bs_conv(const ::bs::PpsTileConfiguration& src, BsHevcPpsTileConfiguration& dst);
 inline void bs_conv(const ::bs::SpsSccExtension& src, BsHevcSpsSccExtension& dst);
-inline void bs_conv(const ::bs::MasteringDisplayColourVolume::Chromaticity& src, BsHevcMasteringDisplayColourVolumeChromaticity& dst);
+inline void bs_conv(
+    const ::bs::MasteringDisplayColourVolume::Chromaticity& src,
+    BsHevcMasteringDisplayColourVolumeChromaticity& dst
+);
 inline void bs_conv(const ::bs::Sps3dExtension& src, BsHevcSps3dExtension& dst);
 inline void bs_conv(const ::bs::VpsExtension& src, BsHevcVpsExtension& dst);
 inline void bs_conv(const ::bs::ShortTermNegativePicture& src, BsHevcShortTermNegativePicture& dst);
@@ -96,8 +116,12 @@ inline void bs_conv(const ::bs::CpbEntry& src, BsHevcCpbEntry& dst);
 inline void bs_conv(const ::bs::SpsPcmParameters& src, BsHevcSpsPcmParameters& dst);
 inline void bs_conv(const ::bs::PpsRefLocationOffset& src, BsHevcPpsRefLocationOffset& dst);
 inline void bs_conv(const ::bs::SpsMultilayerExtension& src, BsHevcSpsMultilayerExtension& dst);
-inline void bs_conv(const ::bs::MasteringDisplayColourVolume& src, BsHevcMasteringDisplayColourVolume& dst);
-inline void bs_conv(const ::bs::RefPicListModificationData& src, BsHevcRefPicListModificationData& dst);
+inline void bs_conv(
+    const ::bs::MasteringDisplayColourVolume& src, BsHevcMasteringDisplayColourVolume& dst
+);
+inline void bs_conv(
+    const ::bs::RefPicListModificationData& src, BsHevcRefPicListModificationData& dst
+);
 inline void bs_conv(const ::bs::ScalingListData& src, BsHevcScalingListData& dst);
 inline void bs_conv(const ::bs::TemporalLayer& src, BsHevcTemporalLayer& dst);
 inline void bs_conv(const ::bs::SeiExtendedValue& src, BsHevcSeiExtendedValue& dst);
@@ -111,7 +135,9 @@ inline void bs_conv(const ::bs::ProfileTierLevel& src, BsHevcProfileTierLevel& d
 inline void bs_conv(const ::bs::PpsExtension& src, BsHevcPpsExtension& dst);
 inline void bs_conv(const ::bs::ContentLightLevelInfo& src, BsHevcContentLightLevelInfo& dst);
 inline void bs_conv(const ::bs::avc::SliceHeader& src, BsAvcSliceHeader& dst);
-inline void bs_conv(const ::bs::AmbientViewingEnvironment& src, BsHevcAmbientViewingEnvironment& dst);
+inline void bs_conv(
+    const ::bs::AmbientViewingEnvironment& src, BsHevcAmbientViewingEnvironment& dst
+);
 inline void bs_conv(const ::bs::HrdSubLayer& src, BsHevcHrdSubLayer& dst);
 inline void bs_conv(const ::bs::ProfileTierLevelId& src, BsHevcProfileTierLevelId& dst);
 inline void bs_conv(const ::bs::VideoSignalType& src, BsHevcVideoSignalType& dst);
@@ -122,8 +148,12 @@ inline void bs_conv(const ::bs::ShortTermRefPicSet& src, BsHevcShortTermRefPicSe
 inline void bs_conv(const ::bs::avc::SequenceParameterSet& src, BsAvcSequenceParameterSet& dst);
 inline void bs_conv(const ::bs::PictureDimensions& src, BsHevcPictureDimensions& dst);
 inline void bs_conv(const ::bs::HrdParameters& src, BsHevcHrdParameters& dst);
-inline void bs_conv(const ::bs::PpsScalingListConfiguration& src, BsHevcPpsScalingListConfiguration& dst);
-inline void bs_conv(const ::bs::SliceReferencePictureInfo& src, BsHevcSliceReferencePictureInfo& dst);
+inline void bs_conv(
+    const ::bs::PpsScalingListConfiguration& src, BsHevcPpsScalingListConfiguration& dst
+);
+inline void bs_conv(
+    const ::bs::SliceReferencePictureInfo& src, BsHevcSliceReferencePictureInfo& dst
+);
 inline void bs_conv(const ::bs::PictureParameterSet& src, BsHevcPictureParameterSet& dst);
 inline void bs_conv(const ::bs::VpsHrdParameter& src, BsHevcVpsHrdParameter& dst);
 inline void bs_conv(const ::bs::VuiParameters& src, BsHevcVuiParameters& dst);
@@ -139,7 +169,8 @@ inline void bs_conv(const ::bs::TimingInfo& src, BsHevcTimingInfo& dst) {
 
 inline void bs_conv(const ::bs::PpsColourMappingOctant& src, BsHevcPpsColourMappingOctant& dst) {
     dst.split_octant_flag = (src.split_octant_flag ? 1 : 0);
-    dst.partition_coded_res_flags_count = static_cast<uint32_t>(src.partition_coded_res_flags.size());
+    dst.partition_coded_res_flags_count =
+        static_cast<uint32_t>(src.partition_coded_res_flags.size());
     if (!src.partition_coded_res_flags.empty()) {
         dst.partition_coded_res_flags = new uint8_t[dst.partition_coded_res_flags_count];
         for (std::size_t _i = 0; _i < dst.partition_coded_res_flags_count; ++_i) {
@@ -165,7 +196,7 @@ inline void bs_conv(const ::bs::avc::ScalingList& src, BsAvcScalingList& dst) {
         dst.present_4x4[_i0] = (src.present_4x4[_i0] ? 1 : 0);
     }
     for (std::size_t _i0 = 0; _i0 < 6; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 16; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 16; ++_i1) {
             dst.list_4x4[_i0][_i1] = (uint8_t)src.list_4x4[_i0][_i1];
         }
     }
@@ -173,7 +204,7 @@ inline void bs_conv(const ::bs::avc::ScalingList& src, BsAvcScalingList& dst) {
         dst.present_8x8[_i0] = (src.present_8x8[_i0] ? 1 : 0);
     }
     for (std::size_t _i0 = 0; _i0 < 2; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 64; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 64; ++_i1) {
             dst.list_8x8[_i0][_i1] = (uint8_t)src.list_8x8[_i0][_i1];
         }
     }
@@ -186,7 +217,9 @@ inline void bs_conv(const ::bs::RecoveryPoint& src, BsHevcRecoveryPoint& dst) {
     dst.changing_slice_group_idc = (uint8_t)src.changing_slice_group_idc;
 }
 
-inline void bs_conv(const ::bs::ShortTermPositivePicture& src, BsHevcShortTermPositivePicture& dst) {
+inline void bs_conv(
+    const ::bs::ShortTermPositivePicture& src, BsHevcShortTermPositivePicture& dst
+) {
     dst.delta_poc_minus1 = (uint32_t)src.delta_poc_minus1;
     dst.used_by_curr_pic = (src.used_by_curr_pic ? 1 : 0);
     dst.delta_poc = (int32_t)src.delta_poc;
@@ -230,7 +263,9 @@ inline void bs_conv(const ::bs::SampleAspectRatio& src, BsHevcSampleAspectRatio&
     dst.height = (uint16_t)src.height;
 }
 
-inline void bs_conv(const ::bs::DerivedShortTermRefPicSet& src, BsHevcDerivedShortTermRefPicSet& dst) {
+inline void bs_conv(
+    const ::bs::DerivedShortTermRefPicSet& src, BsHevcDerivedShortTermRefPicSet& dst
+) {
     dst.references_count = static_cast<uint32_t>(src.references.size());
     if (!src.references.empty()) {
         dst.references = new BsHevcDerivedShortTermReference[dst.references_count];
@@ -286,7 +321,8 @@ inline void bs_conv(const ::bs::avc::HrdParameters& src, BsAvcHrdParameters& dst
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
         dst.cbr_flag[_i0] = (src.cbr_flag[_i0] ? 1 : 0);
     }
-    dst.initial_cpb_removal_delay_length_minus1 = (uint8_t)src.initial_cpb_removal_delay_length_minus1;
+    dst.initial_cpb_removal_delay_length_minus1 =
+        (uint8_t)src.initial_cpb_removal_delay_length_minus1;
     dst.cpb_removal_delay_length_minus1 = (uint8_t)src.cpb_removal_delay_length_minus1;
     dst.dpb_output_delay_length_minus1 = (uint8_t)src.dpb_output_delay_length_minus1;
     dst.time_offset_length = (uint8_t)src.time_offset_length;
@@ -313,7 +349,10 @@ inline void bs_conv(const ::bs::FramePackingArrangement& src, BsHevcFramePacking
     dst.fp_upsampled_aspect_ratio_flag = (src.fp_upsampled_aspect_ratio_flag ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::Pps3dExtension::DepthLayerTransform& src, BsHevcPps3dExtensionDepthLayerTransform& dst) {
+inline void bs_conv(
+    const ::bs::Pps3dExtension::DepthLayerTransform& src,
+    BsHevcPps3dExtensionDepthLayerTransform& dst
+) {
     dst.dlt_flag = (src.dlt_flag ? 1 : 0);
     dst.dlt_pred_flag = (src.dlt_pred_flag ? 1 : 0);
     dst.dlt_val_flags_present_flag = (src.dlt_val_flags_present_flag ? 1 : 0);
@@ -377,7 +416,9 @@ inline void bs_conv(const ::bs::SeiMessageHeader& src, BsHevcSeiMessageHeader& d
     dst.header_size = (uint64_t)src.header_size;
 }
 
-inline void bs_conv(const ::bs::SampleAspectRatioTableEntry& src, BsHevcSampleAspectRatioTableEntry& dst) {
+inline void bs_conv(
+    const ::bs::SampleAspectRatioTableEntry& src, BsHevcSampleAspectRatioTableEntry& dst
+) {
     dst.idc = (uint8_t)src.idc;
     dst.width = (uint16_t)src.width;
     dst.height = (uint16_t)src.height;
@@ -455,37 +496,48 @@ inline void bs_conv(const ::bs::PpsMultilayerExtension& src, BsHevcPpsMultilayer
     dst.cm_adapt_threshold_v_delta = (int32_t)src.cm_adapt_threshold_v_delta;
     dst.colour_mapping_octants_count = static_cast<uint32_t>(src.colour_mapping_octants.size());
     if (!src.colour_mapping_octants.empty()) {
-        dst.colour_mapping_octants = new BsHevcPpsColourMappingOctant[dst.colour_mapping_octants_count];
+        dst.colour_mapping_octants =
+            new BsHevcPpsColourMappingOctant[dst.colour_mapping_octants_count];
         for (std::size_t _i = 0; _i < dst.colour_mapping_octants_count; ++_i) {
             bs_conv(src.colour_mapping_octants[_i], dst.colour_mapping_octants[_i]);
         }
     }
 }
 
-inline void bs_conv(const ::bs::SpsCodingBlockParameters& src, BsHevcSpsCodingBlockParameters& dst) {
-    dst.log2_min_luma_coding_block_size_minus3 = (uint32_t)src.log2_min_luma_coding_block_size_minus3;
-    dst.log2_diff_max_min_luma_coding_block_size = (uint32_t)src.log2_diff_max_min_luma_coding_block_size;
-    dst.log2_min_luma_transform_block_size_minus2 = (uint32_t)src.log2_min_luma_transform_block_size_minus2;
-    dst.log2_diff_max_min_luma_transform_block_size = (uint32_t)src.log2_diff_max_min_luma_transform_block_size;
+inline void bs_conv(
+    const ::bs::SpsCodingBlockParameters& src, BsHevcSpsCodingBlockParameters& dst
+) {
+    dst.log2_min_luma_coding_block_size_minus3 =
+        (uint32_t)src.log2_min_luma_coding_block_size_minus3;
+    dst.log2_diff_max_min_luma_coding_block_size =
+        (uint32_t)src.log2_diff_max_min_luma_coding_block_size;
+    dst.log2_min_luma_transform_block_size_minus2 =
+        (uint32_t)src.log2_min_luma_transform_block_size_minus2;
+    dst.log2_diff_max_min_luma_transform_block_size =
+        (uint32_t)src.log2_diff_max_min_luma_transform_block_size;
     dst.max_transform_hierarchy_depth_inter = (uint32_t)src.max_transform_hierarchy_depth_inter;
     dst.max_transform_hierarchy_depth_intra = (uint32_t)src.max_transform_hierarchy_depth_intra;
 }
 
 inline void bs_conv(const ::bs::PpsSccExtension& src, BsHevcPpsSccExtension& dst) {
     dst.pps_curr_pic_ref_enabled_flag = (src.pps_curr_pic_ref_enabled_flag ? 1 : 0);
-    dst.residual_adaptive_colour_transform_enabled_flag = (src.residual_adaptive_colour_transform_enabled_flag ? 1 : 0);
+    dst.residual_adaptive_colour_transform_enabled_flag =
+        (src.residual_adaptive_colour_transform_enabled_flag ? 1 : 0);
     dst.pps_slice_act_qp_offsets_present_flag = (src.pps_slice_act_qp_offsets_present_flag ? 1 : 0);
     dst.pps_act_y_qp_offset_plus5 = (int32_t)src.pps_act_y_qp_offset_plus5;
     dst.pps_act_cb_qp_offset_plus5 = (int32_t)src.pps_act_cb_qp_offset_plus5;
     dst.pps_act_cr_qp_offset_plus3 = (int32_t)src.pps_act_cr_qp_offset_plus3;
-    dst.pps_palette_predictor_initializers_present_flag = (src.pps_palette_predictor_initializers_present_flag ? 1 : 0);
-    dst.pps_num_palette_predictor_initializers = (uint32_t)src.pps_num_palette_predictor_initializers;
+    dst.pps_palette_predictor_initializers_present_flag =
+        (src.pps_palette_predictor_initializers_present_flag ? 1 : 0);
+    dst.pps_num_palette_predictor_initializers =
+        (uint32_t)src.pps_num_palette_predictor_initializers;
     dst.monochrome_palette_flag = (src.monochrome_palette_flag ? 1 : 0);
     dst.luma_bit_depth_entry_minus8 = (uint32_t)src.luma_bit_depth_entry_minus8;
     dst.chroma_bit_depth_entry_minus8 = (uint32_t)src.chroma_bit_depth_entry_minus8;
     for (std::size_t _i0 = 0; _i0 < 3; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < kMaxPalettePredictorSize; ++_i1) {
-            dst.pps_palette_predictor_initializer[_i0][_i1] = (uint32_t)src.pps_palette_predictor_initializer[_i0][_i1];
+        for (std::size_t _i1 = 0; _i1 < kMaxPalettePredictorSize; ++_i1) {
+            dst.pps_palette_predictor_initializer[_i0][_i1] =
+                (uint32_t)src.pps_palette_predictor_initializer[_i0][_i1];
         }
     }
 }
@@ -498,11 +550,14 @@ inline void bs_conv(const ::bs::SpsRangeExtension& src, BsHevcSpsRangeExtension&
     dst.extended_precision_processing_flag = (src.extended_precision_processing_flag ? 1 : 0);
     dst.intra_smoothing_disabled_flag = (src.intra_smoothing_disabled_flag ? 1 : 0);
     dst.high_precision_offsets_enabled_flag = (src.high_precision_offsets_enabled_flag ? 1 : 0);
-    dst.persistent_rice_adaptation_enabled_flag = (src.persistent_rice_adaptation_enabled_flag ? 1 : 0);
+    dst.persistent_rice_adaptation_enabled_flag =
+        (src.persistent_rice_adaptation_enabled_flag ? 1 : 0);
     dst.cabac_bypass_alignment_enabled_flag = (src.cabac_bypass_alignment_enabled_flag ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::SpsLongTermReferencePictures& src, BsHevcSpsLongTermReferencePictures& dst) {
+inline void bs_conv(
+    const ::bs::SpsLongTermReferencePictures& src, BsHevcSpsLongTermReferencePictures& dst
+) {
     dst.present = (src.present ? 1 : 0);
     dst.count = (uint32_t)src.count;
     dst.poc_lsb_count = static_cast<uint32_t>(src.poc_lsb.size());
@@ -537,11 +592,14 @@ inline void bs_conv(const ::bs::VpsTimingInfo& src, BsHevcVpsTimingInfo& dst) {
     }
 }
 
-inline void bs_conv(const ::bs::SpsReferencePictureSetParameters& src, BsHevcSpsReferencePictureSetParameters& dst) {
+inline void bs_conv(
+    const ::bs::SpsReferencePictureSetParameters& src, BsHevcSpsReferencePictureSetParameters& dst
+) {
     dst.num_short_term_ref_pic_sets = (uint32_t)src.num_short_term_ref_pic_sets;
     dst.short_term_ref_pic_sets_count = static_cast<uint32_t>(src.short_term_ref_pic_sets.size());
     if (!src.short_term_ref_pic_sets.empty()) {
-        dst.short_term_ref_pic_sets = new BsHevcShortTermRefPicSet[dst.short_term_ref_pic_sets_count];
+        dst.short_term_ref_pic_sets =
+            new BsHevcShortTermRefPicSet[dst.short_term_ref_pic_sets_count];
         for (std::size_t _i = 0; _i < dst.short_term_ref_pic_sets_count; ++_i) {
             bs_conv(src.short_term_ref_pic_sets[_i], dst.short_term_ref_pic_sets[_i]);
         }
@@ -555,7 +613,8 @@ inline void bs_conv(const ::bs::SpsReferencePictureSetParameters& src, BsHevcSps
             dst.lt_ref_pic_poc_lsb_sps[_i] = src.lt_ref_pic_poc_lsb_sps[_i];
         }
     }
-    dst.used_by_curr_pic_lt_sps_flag_count = static_cast<uint32_t>(src.used_by_curr_pic_lt_sps_flag.size());
+    dst.used_by_curr_pic_lt_sps_flag_count =
+        static_cast<uint32_t>(src.used_by_curr_pic_lt_sps_flag.size());
     if (!src.used_by_curr_pic_lt_sps_flag.empty()) {
         dst.used_by_curr_pic_lt_sps_flag = new uint8_t[dst.used_by_curr_pic_lt_sps_flag_count];
         for (std::size_t _i = 0; _i < dst.used_by_curr_pic_lt_sps_flag_count; ++_i) {
@@ -586,20 +645,26 @@ inline void bs_conv(const ::bs::InterRpsPrediction& src, BsHevcInterRpsPredictio
     }
 }
 
-inline void bs_conv(const ::bs::DerivedShortTermReference& src, BsHevcDerivedShortTermReference& dst) {
+inline void bs_conv(
+    const ::bs::DerivedShortTermReference& src, BsHevcDerivedShortTermReference& dst
+) {
     dst.delta_poc = (int32_t)src.delta_poc;
     dst.used_by_curr_pic = (src.used_by_curr_pic ? 1 : 0);
     dst.negative = (src.negative ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::AlternativeTransferCharacteristics& src, BsHevcAlternativeTransferCharacteristics& dst) {
+inline void bs_conv(
+    const ::bs::AlternativeTransferCharacteristics& src,
+    BsHevcAlternativeTransferCharacteristics& dst
+) {
     dst.preferred_transfer_characteristics = (uint8_t)src.preferred_transfer_characteristics;
 }
 
 inline void bs_conv(const ::bs::SliceEntryPointOffsets& src, BsHevcSliceEntryPointOffsets& dst) {
     dst.num_entry_point_offsets = (uint32_t)src.num_entry_point_offsets;
     dst.offset_len_minus1 = (uint32_t)src.offset_len_minus1;
-    dst.entry_point_offset_minus1_count = static_cast<uint32_t>(src.entry_point_offset_minus1.size());
+    dst.entry_point_offset_minus1_count =
+        static_cast<uint32_t>(src.entry_point_offset_minus1.size());
     if (!src.entry_point_offset_minus1.empty()) {
         dst.entry_point_offset_minus1 = new uint32_t[dst.entry_point_offset_minus1_count];
         for (std::size_t _i = 0; _i < dst.entry_point_offset_minus1_count; ++_i) {
@@ -645,7 +710,8 @@ inline void bs_conv(const ::bs::avc::VuiParameters& src, BsAvcVuiParameters& dst
     bs_conv(src.vcl_hrd, dst.vcl_hrd);
     dst.low_delay_hrd_flag = (src.low_delay_hrd_flag ? 1 : 0);
     dst.bitstream_restriction_flag = (src.bitstream_restriction_flag ? 1 : 0);
-    dst.motion_vectors_over_pic_boundaries_flag = (src.motion_vectors_over_pic_boundaries_flag ? 1 : 0);
+    dst.motion_vectors_over_pic_boundaries_flag =
+        (src.motion_vectors_over_pic_boundaries_flag ? 1 : 0);
     dst.max_bytes_per_pic_denom = (uint32_t)src.max_bytes_per_pic_denom;
     dst.max_bits_per_mb_denom = (uint32_t)src.max_bits_per_mb_denom;
     dst.log2_max_mv_length_horizontal = (uint32_t)src.log2_max_mv_length_horizontal;
@@ -681,18 +747,25 @@ inline void bs_conv(const ::bs::SpsSccExtension& src, BsHevcSpsSccExtension& dst
     dst.palette_mode_enabled_flag = (src.palette_mode_enabled_flag ? 1 : 0);
     dst.palette_max_size = (uint32_t)src.palette_max_size;
     dst.delta_palette_max_predictor_size = (uint32_t)src.delta_palette_max_predictor_size;
-    dst.sps_palette_predictor_initializers_present_flag = (src.sps_palette_predictor_initializers_present_flag ? 1 : 0);
-    dst.sps_num_palette_predictor_initializers_minus1 = (uint32_t)src.sps_num_palette_predictor_initializers_minus1;
+    dst.sps_palette_predictor_initializers_present_flag =
+        (src.sps_palette_predictor_initializers_present_flag ? 1 : 0);
+    dst.sps_num_palette_predictor_initializers_minus1 =
+        (uint32_t)src.sps_num_palette_predictor_initializers_minus1;
     for (std::size_t _i0 = 0; _i0 < 3; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < kMaxPalettePredictorSize; ++_i1) {
-            dst.sps_palette_predictor_initializer[_i0][_i1] = (uint32_t)src.sps_palette_predictor_initializer[_i0][_i1];
+        for (std::size_t _i1 = 0; _i1 < kMaxPalettePredictorSize; ++_i1) {
+            dst.sps_palette_predictor_initializer[_i0][_i1] =
+                (uint32_t)src.sps_palette_predictor_initializer[_i0][_i1];
         }
     }
     dst.motion_vector_resolution_control_idc = (uint32_t)src.motion_vector_resolution_control_idc;
-    dst.intra_boundary_filtering_disabled_flag = (src.intra_boundary_filtering_disabled_flag ? 1 : 0);
+    dst.intra_boundary_filtering_disabled_flag =
+        (src.intra_boundary_filtering_disabled_flag ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::MasteringDisplayColourVolume::Chromaticity& src, BsHevcMasteringDisplayColourVolumeChromaticity& dst) {
+inline void bs_conv(
+    const ::bs::MasteringDisplayColourVolume::Chromaticity& src,
+    BsHevcMasteringDisplayColourVolumeChromaticity& dst
+) {
     dst.x = (uint16_t)src.x;
     dst.y = (uint16_t)src.y;
 }
@@ -708,7 +781,9 @@ inline void bs_conv(const ::bs::VpsExtension& src, BsHevcVpsExtension& dst) {
     dst.extension_data_flag = (src.extension_data_flag ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::ShortTermNegativePicture& src, BsHevcShortTermNegativePicture& dst) {
+inline void bs_conv(
+    const ::bs::ShortTermNegativePicture& src, BsHevcShortTermNegativePicture& dst
+) {
     dst.delta_poc_minus1 = (uint32_t)src.delta_poc_minus1;
     dst.used_by_curr_pic = (src.used_by_curr_pic ? 1 : 0);
     dst.delta_poc = (int32_t)src.delta_poc;
@@ -731,8 +806,10 @@ inline void bs_conv(const ::bs::avc::SeiMessage& src, BsAvcSeiMessage& dst) {
 }
 
 inline void bs_conv(const ::bs::PpsRangeExtension& src, BsHevcPpsRangeExtension& dst) {
-    dst.log2_max_transform_skip_block_size_minus2 = (uint32_t)src.log2_max_transform_skip_block_size_minus2;
-    dst.cross_component_prediction_enabled_flag = (src.cross_component_prediction_enabled_flag ? 1 : 0);
+    dst.log2_max_transform_skip_block_size_minus2 =
+        (uint32_t)src.log2_max_transform_skip_block_size_minus2;
+    dst.cross_component_prediction_enabled_flag =
+        (src.cross_component_prediction_enabled_flag ? 1 : 0);
     dst.chroma_qp_offset_list_enabled_flag = (src.chroma_qp_offset_list_enabled_flag ? 1 : 0);
     dst.diff_cu_chroma_qp_offset_depth = (uint32_t)src.diff_cu_chroma_qp_offset_depth;
     dst.chroma_qp_offset_list_len_minus1 = (uint32_t)src.chroma_qp_offset_list_len_minus1;
@@ -776,12 +853,12 @@ inline void bs_conv(const ::bs::avc::PredWeightTable& src, BsAvcPredWeightTable&
         dst.chroma_weight_l0_flag[_i0] = (src.chroma_weight_l0_flag[_i0] ? 1 : 0);
     }
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
             dst.chroma_weight_l0[_i0][_i1] = (int16_t)src.chroma_weight_l0[_i0][_i1];
         }
     }
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
             dst.chroma_offset_l0[_i0][_i1] = (int16_t)src.chroma_offset_l0[_i0][_i1];
         }
     }
@@ -798,12 +875,12 @@ inline void bs_conv(const ::bs::avc::PredWeightTable& src, BsAvcPredWeightTable&
         dst.chroma_weight_l1_flag[_i0] = (src.chroma_weight_l1_flag[_i0] ? 1 : 0);
     }
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
             dst.chroma_weight_l1[_i0][_i1] = (int16_t)src.chroma_weight_l1[_i0][_i1];
         }
     }
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < 2; ++_i1) {
             dst.chroma_offset_l1[_i0][_i1] = (int16_t)src.chroma_offset_l1[_i0][_i1];
         }
     }
@@ -822,7 +899,9 @@ inline void bs_conv(const ::bs::Window& src, BsHevcWindow& dst) {
     dst.bottom_offset = (uint32_t)src.bottom_offset;
 }
 
-inline void bs_conv(const ::bs::avc::RefPicListModification& src, BsAvcRefPicListModification& dst) {
+inline void bs_conv(
+    const ::bs::avc::RefPicListModification& src, BsAvcRefPicListModification& dst
+) {
     dst.modification_flag = (src.modification_flag ? 1 : 0);
     dst.ops_count = static_cast<uint32_t>(src.ops.size());
     if (!src.ops.empty()) {
@@ -870,8 +949,10 @@ inline void bs_conv(const ::bs::PocConfiguration& src, BsHevcPocConfiguration& d
 }
 
 inline void bs_conv(const ::bs::PpsDeblockingFilter& src, BsHevcPpsDeblockingFilter& dst) {
-    dst.deblocking_filter_control_present_flag = (src.deblocking_filter_control_present_flag ? 1 : 0);
-    dst.deblocking_filter_override_enabled_flag = (src.deblocking_filter_override_enabled_flag ? 1 : 0);
+    dst.deblocking_filter_control_present_flag =
+        (src.deblocking_filter_control_present_flag ? 1 : 0);
+    dst.deblocking_filter_override_enabled_flag =
+        (src.deblocking_filter_override_enabled_flag ? 1 : 0);
     dst.pps_deblocking_filter_disabled_flag = (src.pps_deblocking_filter_disabled_flag ? 1 : 0);
     dst.pps_beta_offset_div2 = (int32_t)src.pps_beta_offset_div2;
     dst.pps_tc_offset_div2 = (int32_t)src.pps_tc_offset_div2;
@@ -889,8 +970,10 @@ inline void bs_conv(const ::bs::SpsPcmParameters& src, BsHevcSpsPcmParameters& d
     dst.pcm_enabled_flag = (src.pcm_enabled_flag ? 1 : 0);
     dst.pcm_sample_bit_depth_luma_minus1 = (uint8_t)src.pcm_sample_bit_depth_luma_minus1;
     dst.pcm_sample_bit_depth_chroma_minus1 = (uint8_t)src.pcm_sample_bit_depth_chroma_minus1;
-    dst.log2_min_pcm_luma_coding_block_size_minus3 = (uint32_t)src.log2_min_pcm_luma_coding_block_size_minus3;
-    dst.log2_diff_max_min_pcm_luma_coding_block_size = (uint32_t)src.log2_diff_max_min_pcm_luma_coding_block_size;
+    dst.log2_min_pcm_luma_coding_block_size_minus3 =
+        (uint32_t)src.log2_min_pcm_luma_coding_block_size_minus3;
+    dst.log2_diff_max_min_pcm_luma_coding_block_size =
+        (uint32_t)src.log2_diff_max_min_pcm_luma_coding_block_size;
     dst.pcm_loop_filter_disabled_flag = (src.pcm_loop_filter_disabled_flag ? 1 : 0);
 }
 
@@ -917,7 +1000,9 @@ inline void bs_conv(const ::bs::SpsMultilayerExtension& src, BsHevcSpsMultilayer
     dst.inter_view_mv_vert_constraint_flag = (src.inter_view_mv_vert_constraint_flag ? 1 : 0);
 }
 
-inline void bs_conv(const ::bs::MasteringDisplayColourVolume& src, BsHevcMasteringDisplayColourVolume& dst) {
+inline void bs_conv(
+    const ::bs::MasteringDisplayColourVolume& src, BsHevcMasteringDisplayColourVolume& dst
+) {
     for (std::size_t _i0 = 0; _i0 < 3; ++_i0) {
         bs_conv(src.display_primaries[_i0], dst.display_primaries[_i0]);
     }
@@ -926,14 +1011,16 @@ inline void bs_conv(const ::bs::MasteringDisplayColourVolume& src, BsHevcMasteri
     dst.min_display_mastering_luminance = (uint32_t)src.min_display_mastering_luminance;
 }
 
-inline void bs_conv(const ::bs::RefPicListModificationData& src, BsHevcRefPicListModificationData& dst) {
+inline void bs_conv(
+    const ::bs::RefPicListModificationData& src, BsHevcRefPicListModificationData& dst
+) {
     bs_conv(src.list0, dst.list0);
     bs_conv(src.list1, dst.list1);
 }
 
 inline void bs_conv(const ::bs::ScalingListData& src, BsHevcScalingListData& dst) {
     for (std::size_t _i0 = 0; _i0 < kScalingListSizeIds; ++_i0) {
-    for (std::size_t _i1 = 0; _i1 < kScalingListMatrixIds; ++_i1) {
+        for (std::size_t _i1 = 0; _i1 < kScalingListMatrixIds; ++_i1) {
             bs_conv(src.matrices[_i0][_i1], dst.matrices[_i0][_i1]);
         }
     }
@@ -984,7 +1071,9 @@ inline void bs_conv(const ::bs::DisplayDimensions& src, BsHevcDisplayDimensions&
     dst.height = (uint32_t)src.height;
 }
 
-inline void bs_conv(const ::bs::ProfileTierLevelSubLayer& src, BsHevcProfileTierLevelSubLayer& dst) {
+inline void bs_conv(
+    const ::bs::ProfileTierLevelSubLayer& src, BsHevcProfileTierLevelSubLayer& dst
+) {
     dst.profile_space = (uint8_t)src.profile_space;
     dst.tier_flag = (src.tier_flag ? 1 : 0);
     dst.profile_idc = (uint8_t)src.profile_idc;
@@ -1005,7 +1094,8 @@ inline void bs_conv(const ::bs::Pps3dExtension& src, BsHevcPps3dExtension& dst) 
     dst.pps_bit_depth_for_depth_layers_minus8 = (uint32_t)src.pps_bit_depth_for_depth_layers_minus8;
     dst.depth_layer_transforms_count = static_cast<uint32_t>(src.depth_layer_transforms.size());
     if (!src.depth_layer_transforms.empty()) {
-        dst.depth_layer_transforms = new BsHevcPps3dExtensionDepthLayerTransform[dst.depth_layer_transforms_count];
+        dst.depth_layer_transforms =
+            new BsHevcPps3dExtensionDepthLayerTransform[dst.depth_layer_transforms_count];
         for (std::size_t _i = 0; _i < dst.depth_layer_transforms_count; ++_i) {
             bs_conv(src.depth_layer_transforms[_i], dst.depth_layer_transforms[_i]);
         }
@@ -1029,7 +1119,8 @@ inline void bs_conv(const ::bs::ProfileTierLevel& src, BsHevcProfileTierLevel& d
     dst.general_tier_flag = (src.general_tier_flag ? 1 : 0);
     dst.general_profile_idc = (uint8_t)src.general_profile_idc;
     for (std::size_t _i0 = 0; _i0 < 32; ++_i0) {
-        dst.general_profile_compatibility_flag[_i0] = (src.general_profile_compatibility_flag[_i0] ? 1 : 0);
+        dst.general_profile_compatibility_flag[_i0] =
+            (src.general_profile_compatibility_flag[_i0] ? 1 : 0);
     }
     dst.general_progressive_source_flag = (src.general_progressive_source_flag ? 1 : 0);
     dst.general_interlaced_source_flag = (src.general_interlaced_source_flag ? 1 : 0);
@@ -1106,7 +1197,9 @@ inline void bs_conv(const ::bs::avc::SliceHeader& src, BsAvcSliceHeader& dst) {
     dst.slice_qs_delta = (int32_t)src.slice_qs_delta;
 }
 
-inline void bs_conv(const ::bs::AmbientViewingEnvironment& src, BsHevcAmbientViewingEnvironment& dst) {
+inline void bs_conv(
+    const ::bs::AmbientViewingEnvironment& src, BsHevcAmbientViewingEnvironment& dst
+) {
     dst.ambient_illuminance = (uint32_t)src.ambient_illuminance;
     dst.ambient_light_x = (uint16_t)src.ambient_light_x;
     dst.ambient_light_y = (uint16_t)src.ambient_light_y;
@@ -1146,13 +1239,16 @@ inline void bs_conv(const ::bs::HrdCommonInfo& src, BsHevcHrdCommonInfo& dst) {
     dst.vcl_hrd_parameters_present_flag = (src.vcl_hrd_parameters_present_flag ? 1 : 0);
     dst.sub_pic_hrd_params_present_flag = (src.sub_pic_hrd_params_present_flag ? 1 : 0);
     dst.tick_divisor_minus2 = (uint8_t)src.tick_divisor_minus2;
-    dst.du_cpb_removal_delay_increment_length_minus1 = (uint8_t)src.du_cpb_removal_delay_increment_length_minus1;
-    dst.sub_pic_cpb_params_in_pic_timing_sei_flag = (src.sub_pic_cpb_params_in_pic_timing_sei_flag ? 1 : 0);
+    dst.du_cpb_removal_delay_increment_length_minus1 =
+        (uint8_t)src.du_cpb_removal_delay_increment_length_minus1;
+    dst.sub_pic_cpb_params_in_pic_timing_sei_flag =
+        (src.sub_pic_cpb_params_in_pic_timing_sei_flag ? 1 : 0);
     dst.dpb_output_delay_du_length_minus1 = (uint8_t)src.dpb_output_delay_du_length_minus1;
     dst.bit_rate_scale = (uint8_t)src.bit_rate_scale;
     dst.cpb_size_scale = (uint8_t)src.cpb_size_scale;
     dst.cpb_size_du_scale = (uint8_t)src.cpb_size_du_scale;
-    dst.initial_cpb_removal_delay_length_minus1 = (uint8_t)src.initial_cpb_removal_delay_length_minus1;
+    dst.initial_cpb_removal_delay_length_minus1 =
+        (uint8_t)src.initial_cpb_removal_delay_length_minus1;
     dst.au_cpb_removal_delay_length_minus1 = (uint8_t)src.au_cpb_removal_delay_length_minus1;
     dst.dpb_output_delay_length_minus1 = (uint8_t)src.dpb_output_delay_length_minus1;
 }
@@ -1161,7 +1257,8 @@ inline void bs_conv(const ::bs::avc::PictureParameterSet& src, BsAvcPictureParam
     dst.pic_parameter_set_id = (uint8_t)src.pic_parameter_set_id;
     dst.seq_parameter_set_id = (uint8_t)src.seq_parameter_set_id;
     dst.entropy_coding_mode_flag = (src.entropy_coding_mode_flag ? 1 : 0);
-    dst.bottom_field_pic_order_in_frame_present_flag = (src.bottom_field_pic_order_in_frame_present_flag ? 1 : 0);
+    dst.bottom_field_pic_order_in_frame_present_flag =
+        (src.bottom_field_pic_order_in_frame_present_flag ? 1 : 0);
     dst.num_slice_groups_minus1 = (uint8_t)src.num_slice_groups_minus1;
     bs_conv(src.slice_group_map, dst.slice_group_map);
     dst.num_ref_idx_l0_default_active_minus1 = (uint8_t)src.num_ref_idx_l0_default_active_minus1;
@@ -1171,7 +1268,8 @@ inline void bs_conv(const ::bs::avc::PictureParameterSet& src, BsAvcPictureParam
     dst.pic_init_qp_minus26 = (int32_t)src.pic_init_qp_minus26;
     dst.pic_init_qs_minus26 = (int32_t)src.pic_init_qs_minus26;
     dst.chroma_qp_index_offset = (int32_t)src.chroma_qp_index_offset;
-    dst.deblocking_filter_control_present_flag = (src.deblocking_filter_control_present_flag ? 1 : 0);
+    dst.deblocking_filter_control_present_flag =
+        (src.deblocking_filter_control_present_flag ? 1 : 0);
     dst.constrained_intra_pred_flag = (src.constrained_intra_pred_flag ? 1 : 0);
     dst.redundant_pic_cnt_present_flag = (src.redundant_pic_cnt_present_flag ? 1 : 0);
     dst.transform_8x8_mode_flag = (src.transform_8x8_mode_flag ? 1 : 0);
@@ -1189,7 +1287,8 @@ inline void bs_conv(const ::bs::VideoParameterSet& src, BsHevcVideoParameterSet&
     dst.vps_temporal_id_nesting_flag = (src.vps_temporal_id_nesting_flag ? 1 : 0);
     dst.vps_reserved_0xffff_16bits = (uint16_t)src.vps_reserved_0xffff_16bits;
     bs_conv(src.profile_tier_level, dst.profile_tier_level);
-    dst.vps_sub_layer_ordering_info_present_flag = (src.vps_sub_layer_ordering_info_present_flag ? 1 : 0);
+    dst.vps_sub_layer_ordering_info_present_flag =
+        (src.vps_sub_layer_ordering_info_present_flag ? 1 : 0);
     for (std::size_t _i0 = 0; _i0 < 8; ++_i0) {
         bs_conv(src.sub_layer_ordering_info[_i0], dst.sub_layer_ordering_info[_i0]);
     }
@@ -1284,12 +1383,16 @@ inline void bs_conv(const ::bs::HrdParameters& src, BsHevcHrdParameters& dst) {
     dst.max_num_sub_layers_minus1 = (uint8_t)src.max_num_sub_layers_minus1;
 }
 
-inline void bs_conv(const ::bs::PpsScalingListConfiguration& src, BsHevcPpsScalingListConfiguration& dst) {
+inline void bs_conv(
+    const ::bs::PpsScalingListConfiguration& src, BsHevcPpsScalingListConfiguration& dst
+) {
     dst.scaling_list_data_present_flag = (src.scaling_list_data_present_flag ? 1 : 0);
     bs_conv(src.scaling_list, dst.scaling_list);
 }
 
-inline void bs_conv(const ::bs::SliceReferencePictureInfo& src, BsHevcSliceReferencePictureInfo& dst) {
+inline void bs_conv(
+    const ::bs::SliceReferencePictureInfo& src, BsHevcSliceReferencePictureInfo& dst
+) {
     dst.num_ref_idx_active_override_flag = (src.num_ref_idx_active_override_flag ? 1 : 0);
     dst.num_ref_idx_l0_active_minus1 = (uint32_t)src.num_ref_idx_l0_active_minus1;
     dst.num_ref_idx_l1_active_minus1 = (uint32_t)src.num_ref_idx_l1_active_minus1;
@@ -1320,12 +1423,14 @@ inline void bs_conv(const ::bs::PictureParameterSet& src, BsHevcPictureParameter
     dst.transquant_bypass_enabled_flag = (src.transquant_bypass_enabled_flag ? 1 : 0);
     bs_conv(src.tiles, dst.tiles);
     dst.entropy_coding_sync_enabled_flag = (src.entropy_coding_sync_enabled_flag ? 1 : 0);
-    dst.pps_loop_filter_across_slices_enabled_flag = (src.pps_loop_filter_across_slices_enabled_flag ? 1 : 0);
+    dst.pps_loop_filter_across_slices_enabled_flag =
+        (src.pps_loop_filter_across_slices_enabled_flag ? 1 : 0);
     bs_conv(src.deblocking, dst.deblocking);
     bs_conv(src.scaling_list_configuration, dst.scaling_list_configuration);
     dst.lists_modification_present_flag = (src.lists_modification_present_flag ? 1 : 0);
     dst.log2_parallel_merge_level_minus2 = (uint32_t)src.log2_parallel_merge_level_minus2;
-    dst.slice_segment_header_extension_present_flag = (src.slice_segment_header_extension_present_flag ? 1 : 0);
+    dst.slice_segment_header_extension_present_flag =
+        (src.slice_segment_header_extension_present_flag ? 1 : 0);
     bs_conv(src.extension, dst.extension);
     bs_conv(src.range_extension, dst.range_extension);
     bs_conv(src.scc_extension, dst.scc_extension);
@@ -1360,7 +1465,8 @@ inline void bs_conv(const ::bs::VuiParameters& src, BsHevcVuiParameters& dst) {
     dst.hrd_parameters_present_flag = (src.hrd_parameters_present_flag ? 1 : 0);
     bs_conv(src.hrd, dst.hrd);
     dst.bitstream_restriction_flag = (src.bitstream_restriction_flag ? 1 : 0);
-    dst.motion_vectors_over_pic_boundaries_flag = (src.motion_vectors_over_pic_boundaries_flag ? 1 : 0);
+    dst.motion_vectors_over_pic_boundaries_flag =
+        (src.motion_vectors_over_pic_boundaries_flag ? 1 : 0);
     dst.restricted_ref_pic_lists_flag = (src.restricted_ref_pic_lists_flag ? 1 : 0);
     dst.min_spatial_segmentation_idc = (uint32_t)src.min_spatial_segmentation_idc;
     dst.max_bytes_per_pic_denom = (uint32_t)src.max_bytes_per_pic_denom;
@@ -1415,7 +1521,8 @@ inline void bs_conv(const ::bs::SliceSegmentHeader& src, BsHevcSliceSegmentHeade
     dst.slice_cb_qp_offset = (int32_t)src.slice_cb_qp_offset;
     dst.slice_cr_qp_offset = (int32_t)src.slice_cr_qp_offset;
     bs_conv(src.deblocking, dst.deblocking);
-    dst.slice_loop_filter_across_slices_enabled_flag = (src.slice_loop_filter_across_slices_enabled_flag ? 1 : 0);
+    dst.slice_loop_filter_across_slices_enabled_flag =
+        (src.slice_loop_filter_across_slices_enabled_flag ? 1 : 0);
     bs_conv(src.entry_points, dst.entry_points);
     bs_conv(src.extension, dst.extension);
     dst.derived_poc = (int32_t)src.derived_poc;
@@ -1439,7 +1546,8 @@ inline void bs_conv(const ::bs::SequenceParameterSet& src, BsHevcSequenceParamet
     dst.bit_depth_chroma_minus8 = (uint32_t)src.bit_depth_chroma_minus8;
     bs_conv(src.bit_depth, dst.bit_depth);
     dst.log2_max_pic_order_cnt_lsb_minus4 = (uint32_t)src.log2_max_pic_order_cnt_lsb_minus4;
-    dst.sps_sub_layer_ordering_info_present_flag = (src.sps_sub_layer_ordering_info_present_flag ? 1 : 0);
+    dst.sps_sub_layer_ordering_info_present_flag =
+        (src.sps_sub_layer_ordering_info_present_flag ? 1 : 0);
     for (std::size_t _i0 = 0; _i0 < 8; ++_i0) {
         bs_conv(src.sub_layer_ordering_info[_i0], dst.sub_layer_ordering_info[_i0]);
     }
@@ -1463,5 +1571,5 @@ inline void bs_conv(const ::bs::SequenceParameterSet& src, BsHevcSequenceParamet
     bs_conv(src.geometry, dst.geometry);
 }
 
-} /* namespace bs::capi */
+}  // namespace capi
 } /* namespace bs */

@@ -18,12 +18,10 @@ struct RefPicReorderingOp {
     std::uint32_t long_term_pic_num = 0;
 };
 
-
 struct RefPicListModification {
     bool modification_flag = false;
     std::vector<RefPicReorderingOp> ops{};
 };
-
 
 /*
  * One memory_management_control_operation (7.3.3.3).
@@ -36,7 +34,6 @@ struct MmcoOperation {
     std::uint32_t max_long_term_frame_idx_plus1 = 0;
 };
 
-
 /*
  * pred_weight_table() (7.3.3.2).
  *
@@ -44,7 +41,6 @@ struct MmcoOperation {
  * can hold up to 32 reference indices.
  */
 struct PredWeightTable {
-
     std::uint32_t luma_log2_weight_denom = 0;
     std::uint32_t chroma_log2_weight_denom = 0;
 
@@ -63,12 +59,10 @@ struct PredWeightTable {
     std::array<std::array<std::int16_t, 2>, 32> chroma_offset_l1{};
 };
 
-
 /*
  * H.264 / AVC slice segment header (7.3.3.1).
  */
 struct SliceHeader {
-
     std::uint32_t first_mb_in_slice = 0;
     SliceType slice_type = SliceType::P;
     std::uint8_t pic_parameter_set_id = 0;
@@ -115,5 +109,5 @@ struct SliceHeader {
     std::int32_t slice_qs_delta = 0;
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

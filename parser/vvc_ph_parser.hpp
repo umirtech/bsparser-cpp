@@ -16,16 +16,13 @@ namespace vvc {
  */
 template <typename Reader>
 [[nodiscard]]
-inline PictureHeader
-parse_ph(Reader& r)
-{
+inline PictureHeader parse_ph(Reader& r) {
     PictureHeader ph;
 
-    ph.pps_id =
-        static_cast<std::uint8_t>(r.read_bits(6));
+    ph.pps_id = static_cast<std::uint8_t>(r.read_bits(6));
 
     return ph;
 }
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

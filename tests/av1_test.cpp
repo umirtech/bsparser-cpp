@@ -23,28 +23,21 @@ bs::av1::FrameHeader g_fh;
 bool g_seq_hit = false;
 bool g_fh_hit = false;
 
-
-std::vector<std::uint8_t>
-read_file(const char* path)
-{
+std::vector<std::uint8_t> read_file(const char* path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) {
         std::cerr << "cannot open " << path << "\n";
         return {};
     }
     return std::vector<std::uint8_t>(
-        std::istreambuf_iterator<char>(f),
-        std::istreambuf_iterator<char>());
+        std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()
+    );
 }
 
-} // namespace
+}  // namespace
 
-
-int main(int argc, char** argv)
-{
-    const char* path =
-        argc > 1 ? argv[1]
-                 : "tests/fuzz/corpus/av1_sample.obu";
+int main(int argc, char** argv) {
+    const char* path = argc > 1 ? argv[1] : "tests/fuzz/corpus/av1_sample.obu";
 
     auto data = read_file(path);
     if (data.empty()) {
@@ -83,11 +76,8 @@ int main(int argc, char** argv)
     }
 
     if (failures == 0) {
-        std::cout << "AV1 OK: profile="
-                  << static_cast<int>(g_seq.seq_profile)
-                  << " frame_type="
-                  << static_cast<int>(g_fh.frame_type)
-                  << "\n";
+        std::cout << "AV1 OK: profile=" << static_cast<int>(g_seq.seq_profile)
+                  << " frame_type=" << static_cast<int>(g_fh.frame_type) << "\n";
     }
 
     return failures == 0 ? 0 : 1;

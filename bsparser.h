@@ -38,33 +38,32 @@
 
 #if defined(BS_FORCE_C_API) || defined(BS_USE_C_API)
 
-#  define BSPARSER_USE_C_API 1
+#define BSPARSER_USE_C_API 1
 
 #elif !defined(__cplusplus)
 
-#  define BSPARSER_USE_C_API 1
+#define BSPARSER_USE_C_API 1
 
 #elif (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L) || \
-      (defined(__cplusplus) && __cplusplus >= 202002L)
+    (defined(__cplusplus) && __cplusplus >= 202002L)
 
-#  define BSPARSER_USE_C_API 0
+#define BSPARSER_USE_C_API 0
 
 #else
 
-#  define BSPARSER_USE_C_API 1
+#define BSPARSER_USE_C_API 1
 
 #endif
 
-
 #if BSPARSER_USE_C_API
 
-#  define BSPARSER_C_API 1
-#  include "bs_capi.h"
+#define BSPARSER_C_API 1
+#include "bs_capi.h"
 
 #else
 
-#  define BSPARSER_CXX_API 1
-#  include "bsparser.hpp"
+#define BSPARSER_CXX_API 1
+#include "bsparser.hpp"
 
 #endif
 

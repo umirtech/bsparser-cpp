@@ -35,7 +35,6 @@ namespace bs {
  * buffer. No payload is copied.
  */
 
-
 /*
  * -----------------------------------------------------------
  * Framing error
@@ -43,13 +42,9 @@ namespace bs {
  */
 
 class NalFramingError : public std::runtime_error {
-public:
-    explicit NalFramingError(const char* message)
-        : std::runtime_error(message)
-    {
-    }
+   public:
+    explicit NalFramingError(const char* message) : std::runtime_error(message) {}
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -67,9 +62,7 @@ public:
  *     length prefix
  */
 
-using FramedNalSpan =
-    std::span<const std::uint8_t>;
-
+using FramedNalSpan = std::span<const std::uint8_t>;
 
 /*
  * -----------------------------------------------------------
@@ -78,33 +71,20 @@ using FramedNalSpan =
  */
 
 [[nodiscard]]
-constexpr bool
-is_annex_b_start_code_3(
-    std::span<const std::uint8_t> data,
-    std::size_t pos) noexcept
-{
-    return
-        pos + 3 <= data.size() &&
-        data[pos]     == 0x00 &&
-        data[pos + 1] == 0x00 &&
-        data[pos + 2] == 0x01;
+constexpr bool is_annex_b_start_code_3(
+    std::span<const std::uint8_t> data, std::size_t pos
+) noexcept {
+    return pos + 3 <= data.size() && data[pos] == 0x00 && data[pos + 1] == 0x00 &&
+           data[pos + 2] == 0x01;
 }
-
 
 [[nodiscard]]
-constexpr bool
-is_annex_b_start_code_4(
-    std::span<const std::uint8_t> data,
-    std::size_t pos) noexcept
-{
-    return
-        pos + 4 <= data.size() &&
-        data[pos]     == 0x00 &&
-        data[pos + 1] == 0x00 &&
-        data[pos + 2] == 0x00 &&
-        data[pos + 3] == 0x01;
+constexpr bool is_annex_b_start_code_4(
+    std::span<const std::uint8_t> data, std::size_t pos
+) noexcept {
+    return pos + 4 <= data.size() && data[pos] == 0x00 && data[pos + 1] == 0x00 &&
+           data[pos + 2] == 0x00 && data[pos + 3] == 0x01;
 }
-
 
 /*
  * Return the size of the start code at pos.
@@ -114,11 +94,9 @@ is_annex_b_start_code_4(
  * Prefer the four-byte form when both could match.
  */
 [[nodiscard]]
-constexpr std::size_t
-annex_b_start_code_size(
-    std::span<const std::uint8_t> data,
-    std::size_t pos) noexcept
-{
+constexpr std::size_t annex_b_start_code_size(
+    std::span<const std::uint8_t> data, std::size_t pos
+) noexcept {
     if (is_annex_b_start_code_4(data, pos)) {
         return 4;
     }
@@ -129,7 +107,6 @@ annex_b_start_code_size(
 
     return 0;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -158,34 +135,24 @@ namespace {
  * idiom, whose borrow propagation marks the wrong lane).
  */
 [[nodiscard]]
-inline std::uint64_t
-sw_allzero(
-    std::uint64_t v) noexcept
-{
-    v |= (v << 1) &
-         0xFEFEFEFEFEFEFEFEULL;
-    v |= (v << 2) &
-         0xFCFCFCFCFCFCFCFCULL;
-    v |= (v << 4) &
-         0xF0F0F0F0F0F0F0F0ULL;
+inline std::uint64_t sw_allzero(std::uint64_t v) noexcept {
+    v |= (v << 1) & 0xFEFEFEFEFEFEFEFEULL;
+    v |= (v << 2) & 0xFCFCFCFCFCFCFCFCULL;
+    v |= (v << 4) & 0xF0F0F0F0F0F0F0F0ULL;
 
-    return ~v &
-           0x8080808080808080ULL;
+    return ~v & 0x8080808080808080ULL;
 }
 
-} // namespace
-
+}  // namespace
 
 /*
  * Return the index of the first start code at or after `from`,
  * or `data.size()` when none remains.
  */
 [[nodiscard]]
-inline std::size_t
-annex_b_find_start_code(
-    std::span<const std::uint8_t> data,
-    std::size_t from) noexcept
-{
+inline std::size_t annex_b_find_start_code(
+    std::span<const std::uint8_t> data, std::size_t from
+) noexcept {
     const std::size_t n = data.size();
 
     if (from + 3 > n) {
@@ -196,54 +163,39 @@ annex_b_find_start_code(
     std::size_t i = from;
 
     while (i + 8 <= n) {
-
         std::uint64_t x;
         std::memcpy(&x, p + i, 8);
 
-        const std::uint64_t z =
-            sw_allzero(x);
+        const std::uint64_t z = sw_allzero(x);
 
-        const std::uint64_t o =
-            sw_allzero(
-                x ^ 0x0101010101010101ULL);
+        const std::uint64_t o = sw_allzero(x ^ 0x0101010101010101ULL);
 
         /*
          * 00 00 01 ending at lane j: lane j is 0x01 and
          * lanes j-1, j-2 are 0x00. Lane shifts keep the
          * markers byte-aligned.
          */
-        const std::uint64_t match =
-            o &
-            (z << 8) &
-            (z << 16);
+        const std::uint64_t match = o & (z << 8) & (z << 16);
 
         if (match != 0) {
-
-            const int bit =
-                __builtin_ctzll(match);
+            const int bit = __builtin_ctzll(match);
 
             const int j = bit / 8;
 
-            return i +
-                   static_cast<std::size_t>(j - 2);
+            return i + static_cast<std::size_t>(j - 2);
         }
 
         i += 6;
     }
 
     for (; i + 3 <= n; ++i) {
-
-        if (annex_b_start_code_size(
-                data,
-                i) != 0) {
-
+        if (annex_b_start_code_size(data, i) != 0) {
             return i;
         }
     }
 
     return n;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -256,8 +208,7 @@ annex_b_find_start_code(
  */
 
 class AnnexBNalIterator {
-private:
-
+   private:
     std::span<const std::uint8_t> data_{};
 
     std::size_t current_ = 0;
@@ -268,27 +219,19 @@ private:
 
     bool finished_ = true;
 
-
     /*
      * Find the next start code.
      */
     [[nodiscard]]
-    std::size_t find_start_code(
-        std::size_t from) const noexcept
-    {
-        return annex_b_find_start_code(
-            data_,
-            from);
+    std::size_t find_start_code(std::size_t from) const noexcept {
+        return annex_b_find_start_code(data_, from);
     }
-
 
     /*
      * Locate the next NAL after current_.
      */
-    void locate_next()
-    {
-        const auto start =
-            find_start_code(current_);
+    void locate_next() {
+        const auto start = find_start_code(current_);
 
         if (start == data_.size()) {
             finished_ = true;
@@ -297,16 +240,11 @@ private:
             return;
         }
 
-        const auto prefix_size =
-            annex_b_start_code_size(
-                data_,
-                start);
+        const auto prefix_size = annex_b_start_code_size(data_, start);
 
-        const auto begin =
-            start + prefix_size;
+        const auto begin = start + prefix_size;
 
-        const auto next =
-            find_start_code(begin);
+        const auto next = find_start_code(begin);
 
         /*
          * Annex-B permits trailing_zero_8bits between the end
@@ -316,8 +254,7 @@ private:
          */
         std::size_t end = next;
 
-        while (end > begin &&
-               data_[end - 1] == 0x00) {
+        while (end > begin && data_[end - 1] == 0x00) {
             --end;
         }
 
@@ -337,55 +274,38 @@ private:
         finished_ = false;
     }
 
-
-public:
-
+   public:
     AnnexBNalIterator() = default;
 
-
-    explicit AnnexBNalIterator(
-        std::span<const std::uint8_t> data)
-        : data_(data),
-          current_(0),
-          nal_begin_(0),
-          nal_end_(0),
-          finished_(false)
-    {
+    explicit AnnexBNalIterator(std::span<const std::uint8_t> data)
+        : data_(data), current_(0), nal_begin_(0), nal_end_(0), finished_(false) {
         locate_next();
     }
-
 
     /*
      * Is another NAL available?
      */
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return !finished_;
     }
-
 
     /*
      * Current NAL.
      */
     [[nodiscard]]
-    FramedNalSpan nal() const noexcept
-    {
+    FramedNalSpan nal() const noexcept {
         if (finished_) {
             return {};
         }
 
-        return data_.subspan(
-            nal_begin_,
-            nal_end_ - nal_begin_);
+        return data_.subspan(nal_begin_, nal_end_ - nal_begin_);
     }
-
 
     /*
      * Advance to the next NAL.
      */
-    void next()
-    {
+    void next() {
         if (finished_) {
             return;
         }
@@ -393,18 +313,14 @@ public:
         locate_next();
     }
 
-
     /*
      * Underlying source.
      */
     [[nodiscard]]
-    std::span<const std::uint8_t>
-    source() const noexcept
-    {
+    std::span<const std::uint8_t> source() const noexcept {
         return data_;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -417,10 +333,7 @@ public:
  */
 
 [[nodiscard]]
-inline std::vector<FramedNalSpan>
-split_annex_b(
-    std::span<const std::uint8_t> data)
-{
+inline std::vector<FramedNalSpan> split_annex_b(std::span<const std::uint8_t> data) {
     std::vector<FramedNalSpan> result;
 
     AnnexBNalIterator iterator{data};
@@ -432,7 +345,6 @@ split_annex_b(
 
     return result;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -449,43 +361,29 @@ split_annex_b(
  * The caller must provide the actual length-field width.
  */
 
-
 /*
  * Read a big-endian length.
  */
 [[nodiscard]]
-constexpr std::uint32_t
-read_big_endian_length(
-    std::span<const std::uint8_t> data,
-    std::size_t pos,
-    unsigned length_size)
-{
-    if (length_size == 0 ||
-        length_size > 4) {
-
-        throw NalFramingError(
-            "length-prefixed NAL: invalid length size");
+constexpr std::uint32_t read_big_endian_length(
+    std::span<const std::uint8_t> data, std::size_t pos, unsigned length_size
+) {
+    if (length_size == 0 || length_size > 4) {
+        throw NalFramingError("length-prefixed NAL: invalid length size");
     }
 
     if (pos + length_size > data.size()) {
-        throw NalFramingError(
-            "length-prefixed NAL: truncated length");
+        throw NalFramingError("length-prefixed NAL: truncated length");
     }
 
     std::uint32_t value = 0;
 
-    for (unsigned i = 0;
-         i < length_size;
-         ++i) {
-
-        value =
-            (value << 8) |
-            data[pos + i];
+    for (unsigned i = 0; i < length_size; ++i) {
+        value = (value << 8) | data[pos + i];
     }
 
     return value;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -494,8 +392,7 @@ read_big_endian_length(
  */
 
 class LengthPrefixedNalIterator {
-private:
-
+   private:
     std::span<const std::uint8_t> data_{};
 
     unsigned length_size_ = 4;
@@ -508,9 +405,7 @@ private:
 
     bool finished_ = true;
 
-
-    void locate_next()
-    {
+    void locate_next() {
         if (current_ >= data_.size()) {
             finished_ = true;
             nal_begin_ = data_.size();
@@ -518,29 +413,18 @@ private:
             return;
         }
 
-        if (current_ + length_size_ >
-            data_.size()) {
-
-            throw NalFramingError(
-                "length-prefixed NAL: truncated length");
+        if (current_ + length_size_ > data_.size()) {
+            throw NalFramingError("length-prefixed NAL: truncated length");
         }
 
-        const auto length =
-            read_big_endian_length(
-                data_,
-                current_,
-                length_size_);
+        const auto length = read_big_endian_length(data_, current_, length_size_);
 
-        const auto payload_begin =
-            current_ + length_size_;
+        const auto payload_begin = current_ + length_size_;
 
-        const auto payload_end =
-            payload_begin +
-            static_cast<std::size_t>(length);
+        const auto payload_end = payload_begin + static_cast<std::size_t>(length);
 
         if (payload_end > data_.size()) {
-            throw NalFramingError(
-                "length-prefixed NAL: NAL exceeds input");
+            throw NalFramingError("length-prefixed NAL: NAL exceeds input");
         }
 
         /*
@@ -560,55 +444,38 @@ private:
         finished_ = false;
     }
 
-
-public:
-
+   public:
     LengthPrefixedNalIterator() = default;
 
-
-    LengthPrefixedNalIterator(
-        std::span<const std::uint8_t> data,
-        unsigned length_size)
+    LengthPrefixedNalIterator(std::span<const std::uint8_t> data, unsigned length_size)
         : data_(data),
           length_size_(length_size),
           current_(0),
           nal_begin_(0),
           nal_end_(0),
-          finished_(false)
-    {
-        if (length_size_ == 0 ||
-            length_size_ > 4) {
-
-            throw NalFramingError(
-                "length-prefixed NAL: invalid length size");
+          finished_(false) {
+        if (length_size_ == 0 || length_size_ > 4) {
+            throw NalFramingError("length-prefixed NAL: invalid length size");
         }
 
         locate_next();
     }
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return !finished_;
     }
 
-
     [[nodiscard]]
-    FramedNalSpan nal() const noexcept
-    {
+    FramedNalSpan nal() const noexcept {
         if (finished_) {
             return {};
         }
 
-        return data_.subspan(
-            nal_begin_,
-            nal_end_ - nal_begin_);
+        return data_.subspan(nal_begin_, nal_end_ - nal_begin_);
     }
 
-
-    void next()
-    {
+    void next() {
         if (finished_) {
             return;
         }
@@ -616,22 +483,16 @@ public:
         locate_next();
     }
 
-
     [[nodiscard]]
-    unsigned length_size() const noexcept
-    {
+    unsigned length_size() const noexcept {
         return length_size_;
     }
 
-
     [[nodiscard]]
-    std::span<const std::uint8_t>
-    source() const noexcept
-    {
+    std::span<const std::uint8_t> source() const noexcept {
         return data_;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -640,17 +501,12 @@ public:
  */
 
 [[nodiscard]]
-inline std::vector<FramedNalSpan>
-split_length_prefixed(
-    std::span<const std::uint8_t> data,
-    unsigned length_size)
-{
+inline std::vector<FramedNalSpan> split_length_prefixed(
+    std::span<const std::uint8_t> data, unsigned length_size
+) {
     std::vector<FramedNalSpan> result;
 
-    LengthPrefixedNalIterator iterator{
-        data,
-        length_size
-    };
+    LengthPrefixedNalIterator iterator{data, length_size};
 
     while (iterator.valid()) {
         result.push_back(iterator.nal());
@@ -660,20 +516,13 @@ split_length_prefixed(
     return result;
 }
 
-
 /*
  * -----------------------------------------------------------
  * Unified NAL framing mode
  * -----------------------------------------------------------
  */
 
-enum class NalFramingMode : std::uint8_t {
-    AnnexB,
-    LengthPrefixed,
-    Obu,
-    Ivf
-};
-
+enum class NalFramingMode : std::uint8_t { AnnexB, LengthPrefixed, Obu, Ivf };
 
 /*
  * -----------------------------------------------------------
@@ -682,45 +531,38 @@ enum class NalFramingMode : std::uint8_t {
  */
 
 [[nodiscard]]
-inline std::vector<FramedNalSpan>
-split_nal_units(
-    std::span<const std::uint8_t> data,
-    NalFramingMode mode,
-    unsigned length_size = 4)
-{
+inline std::vector<FramedNalSpan> split_nal_units(
+    std::span<const std::uint8_t> data, NalFramingMode mode, unsigned length_size = 4
+) {
     switch (mode) {
+        case NalFramingMode::AnnexB:
+            return split_annex_b(data);
 
-    case NalFramingMode::AnnexB:
-        return split_annex_b(data);
+        case NalFramingMode::LengthPrefixed:
+            return split_length_prefixed(data, length_size);
 
-    case NalFramingMode::LengthPrefixed:
-        return split_length_prefixed(
-            data,
-            length_size);
-
-    case NalFramingMode::Obu: {
-        std::vector<FramedNalSpan> out;
-        av1::ObuFramer framer{data};
-        while (framer.valid()) {
-            out.push_back(framer.obu());
-            framer.next();
+        case NalFramingMode::Obu: {
+            std::vector<FramedNalSpan> out;
+            av1::ObuFramer framer{data};
+            while (framer.valid()) {
+                out.push_back(framer.obu());
+                framer.next();
+            }
+            return out;
         }
-        return out;
-    }
 
-    case NalFramingMode::Ivf: {
-        std::vector<FramedNalSpan> out;
-        IvfFramer framer{data};
-        while (framer.valid()) {
-            out.push_back(framer.frame());
-            framer.next();
+        case NalFramingMode::Ivf: {
+            std::vector<FramedNalSpan> out;
+            IvfFramer framer{data};
+            while (framer.valid()) {
+                out.push_back(framer.frame());
+                framer.next();
+            }
+            return out;
         }
-        return out;
-    }
     }
 
-    throw NalFramingError(
-        "NAL framing: unsupported framing mode");
+    throw NalFramingError("NAL framing: unsupported framing mode");
 }
 
-} // namespace bs
+}  // namespace bs

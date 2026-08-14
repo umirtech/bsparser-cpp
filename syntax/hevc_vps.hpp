@@ -24,7 +24,6 @@ namespace bs {
  * bitstream-specific objects.
  */
 
-
 /*
  * One VPS layer-set entry.
  *
@@ -44,8 +43,7 @@ struct VpsLayerSet {
     std::vector<std::uint8_t> layer_ids;
 
     [[nodiscard]]
-    bool contains(std::uint8_t layer_id) const noexcept
-    {
+    bool contains(std::uint8_t layer_id) const noexcept {
         if (layer_id >= layer_id_included_flag.size()) {
             return false;
         }
@@ -54,12 +52,10 @@ struct VpsLayerSet {
     }
 
     [[nodiscard]]
-    std::size_t layer_count() const noexcept
-    {
+    std::size_t layer_count() const noexcept {
         return layer_ids.size();
     }
 };
-
 
 /*
  * One VPS HRD parameter-set entry.
@@ -85,7 +81,6 @@ struct VpsHrdParameter {
     HrdParameters hrd{};
 };
 
-
 /*
  * VPS timing information.
  *
@@ -110,17 +105,14 @@ struct VpsTimingInfo {
     std::vector<VpsHrdParameter> hrd_parameters;
 
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         if (!timing_info_present_flag) {
             return true;
         }
 
-        return num_units_in_tick != 0 &&
-               time_scale != 0;
+        return num_units_in_tick != 0 && time_scale != 0;
     }
 };
-
 
 /*
  * VPS extension information.
@@ -143,12 +135,10 @@ struct VpsExtension {
     bool extension_data_flag = false;
 };
 
-
 /*
  * Complete Video Parameter Set.
  */
 struct VideoParameterSet {
-
     /*
      * -------------------------------------------------------
      * VPS identification
@@ -162,7 +152,6 @@ struct VideoParameterSet {
      */
     std::uint8_t vps_video_parameter_set_id = 0;
 
-
     /*
      * -------------------------------------------------------
      * Base-layer configuration
@@ -172,7 +161,6 @@ struct VideoParameterSet {
     bool vps_base_layer_internal_flag = false;
 
     bool vps_base_layer_available_flag = false;
-
 
     /*
      * -------------------------------------------------------
@@ -198,7 +186,6 @@ struct VideoParameterSet {
 
     bool vps_temporal_id_nesting_flag = false;
 
-
     /*
      * Reserved:
      *
@@ -208,7 +195,6 @@ struct VideoParameterSet {
      */
     std::uint16_t vps_reserved_0xffff_16bits = 0;
 
-
     /*
      * -------------------------------------------------------
      * Profile / tier / level
@@ -216,7 +202,6 @@ struct VideoParameterSet {
      */
 
     ProfileTierLevel profile_tier_level{};
-
 
     /*
      * -------------------------------------------------------
@@ -234,9 +219,7 @@ struct VideoParameterSet {
      * sub-layer 0 or only from the highest sub-layer with
      * lower entries inferred.
      */
-    std::array<SubLayerOrderingInfo, 8>
-        sub_layer_ordering_info{};
-
+    std::array<SubLayerOrderingInfo, 8> sub_layer_ordering_info{};
 
     /*
      * -------------------------------------------------------
@@ -265,7 +248,6 @@ struct VideoParameterSet {
      */
     std::vector<VpsLayerSet> layer_sets;
 
-
     /*
      * -------------------------------------------------------
      * Timing / HRD
@@ -273,7 +255,6 @@ struct VideoParameterSet {
      */
 
     VpsTimingInfo timing{};
-
 
     /*
      * -------------------------------------------------------
@@ -283,7 +264,6 @@ struct VideoParameterSet {
 
     VpsExtension extension{};
 
-
     /*
      * -------------------------------------------------------
      * Helpers
@@ -291,38 +271,28 @@ struct VideoParameterSet {
      */
 
     [[nodiscard]]
-    constexpr std::size_t max_layers() const noexcept
-    {
-        return static_cast<std::size_t>(
-            vps_max_layers_minus1) + 1;
+    constexpr std::size_t max_layers() const noexcept {
+        return static_cast<std::size_t>(vps_max_layers_minus1) + 1;
     }
 
     [[nodiscard]]
-    constexpr std::size_t max_sub_layers() const noexcept
-    {
-        return static_cast<std::size_t>(
-            vps_max_sub_layers_minus1) + 1;
+    constexpr std::size_t max_sub_layers() const noexcept {
+        return static_cast<std::size_t>(vps_max_sub_layers_minus1) + 1;
     }
 
     [[nodiscard]]
-    constexpr std::size_t layer_set_count() const noexcept
-    {
-        return static_cast<std::size_t>(
-            vps_num_layer_sets_minus1) + 1;
+    constexpr std::size_t layer_set_count() const noexcept {
+        return static_cast<std::size_t>(vps_num_layer_sets_minus1) + 1;
     }
 
     [[nodiscard]]
-    bool valid() const noexcept
-    {
-        return vps_video_parameter_set_id < 16 &&
-               vps_max_layers_minus1 < 64 &&
+    bool valid() const noexcept {
+        return vps_video_parameter_set_id < 16 && vps_max_layers_minus1 < 64 &&
                vps_max_sub_layers_minus1 < 8;
     }
 
     [[nodiscard]]
-    const VpsLayerSet* layer_set(
-        std::size_t index) const noexcept
-    {
+    const VpsLayerSet* layer_set(std::size_t index) const noexcept {
         if (index >= layer_sets.size()) {
             return nullptr;
         }
@@ -331,9 +301,7 @@ struct VideoParameterSet {
     }
 
     [[nodiscard]]
-    VpsLayerSet* layer_set(
-        std::size_t index) noexcept
-    {
+    VpsLayerSet* layer_set(std::size_t index) noexcept {
         if (index >= layer_sets.size()) {
             return nullptr;
         }
@@ -342,13 +310,11 @@ struct VideoParameterSet {
     }
 };
 
-
 /*
  * -----------------------------------------------------------
  * VPS construction helpers
  * -----------------------------------------------------------
  */
-
 
 /*
  * Initialize the sub-layer ordering array.
@@ -356,14 +322,11 @@ struct VideoParameterSet {
  * The array always has eight entries so that parser code
  * doesn't need optional allocations.
  */
-inline void initialize_vps_sub_layer_ordering(
-    VideoParameterSet& vps)
-{
+inline void initialize_vps_sub_layer_ordering(VideoParameterSet& vps) {
     for (auto& entry : vps.sub_layer_ordering_info) {
         entry = {};
     }
 }
-
 
 /*
  * Initialize layer sets.
@@ -374,21 +337,16 @@ inline void initialize_vps_sub_layer_ordering(
  *
  *     vps_num_layer_sets_minus1
  */
-inline void initialize_vps_layer_sets(
-    VideoParameterSet& vps)
-{
-    const std::size_t count =
-        static_cast<std::size_t>(
-            vps.vps_num_layer_sets_minus1) + 1;
+inline void initialize_vps_layer_sets(VideoParameterSet& vps) {
+    const std::size_t count = static_cast<std::size_t>(vps.vps_num_layer_sets_minus1) + 1;
 
     vps.layer_sets.clear();
     vps.layer_sets.resize(count);
 
     for (auto& layer_set : vps.layer_sets) {
         layer_set.layer_id_included_flag.resize(
-            static_cast<std::size_t>(
-                vps.vps_max_layer_id) + 1,
-            false);
+            static_cast<std::size_t>(vps.vps_max_layer_id) + 1, false
+        );
 
         layer_set.layer_ids.clear();
     }
@@ -408,38 +366,27 @@ inline void initialize_vps_layer_sets(
     }
 }
 
-
 /*
  * Build the derived layer-id list for a layer set.
  */
-inline void derive_vps_layer_ids(
-    VpsLayerSet& layer_set)
-{
+inline void derive_vps_layer_ids(VpsLayerSet& layer_set) {
     layer_set.layer_ids.clear();
 
-    for (std::size_t layer_id = 0;
-         layer_id < layer_set.layer_id_included_flag.size();
-         ++layer_id) {
-
+    for (std::size_t layer_id = 0; layer_id < layer_set.layer_id_included_flag.size(); ++layer_id) {
         if (layer_set.layer_id_included_flag[layer_id]) {
-            layer_set.layer_ids.push_back(
-                static_cast<std::uint8_t>(layer_id));
+            layer_set.layer_ids.push_back(static_cast<std::uint8_t>(layer_id));
         }
     }
 }
 
-
 /*
  * Build derived layer-id lists for all VPS layer sets.
  */
-inline void derive_vps_layer_ids(
-    VideoParameterSet& vps)
-{
+inline void derive_vps_layer_ids(VideoParameterSet& vps) {
     for (auto& layer_set : vps.layer_sets) {
         derive_vps_layer_ids(layer_set);
     }
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -447,44 +394,35 @@ inline void derive_vps_layer_ids(
  * -----------------------------------------------------------
  */
 
-
 /*
  * Return the decoded DPB buffering limit:
  *
  *     max_dec_pic_buffering_minus1 + 1
  */
 [[nodiscard]]
-constexpr std::uint32_t
-max_dec_pic_buffering(
-    const VideoParameterSet& vps,
-    std::size_t sub_layer) noexcept
-{
+constexpr std::uint32_t max_dec_pic_buffering(
+    const VideoParameterSet& vps, std::size_t sub_layer
+) noexcept {
     if (sub_layer >= 8) {
         return 0;
     }
 
-    return vps.sub_layer_ordering_info[sub_layer]
-               .max_dec_pic_buffering_minus1 + 1;
+    return vps.sub_layer_ordering_info[sub_layer].max_dec_pic_buffering_minus1 + 1;
 }
-
 
 /*
  * Return the maximum number of reorder pictures.
  */
 [[nodiscard]]
-constexpr std::uint32_t
-max_num_reorder_pics(
-    const VideoParameterSet& vps,
-    std::size_t sub_layer) noexcept
-{
+constexpr std::uint32_t max_num_reorder_pics(
+    const VideoParameterSet& vps, std::size_t sub_layer
+) noexcept {
     if (sub_layer >= 8) {
         return 0;
     }
 
-    return vps.sub_layer_ordering_info[sub_layer]
-        .max_num_reorder_pics;
+    return vps.sub_layer_ordering_info[sub_layer].max_num_reorder_pics;
 }
-
 
 /*
  * Return max latency increase.
@@ -497,22 +435,17 @@ max_num_reorder_pics(
  * latency-increase value.
  */
 [[nodiscard]]
-constexpr std::uint32_t
-max_latency_increase(
-    const VideoParameterSet& vps,
-    std::size_t sub_layer) noexcept
-{
+constexpr std::uint32_t max_latency_increase(
+    const VideoParameterSet& vps, std::size_t sub_layer
+) noexcept {
     if (sub_layer >= 8) {
         return 0;
     }
 
-    const auto value =
-        vps.sub_layer_ordering_info[sub_layer]
-            .max_latency_increase_plus1;
+    const auto value = vps.sub_layer_ordering_info[sub_layer].max_latency_increase_plus1;
 
     return value == 0 ? 0 : value - 1;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -521,20 +454,14 @@ max_latency_increase(
  */
 
 [[nodiscard]]
-constexpr double vps_time_scale(
-    const VideoParameterSet& vps) noexcept
-{
-    if (!vps.timing.timing_info_present_flag ||
-        vps.timing.num_units_in_tick == 0) {
+constexpr double vps_time_scale(const VideoParameterSet& vps) noexcept {
+    if (!vps.timing.timing_info_present_flag || vps.timing.num_units_in_tick == 0) {
         return 0.0;
     }
 
-    return static_cast<double>(
-               vps.timing.time_scale) /
-           static_cast<double>(
-               vps.timing.num_units_in_tick);
+    return static_cast<double>(vps.timing.time_scale) /
+           static_cast<double>(vps.timing.num_units_in_tick);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -542,43 +469,33 @@ constexpr double vps_time_scale(
  * -----------------------------------------------------------
  */
 
-
 /*
  * H.265 limits.
  */
-inline constexpr std::uint8_t
-    kMaxVpsLayersMinus1 = 63;
+inline constexpr std::uint8_t kMaxVpsLayersMinus1 = 63;
 
-inline constexpr std::uint8_t
-    kMaxVpsSubLayersMinus1 = 7;
+inline constexpr std::uint8_t kMaxVpsSubLayersMinus1 = 7;
 
-inline constexpr std::uint8_t
-    kMaxVpsLayerId = 63;
-
+inline constexpr std::uint8_t kMaxVpsLayerId = 63;
 
 /*
  * Validate the base VPS fields.
  */
 [[nodiscard]]
-constexpr bool validate_vps_base(
-    const VideoParameterSet& vps) noexcept
-{
+constexpr bool validate_vps_base(const VideoParameterSet& vps) noexcept {
     if (vps.vps_video_parameter_set_id >= 16) {
         return false;
     }
 
-    if (vps.vps_max_layers_minus1 >
-        kMaxVpsLayersMinus1) {
+    if (vps.vps_max_layers_minus1 > kMaxVpsLayersMinus1) {
         return false;
     }
 
-    if (vps.vps_max_sub_layers_minus1 >
-        kMaxVpsSubLayersMinus1) {
+    if (vps.vps_max_sub_layers_minus1 > kMaxVpsSubLayersMinus1) {
         return false;
     }
 
-    if (vps.vps_max_layer_id >
-        kMaxVpsLayerId) {
+    if (vps.vps_max_layer_id > kMaxVpsLayerId) {
         return false;
     }
 
@@ -592,31 +509,23 @@ constexpr bool validate_vps_base(
     return true;
 }
 
-
 /*
  * Validate that layer-set dimensions match VPS limits.
  */
 [[nodiscard]]
-inline bool validate_vps_layer_sets(
-    const VideoParameterSet& vps) noexcept
-{
+inline bool validate_vps_layer_sets(const VideoParameterSet& vps) noexcept {
     if (vps.layer_sets.empty()) {
         return false;
     }
 
-    if (vps.layer_sets.size() !=
-        static_cast<std::size_t>(
-            vps.vps_num_layer_sets_minus1) + 1) {
+    if (vps.layer_sets.size() != static_cast<std::size_t>(vps.vps_num_layer_sets_minus1) + 1) {
         return false;
     }
 
-    const std::size_t expected_flags =
-        static_cast<std::size_t>(
-            vps.vps_max_layer_id) + 1;
+    const std::size_t expected_flags = static_cast<std::size_t>(vps.vps_max_layer_id) + 1;
 
     for (const auto& set : vps.layer_sets) {
-        if (set.layer_id_included_flag.size() !=
-            expected_flags) {
+        if (set.layer_id_included_flag.size() != expected_flags) {
             return false;
         }
     }
@@ -624,4 +533,4 @@ inline bool validate_vps_layer_sets(
     return true;
 }
 
-} // namespace bs
+}  // namespace bs

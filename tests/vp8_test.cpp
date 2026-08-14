@@ -20,28 +20,21 @@ namespace {
 bs::vp8::FrameHeader g_fh;
 bool g_hit = false;
 
-
-std::vector<std::uint8_t>
-read_file(const char* path)
-{
+std::vector<std::uint8_t> read_file(const char* path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) {
         std::cerr << "cannot open " << path << "\n";
         return {};
     }
     return std::vector<std::uint8_t>(
-        std::istreambuf_iterator<char>(f),
-        std::istreambuf_iterator<char>());
+        std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()
+    );
 }
 
-} // namespace
+}  // namespace
 
-
-int main(int argc, char** argv)
-{
-    const char* path =
-        argc > 1 ? argv[1]
-                 : "tests/fuzz/corpus/vp8_sample.ivf";
+int main(int argc, char** argv) {
+    const char* path = argc > 1 ? argv[1] : "tests/fuzz/corpus/vp8_sample.ivf";
 
     auto data = read_file(path);
     if (data.empty()) {
@@ -68,8 +61,8 @@ int main(int argc, char** argv)
     if (failures == 0) {
         std::cout << "VP8 OK: key=" << g_fh.key_frame
                   << " version=" << static_cast<int>(g_fh.version)
-                  << " first_part_size=" << g_fh.first_part_size
-                  << " " << g_fh.width << "x" << g_fh.height << "\n";
+                  << " first_part_size=" << g_fh.first_part_size << " " << g_fh.width << "x"
+                  << g_fh.height << "\n";
     }
 
     return failures == 0 ? 0 : 1;

@@ -23,7 +23,6 @@ namespace vp8 {
  * which parse syntax, not the coded data).
  */
 struct FrameHeader {
-
     bool key_frame = false;
 
     /*
@@ -49,13 +48,11 @@ struct FrameHeader {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return !key_frame || start_code_ok;
     }
 };
 
-} // namespace vp8
-} // namespace bs
+}  // namespace vp8
+}  // namespace bs

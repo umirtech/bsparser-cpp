@@ -13,7 +13,6 @@ namespace bs {
  */
 
 struct ProfileTierLevelSubLayer {
-
     /*
      * sub_layer_profile_space[i]
      *
@@ -40,8 +39,7 @@ struct ProfileTierLevelSubLayer {
      *
      * 32 flags
      */
-    std::array<bool, 32>
-        profile_compatibility_flag{};
+    std::array<bool, 32> profile_compatibility_flag{};
 
     /*
      * Constraint flags.
@@ -68,14 +66,9 @@ struct ProfileTierLevelSubLayer {
      */
     std::uint8_t level_idc = 0;
 
-
     [[nodiscard]]
-    constexpr bool
-    profile_compatible(
-        std::size_t profile) const noexcept
-    {
-        if (profile >=
-            profile_compatibility_flag.size()) {
+    constexpr bool profile_compatible(std::size_t profile) const noexcept {
+        if (profile >= profile_compatibility_flag.size()) {
             return false;
         }
 
@@ -83,15 +76,12 @@ struct ProfileTierLevelSubLayer {
     }
 };
 
-
 struct ProfileTierLevel {
-
     /*
      * MaxNumSubLayersMinus1 passed to
      * profile_tier_level().
      */
     std::uint8_t max_sub_layers_minus1 = 0;
-
 
     /*
      * -------------------------------------------------------
@@ -123,9 +113,7 @@ struct ProfileTierLevel {
     /*
      * general_profile_compatibility_flag[32]
      */
-    std::array<bool, 32>
-        general_profile_compatibility_flag{};
-
+    std::array<bool, 32> general_profile_compatibility_flag{};
 
     /*
      * -------------------------------------------------------
@@ -141,7 +129,6 @@ struct ProfileTierLevel {
 
     bool general_frame_only_constraint_flag = false;
 
-
     /*
      * -------------------------------------------------------
      * Reserved constraint bits
@@ -149,7 +136,6 @@ struct ProfileTierLevel {
      */
 
     std::uint64_t general_reserved_zero_44bits = 0;
-
 
     /*
      * -------------------------------------------------------
@@ -164,19 +150,15 @@ struct ProfileTierLevel {
      */
     std::uint8_t general_level_idc = 0;
 
-
     /*
      * -------------------------------------------------------
      * Sub-layer presence flags
      * -------------------------------------------------------
      */
 
-    std::array<bool, 8>
-        sub_layer_profile_present_flag{};
+    std::array<bool, 8> sub_layer_profile_present_flag{};
 
-    std::array<bool, 8>
-        sub_layer_level_present_flag{};
-
+    std::array<bool, 8> sub_layer_level_present_flag{};
 
     /*
      * -------------------------------------------------------
@@ -184,9 +166,7 @@ struct ProfileTierLevel {
      * -------------------------------------------------------
      */
 
-    std::array<ProfileTierLevelSubLayer, 8>
-        sub_layer{};
-
+    std::array<ProfileTierLevelSubLayer, 8> sub_layer{};
 
     /*
      * -------------------------------------------------------
@@ -195,64 +175,38 @@ struct ProfileTierLevel {
      */
 
     [[nodiscard]]
-    constexpr std::size_t
-    max_sub_layers() const noexcept
-    {
-        return static_cast<std::size_t>(
-            max_sub_layers_minus1) + 1;
+    constexpr std::size_t max_sub_layers() const noexcept {
+        return static_cast<std::size_t>(max_sub_layers_minus1) + 1;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    profile_compatible(
-        std::size_t profile) const noexcept
-    {
-        if (profile >=
-            general_profile_compatibility_flag.size()) {
+    constexpr bool profile_compatible(std::size_t profile) const noexcept {
+        if (profile >= general_profile_compatibility_flag.size()) {
             return false;
         }
 
-        return general_profile_compatibility_flag[
-            profile];
+        return general_profile_compatibility_flag[profile];
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    profile_or_compatible(
-        std::size_t profile) const noexcept
-    {
-        return
-            general_profile_idc == profile ||
-            profile_compatible(profile);
+    constexpr bool profile_or_compatible(std::size_t profile) const noexcept {
+        return general_profile_idc == profile || profile_compatible(profile);
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    progressive_only() const noexcept
-    {
-        return
-            general_progressive_source_flag &&
-            !general_interlaced_source_flag;
+    constexpr bool progressive_only() const noexcept {
+        return general_progressive_source_flag && !general_interlaced_source_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    frame_only() const noexcept
-    {
+    constexpr bool frame_only() const noexcept {
         return general_frame_only_constraint_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool
-    non_packed() const noexcept
-    {
+    constexpr bool non_packed() const noexcept {
         return general_non_packed_constraint_flag;
     }
 };
 
-} // namespace bs
+}  // namespace bs

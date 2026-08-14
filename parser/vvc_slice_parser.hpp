@@ -17,18 +17,15 @@ namespace vvc {
  */
 template <typename Reader>
 [[nodiscard]]
-inline SliceHeader
-parse_slice_header(Reader& r)
-{
+inline SliceHeader parse_slice_header(Reader& r) {
     SliceHeader sh;
 
     sh.pps_id = r.read_ue();
 
-    sh.slice_type =
-        static_cast<SliceType>(r.read_ue());
+    sh.slice_type = static_cast<SliceType>(r.read_ue());
 
     return sh;
 }
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

@@ -14,7 +14,6 @@ namespace av1 {
  * Everything is boolean-coded.
  */
 struct FrameHeader {
-
     FrameType frame_type = FrameType::InterFrame;
 
     bool show_frame = false;
@@ -25,13 +24,11 @@ struct FrameHeader {
 
     bool allow_screen_content_tools = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return true;
     }
 };
 
-} // namespace av1
-} // namespace bs
+}  // namespace av1
+}  // namespace bs

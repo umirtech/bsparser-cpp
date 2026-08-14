@@ -20,14 +20,9 @@ namespace vp9 {
  *
  * Only the uncompressed (header) portion is modelled.
  */
-enum class FrameType : std::uint8_t {
-    KeyFrame = 0,
-    InterFrame = 1
-};
-
+enum class FrameType : std::uint8_t { KeyFrame = 0, InterFrame = 1 };
 
 struct FrameHeader {
-
     /*
      * frame_marker must equal 0b10.
      */
@@ -73,13 +68,11 @@ struct FrameHeader {
      */
     bool frame_size_from_refs = false;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return frame_marker == 0b10u;
     }
 };
 
-} // namespace vp9
-} // namespace bs
+}  // namespace vp9
+}  // namespace bs

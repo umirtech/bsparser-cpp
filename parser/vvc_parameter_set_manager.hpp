@@ -23,88 +23,60 @@ namespace vvc {
  * ranges, so the stores are small arrays.
  */
 class ParameterSetManager {
-public:
-
-    void store_dci(const Dci& dci)
-    {
+   public:
+    void store_dci(const Dci& dci) {
         dci_ = dci;
     }
 
-
-    void store_opi(const Opi& opi)
-    {
+    void store_opi(const Opi& opi) {
         opi_ = opi;
     }
 
-
-    void store_vps(const VideoParameterSet& vps)
-    {
+    void store_vps(const VideoParameterSet& vps) {
         vps_[vps.vps_id] = vps;
     }
 
-
-    void store_sps(const SequenceParameterSet& sps)
-    {
+    void store_sps(const SequenceParameterSet& sps) {
         sps_[sps.sps_id] = sps;
     }
 
-
-    void store_pps(const PictureParameterSet& pps)
-    {
+    void store_pps(const PictureParameterSet& pps) {
         pps_[pps.pps_id] = pps;
     }
 
-
-    void store_ph(const PictureHeader& ph)
-    {
+    void store_ph(const PictureHeader& ph) {
         ph_ = ph;
     }
 
-
     [[nodiscard]]
-    const Dci* dci() const noexcept
-    {
+    const Dci* dci() const noexcept {
         return dci_ ? &*dci_ : nullptr;
     }
 
-
     [[nodiscard]]
-    const Opi* opi() const noexcept
-    {
+    const Opi* opi() const noexcept {
         return opi_ ? &*opi_ : nullptr;
     }
 
-
     [[nodiscard]]
-    const PictureHeader* ph() const noexcept
-    {
+    const PictureHeader* ph() const noexcept {
         return ph_ ? &*ph_ : nullptr;
     }
 
-
     [[nodiscard]]
-    const VideoParameterSet* find_vps(
-        std::uint8_t id) const noexcept
-    {
+    const VideoParameterSet* find_vps(std::uint8_t id) const noexcept {
         return vps_[id] ? &vps_[id].value() : nullptr;
     }
 
-
     [[nodiscard]]
-    const SequenceParameterSet* find_sps(
-        std::uint8_t id) const noexcept
-    {
+    const SequenceParameterSet* find_sps(std::uint8_t id) const noexcept {
         return sps_[id] ? &sps_[id].value() : nullptr;
     }
 
-
     [[nodiscard]]
-    const PictureParameterSet* find_pps(
-        std::uint8_t id) const noexcept
-    {
+    const PictureParameterSet* find_pps(std::uint8_t id) const noexcept {
         return pps_[id] ? &pps_[id].value() : nullptr;
     }
-
 
     /*
      * Resolve a PPS and the SPS it references.
@@ -115,12 +87,8 @@ public:
         const VideoParameterSet* vps = nullptr;
     };
 
-
     [[nodiscard]]
-    Resolved
-    resolve(
-        std::uint8_t pps_id) const noexcept
-    {
+    Resolved resolve(std::uint8_t pps_id) const noexcept {
         Resolved r;
 
         r.pps = find_pps(pps_id);
@@ -135,21 +103,20 @@ public:
         return r;
     }
 
-
-    void clear() noexcept
-    {
+    void clear() noexcept {
         dci_.reset();
         opi_.reset();
         ph_.reset();
 
-        for (auto& e : vps_) e.reset();
-        for (auto& e : sps_) e.reset();
-        for (auto& e : pps_) e.reset();
+        for (auto& e : vps_)
+            e.reset();
+        for (auto& e : sps_)
+            e.reset();
+        for (auto& e : pps_)
+            e.reset();
     }
 
-
-private:
-
+   private:
     std::optional<Dci> dci_{};
     std::optional<Opi> opi_{};
     std::optional<PictureHeader> ph_{};
@@ -159,5 +126,5 @@ private:
     std::array<std::optional<PictureParameterSet>, 64> pps_{};
 };
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs

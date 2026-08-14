@@ -49,16 +49,11 @@
 namespace {
 
 [[nodiscard]]
-std::span<const std::byte>
-as_bytes(
-    std::span<const std::uint8_t> input) noexcept
-{
+std::span<const std::byte> as_bytes(std::span<const std::uint8_t> input) noexcept {
     return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(
-            input.data()),
-        input.size());
+        reinterpret_cast<const std::byte*>(input.data()), input.size()
+    );
 }
-
 
 /*
  * Per-input parser state.
@@ -73,48 +68,32 @@ struct FuzzState {
     std::array<bool, bs::kMaxPpsCount> pps_seen{};
 };
 
+void parse_slice(FuzzState& state, const bs::NalUnit& nal) {
+    const auto payload = nal.payload_bytes();
 
-void parse_slice(
-    FuzzState& state,
-    const bs::NalUnit& nal)
-{
-    const auto payload =
-        nal.payload_bytes();
+    const auto span = as_bytes(payload);
 
-    const auto span =
-        as_bytes(payload);
+    const auto nal_type = static_cast<std::uint8_t>(nal.nal_type());
 
-    const auto nal_type =
-        static_cast<std::uint8_t>(
-            nal.nal_type());
-
-    const auto temporal_id =
-        nal.header.temporal_id();
+    const auto temporal_id = nal.header.temporal_id();
 
     /*
      * The slice header encodes its PPS id inside the header, so we try
      * every PPS known from this input.  Bounded by the number of stored
      * PPS (at most kMaxPpsCount); mismatches reject quickly by throwing.
      */
-    for (std::size_t pps_id = 0;
-         pps_id < state.pps_seen.size();
-         ++pps_id) {
-
+    for (std::size_t pps_id = 0; pps_id < state.pps_seen.size(); ++pps_id) {
         if (!state.pps_seen[pps_id]) {
             continue;
         }
 
-        const auto* pps =
-            state.parameter_sets.find_pps(
-                static_cast<std::uint8_t>(pps_id));
+        const auto* pps = state.parameter_sets.find_pps(static_cast<std::uint8_t>(pps_id));
 
         if (pps == nullptr) {
             continue;
         }
 
-        const auto* sps =
-            state.parameter_sets.find_sps(
-                pps->pps_seq_parameter_set_id);
+        const auto* sps = state.parameter_sets.find_sps(pps->pps_seq_parameter_set_id);
 
         if (sps == nullptr) {
             continue;
@@ -125,82 +104,57 @@ void parse_slice(
          */
         bs::RbspBitstreamReader reader(span);
 
-        (void)bs::parse_slice_segment_header(
-            reader,
-            *sps,
-            *pps,
-            nal_type,
-            temporal_id);
+        (void)bs::parse_slice_segment_header(reader, *sps, *pps, nal_type, temporal_id);
     }
 }
 
+void handle_nal(FuzzState& state, const bs::NalUnit& nal) {
+    const auto payload = nal.payload_bytes();
 
-void handle_nal(
-    FuzzState& state,
-    const bs::NalUnit& nal)
-{
-    const auto payload =
-        nal.payload_bytes();
-
-    const auto span =
-        as_bytes(payload);
+    const auto span = as_bytes(payload);
 
     switch (nal.type()) {
-
-    case bs::NalUnitType::VPS_NUT: {
-        bs::RbspBitstreamReader reader(span);
-        auto vps =
-            bs::parse_video_parameter_set(reader);
-        (void)state.parameter_sets.store_vps(
-            std::move(vps));
-        break;
-    }
-
-    case bs::NalUnitType::SPS_NUT: {
-        bs::RbspBitstreamReader reader(span);
-        auto sps =
-            bs::parse_sequence_parameter_set(reader);
-        (void)state.parameter_sets.store_sps(
-            std::move(sps));
-        break;
-    }
-
-    case bs::NalUnitType::PPS_NUT: {
-        bs::RbspBitstreamReader reader(span);
-        auto pps =
-            bs::parse_picture_parameter_set(reader);
-        const auto id = pps.pps_pic_parameter_set_id;
-        if (state.parameter_sets.store_pps(
-                std::move(pps))) {
-            state.pps_seen[
-                static_cast<std::size_t>(id)] = true;
+        case bs::NalUnitType::VPS_NUT: {
+            bs::RbspBitstreamReader reader(span);
+            auto vps = bs::parse_video_parameter_set(reader);
+            (void)state.parameter_sets.store_vps(std::move(vps));
+            break;
         }
-        break;
-    }
 
-    case bs::NalUnitType::PREFIX_SEI_NUT:
-    case bs::NalUnitType::SUFFIX_SEI_NUT: {
-        std::vector<std::byte> storage;
-        bs::SeiRbspView view;
-        (void)bs::parse_sei_nal(
-            nal,
-            storage,
-            view);
-        break;
-    }
-
-    default:
-        if (nal.is_vcl()) {
-            parse_slice(state, nal);
+        case bs::NalUnitType::SPS_NUT: {
+            bs::RbspBitstreamReader reader(span);
+            auto sps = bs::parse_sequence_parameter_set(reader);
+            (void)state.parameter_sets.store_sps(std::move(sps));
+            break;
         }
-        break;
+
+        case bs::NalUnitType::PPS_NUT: {
+            bs::RbspBitstreamReader reader(span);
+            auto pps = bs::parse_picture_parameter_set(reader);
+            const auto id = pps.pps_pic_parameter_set_id;
+            if (state.parameter_sets.store_pps(std::move(pps))) {
+                state.pps_seen[static_cast<std::size_t>(id)] = true;
+            }
+            break;
+        }
+
+        case bs::NalUnitType::PREFIX_SEI_NUT:
+        case bs::NalUnitType::SUFFIX_SEI_NUT: {
+            std::vector<std::byte> storage;
+            bs::SeiRbspView view;
+            (void)bs::parse_sei_nal(nal, storage, view);
+            break;
+        }
+
+        default:
+            if (nal.is_vcl()) {
+                parse_slice(state, nal);
+            }
+            break;
     }
 }
 
-
-void run_input(
-    std::span<const std::uint8_t> input)
-{
+void run_input(std::span<const std::uint8_t> input) {
     /*
      * Pass 1: Annex-B framing with full parameter-set state.
      */
@@ -210,11 +164,9 @@ void run_input(
         bs::AnnexBNalIterator framer{input};
 
         while (framer.valid()) {
-            const auto bytes =
-                framer.nal();
+            const auto bytes = framer.nal();
 
-            const bs::NalUnit nal =
-                bs::parse_nal_unit(bytes);
+            const bs::NalUnit nal = bs::parse_nal_unit(bytes);
 
             handle_nal(state, nal);
 
@@ -231,8 +183,7 @@ void run_input(
     {
         FuzzState state;
 
-        const bs::NalUnit nal =
-            bs::parse_nal_unit(input);
+        const bs::NalUnit nal = bs::parse_nal_unit(input);
 
         handle_nal(state, nal);
     }
@@ -240,20 +191,12 @@ void run_input(
 
 }  // namespace
 
-
-extern "C" int
-LLVMFuzzerTestOneInput(
-    const std::uint8_t* data,
-    std::size_t size)
-{
-    const std::span<const std::uint8_t> input(
-        data,
-        size);
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
+    const std::span<const std::uint8_t> input(data, size);
 
     try {
         run_input(input);
-    }
-    catch (...) {
+    } catch (...) {
         /*
          * Rejection is signaled with exceptions throughout this parser.
          * Swallow them so a malformed input is not treated as a crash.

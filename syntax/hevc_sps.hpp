@@ -27,7 +27,6 @@ namespace bs {
  *     parser/hevc_sps_parser.hpp
  */
 
-
 /*
  * -----------------------------------------------------------
  * SPS sub-layer ordering
@@ -35,7 +34,6 @@ namespace bs {
  */
 
 using SpsSubLayerOrderingInfo = SubLayerOrderingInfo;
-
 
 /*
  * -----------------------------------------------------------
@@ -49,43 +47,35 @@ using SpsSubLayerOrderingInfo = SubLayerOrderingInfo;
  */
 
 struct SpsCodingBlockParameters {
-
     /*
      * log2_min_luma_coding_block_size_minus3
      */
-    std::uint32_t
-        log2_min_luma_coding_block_size_minus3 = 0;
+    std::uint32_t log2_min_luma_coding_block_size_minus3 = 0;
 
     /*
      * log2_diff_max_min_luma_coding_block_size
      */
-    std::uint32_t
-        log2_diff_max_min_luma_coding_block_size = 0;
+    std::uint32_t log2_diff_max_min_luma_coding_block_size = 0;
 
     /*
      * log2_min_luma_transform_block_size_minus2
      */
-    std::uint32_t
-        log2_min_luma_transform_block_size_minus2 = 0;
+    std::uint32_t log2_min_luma_transform_block_size_minus2 = 0;
 
     /*
      * log2_diff_max_min_luma_transform_block_size
      */
-    std::uint32_t
-        log2_diff_max_min_luma_transform_block_size = 0;
+    std::uint32_t log2_diff_max_min_luma_transform_block_size = 0;
 
     /*
      * max_transform_hierarchy_depth_inter
      */
-    std::uint32_t
-        max_transform_hierarchy_depth_inter = 0;
+    std::uint32_t max_transform_hierarchy_depth_inter = 0;
 
     /*
      * max_transform_hierarchy_depth_intra
      */
-    std::uint32_t
-        max_transform_hierarchy_depth_intra = 0;
-
+    std::uint32_t max_transform_hierarchy_depth_intra = 0;
 
     /*
      * -------------------------------------------------------
@@ -94,40 +84,29 @@ struct SpsCodingBlockParameters {
      */
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    min_luma_coding_block_size() const noexcept
-    {
-        return std::uint32_t{1}
-            << (log2_min_luma_coding_block_size_minus3 + 3);
+    constexpr std::uint32_t min_luma_coding_block_size() const noexcept {
+        return std::uint32_t{1} << (log2_min_luma_coding_block_size_minus3 + 3);
     }
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    max_luma_coding_block_size() const noexcept
-    {
+    constexpr std::uint32_t max_luma_coding_block_size() const noexcept {
         return std::uint32_t{1}
-            << (log2_min_luma_coding_block_size_minus3 +
-                log2_diff_max_min_luma_coding_block_size + 3);
+               << (log2_min_luma_coding_block_size_minus3 +
+                   log2_diff_max_min_luma_coding_block_size + 3);
     }
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    min_luma_transform_block_size() const noexcept
-    {
-        return std::uint32_t{1}
-            << (log2_min_luma_transform_block_size_minus2 + 2);
+    constexpr std::uint32_t min_luma_transform_block_size() const noexcept {
+        return std::uint32_t{1} << (log2_min_luma_transform_block_size_minus2 + 2);
     }
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    max_luma_transform_block_size() const noexcept
-    {
+    constexpr std::uint32_t max_luma_transform_block_size() const noexcept {
         return std::uint32_t{1}
-            << (log2_min_luma_transform_block_size_minus2 +
-                log2_diff_max_min_luma_transform_block_size + 2);
+               << (log2_min_luma_transform_block_size_minus2 +
+                   log2_diff_max_min_luma_transform_block_size + 2);
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -136,7 +115,6 @@ struct SpsCodingBlockParameters {
  */
 
 struct SpsPcmParameters {
-
     /*
      * pcm_enabled_flag
      */
@@ -155,58 +133,40 @@ struct SpsPcmParameters {
     /*
      * log2_min_pcm_luma_coding_block_size_minus3
      */
-    std::uint32_t
-        log2_min_pcm_luma_coding_block_size_minus3 = 0;
+    std::uint32_t log2_min_pcm_luma_coding_block_size_minus3 = 0;
 
     /*
      * log2_diff_max_min_pcm_luma_coding_block_size
      */
-    std::uint32_t
-        log2_diff_max_min_pcm_luma_coding_block_size = 0;
+    std::uint32_t log2_diff_max_min_pcm_luma_coding_block_size = 0;
 
     /*
      * pcm_loop_filter_disabled_flag
      */
     bool pcm_loop_filter_disabled_flag = false;
 
+    [[nodiscard]]
+    constexpr std::uint32_t min_pcm_luma_coding_block_size() const noexcept {
+        return std::uint32_t{1} << (log2_min_pcm_luma_coding_block_size_minus3 + 3);
+    }
 
     [[nodiscard]]
-    constexpr std::uint32_t
-    min_pcm_luma_coding_block_size() const noexcept
-    {
+    constexpr std::uint32_t max_pcm_luma_coding_block_size() const noexcept {
         return std::uint32_t{1}
-            << (log2_min_pcm_luma_coding_block_size_minus3 + 3);
+               << (log2_min_pcm_luma_coding_block_size_minus3 +
+                   log2_diff_max_min_pcm_luma_coding_block_size + 3);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    max_pcm_luma_coding_block_size() const noexcept
-    {
-        return std::uint32_t{1}
-            << (log2_min_pcm_luma_coding_block_size_minus3 +
-                log2_diff_max_min_pcm_luma_coding_block_size + 3);
+    constexpr std::uint8_t luma_bit_depth() const noexcept {
+        return static_cast<std::uint8_t>(pcm_sample_bit_depth_luma_minus1 + 1);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    luma_bit_depth() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            pcm_sample_bit_depth_luma_minus1 + 1);
-    }
-
-
-    [[nodiscard]]
-    constexpr std::uint8_t
-    chroma_bit_depth() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            pcm_sample_bit_depth_chroma_minus1 + 1);
+    constexpr std::uint8_t chroma_bit_depth() const noexcept {
+        return static_cast<std::uint8_t>(pcm_sample_bit_depth_chroma_minus1 + 1);
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -215,7 +175,6 @@ struct SpsPcmParameters {
  */
 
 struct SpsReferencePictureSetParameters {
-
     /*
      * num_short_term_ref_pic_sets
      */
@@ -224,8 +183,7 @@ struct SpsReferencePictureSetParameters {
     /*
      * short_term_ref_pic_set[]
      */
-    std::vector<ShortTermRefPicSet>
-        short_term_ref_pic_sets;
+    std::vector<ShortTermRefPicSet> short_term_ref_pic_sets;
 
     /*
      * long_term_ref_pics_present_flag
@@ -244,16 +202,13 @@ struct SpsReferencePictureSetParameters {
      *
      *     log2_max_pic_order_cnt_lsb_minus4 + 4
      */
-    std::vector<std::uint32_t>
-        lt_ref_pic_poc_lsb_sps;
+    std::vector<std::uint32_t> lt_ref_pic_poc_lsb_sps;
 
     /*
      * used_by_curr_pic_lt_sps_flag[]
      */
-    std::vector<bool>
-        used_by_curr_pic_lt_sps_flag;
+    std::vector<bool> used_by_curr_pic_lt_sps_flag;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -262,18 +217,14 @@ struct SpsReferencePictureSetParameters {
  */
 
 struct SpsLongTermReferencePictures {
-
     bool present = false;
 
     std::uint32_t count = 0;
 
-    std::vector<std::uint32_t>
-        poc_lsb;
+    std::vector<std::uint32_t> poc_lsb;
 
-    std::vector<bool>
-        used_by_curr_pic;
+    std::vector<bool> used_by_curr_pic;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -285,7 +236,6 @@ struct SpsLongTermReferencePictures {
  */
 
 struct SpsExtension {
-
     /*
      * sps_extension_present_flag
      */
@@ -310,8 +260,7 @@ struct SpsExtension {
     /*
      * Reserved sps_extension_4bits.
      */
-    std::array<bool, 4>
-        reserved_extension_flags{};
+    std::array<bool, 4> reserved_extension_flags{};
 
     /*
      * sps_extension_data_flag while more_rbsp_data().
@@ -321,7 +270,6 @@ struct SpsExtension {
      */
     bool extension_data_present = false;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -336,7 +284,6 @@ struct SpsExtension {
  */
 
 struct SpsRangeExtension {
-
     bool transform_skip_rotation_enabled_flag = false;
 
     bool transform_skip_context_enabled_flag = false;
@@ -356,7 +303,6 @@ struct SpsRangeExtension {
     bool cabac_bypass_alignment_enabled_flag = false;
 };
 
-
 /*
  * -----------------------------------------------------------
  * SPS multilayer extension
@@ -370,13 +316,11 @@ struct SpsRangeExtension {
  */
 
 struct SpsMultilayerExtension {
-
     /*
      * inter_view_mv_vert_constraint_flag
      */
     bool inter_view_mv_vert_constraint_flag = false;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -392,7 +336,6 @@ struct SpsMultilayerExtension {
  */
 
 struct Sps3dViewExtension {
-
     bool iv_di_mc_enabled_flag = false;
 
     bool iv_mv_scal_enabled_flag = false;
@@ -422,11 +365,8 @@ struct Sps3dViewExtension {
 };
 
 struct Sps3dExtension {
-
-    std::array<Sps3dViewExtension, 2>
-        views{};
+    std::array<Sps3dViewExtension, 2> views{};
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -439,7 +379,6 @@ struct Sps3dExtension {
  */
 
 struct SpsSccExtension {
-
     /*
      * sps_curr_pic_ref_enabled_flag
      */
@@ -457,14 +396,12 @@ struct SpsSccExtension {
 
     std::uint32_t delta_palette_max_predictor_size = 0;
 
-    bool sps_palette_predictor_initializers_present_flag =
-        false;
+    bool sps_palette_predictor_initializers_present_flag = false;
 
     /*
      * sps_num_palette_predictor_initializers_minus1
      */
-    std::uint32_t
-        sps_num_palette_predictor_initializers_minus1 = 0;
+    std::uint32_t sps_num_palette_predictor_initializers_minus1 = 0;
 
     /*
      * sps_palette_predictor_initializer[ comp ][ i ]
@@ -474,9 +411,7 @@ struct SpsSccExtension {
      *     comp == 0: BitDepthY
      *     comp != 0: BitDepthC
      */
-    std::array<std::array<
-        std::uint32_t,
-        kMaxPalettePredictorSize>, 3>
+    std::array<std::array<std::uint32_t, kMaxPalettePredictorSize>, 3>
         sps_palette_predictor_initializer{};
 
     /*
@@ -484,15 +419,13 @@ struct SpsSccExtension {
      *
      * u(2)
      */
-    std::uint32_t
-        motion_vector_resolution_control_idc = 0;
+    std::uint32_t motion_vector_resolution_control_idc = 0;
 
     /*
      * intra_boundary_filtering_disabled_flag
      */
     bool intra_boundary_filtering_disabled_flag = false;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -508,7 +441,6 @@ struct SpsSccExtension {
  */
 
 struct SpsGeometry {
-
     /*
      * Coded dimensions.
      */
@@ -534,7 +466,6 @@ struct SpsGeometry {
     std::uint32_t max_tb_size = 0;
 };
 
-
 /*
  * -----------------------------------------------------------
  * Complete Sequence Parameter Set
@@ -542,7 +473,6 @@ struct SpsGeometry {
  */
 
 struct SequenceParameterSet {
-
     /*
      * =======================================================
      * Identification
@@ -568,7 +498,6 @@ struct SequenceParameterSet {
      */
     bool sps_temporal_id_nesting_flag = false;
 
-
     /*
      * =======================================================
      * Profile / tier / level
@@ -576,7 +505,6 @@ struct SequenceParameterSet {
      */
 
     ProfileTierLevel profile_tier_level{};
-
 
     /*
      * =======================================================
@@ -591,7 +519,6 @@ struct SequenceParameterSet {
      */
     std::uint32_t sps_seq_parameter_set_id = 0;
 
-
     /*
      * =======================================================
      * Chroma format
@@ -603,8 +530,7 @@ struct SequenceParameterSet {
      *
      * ue(v)
      */
-    ChromaFormat chroma_format =
-        ChromaFormat::YUV420;
+    ChromaFormat chroma_format = ChromaFormat::YUV420;
 
     /*
      * separate_colour_plane_flag
@@ -612,7 +538,6 @@ struct SequenceParameterSet {
      * Present only when chroma_format_idc == 3.
      */
     bool separate_colour_plane_flag = false;
-
 
     /*
      * =======================================================
@@ -624,14 +549,12 @@ struct SequenceParameterSet {
 
     std::uint32_t pic_height_in_luma_samples = 0;
 
-
     /*
      * conformance_window_flag
      */
     bool conformance_window_flag = false;
 
     Window conformance_window{};
-
 
     /*
      * =======================================================
@@ -651,7 +574,6 @@ struct SequenceParameterSet {
      */
     BitDepth bit_depth{};
 
-
     /*
      * =======================================================
      * Picture order count
@@ -661,9 +583,7 @@ struct SequenceParameterSet {
     /*
      * log2_max_pic_order_cnt_lsb_minus4
      */
-    std::uint32_t
-        log2_max_pic_order_cnt_lsb_minus4 = 0;
-
+    std::uint32_t log2_max_pic_order_cnt_lsb_minus4 = 0;
 
     /*
      * =======================================================
@@ -673,9 +593,7 @@ struct SequenceParameterSet {
 
     bool sps_sub_layer_ordering_info_present_flag = false;
 
-    std::array<SpsSubLayerOrderingInfo, 8>
-        sub_layer_ordering_info{};
-
+    std::array<SpsSubLayerOrderingInfo, 8> sub_layer_ordering_info{};
 
     /*
      * =======================================================
@@ -684,7 +602,6 @@ struct SequenceParameterSet {
      */
 
     SpsCodingBlockParameters coding_blocks{};
-
 
     /*
      * =======================================================
@@ -714,7 +631,6 @@ struct SequenceParameterSet {
      */
     bool sample_adaptive_offset_enabled_flag = false;
 
-
     /*
      * =======================================================
      * PCM
@@ -723,16 +639,13 @@ struct SequenceParameterSet {
 
     SpsPcmParameters pcm{};
 
-
     /*
      * =======================================================
      * Short-term reference pictures
      * =======================================================
      */
 
-    SpsReferencePictureSetParameters
-        reference_picture_sets{};
-
+    SpsReferencePictureSetParameters reference_picture_sets{};
 
     /*
      * =======================================================
@@ -750,7 +663,6 @@ struct SequenceParameterSet {
      */
     bool strong_intra_smoothing_enabled_flag = false;
 
-
     /*
      * =======================================================
      * VUI
@@ -763,7 +675,6 @@ struct SequenceParameterSet {
     bool vui_parameters_present_flag = false;
 
     VuiParameters vui{};
-
 
     /*
      * =======================================================
@@ -781,7 +692,6 @@ struct SequenceParameterSet {
 
     SpsSccExtension scc_extension{};
 
-
     /*
      * =======================================================
      * Derived information
@@ -790,7 +700,6 @@ struct SequenceParameterSet {
 
     SpsGeometry geometry{};
 
-
     /*
      * =======================================================
      * Helpers
@@ -798,96 +707,62 @@ struct SequenceParameterSet {
      */
 
     [[nodiscard]]
-    constexpr std::size_t max_sub_layers() const noexcept
-    {
-        return static_cast<std::size_t>(
-            sps_max_sub_layers_minus1) + 1;
+    constexpr std::size_t max_sub_layers() const noexcept {
+        return static_cast<std::size_t>(sps_max_sub_layers_minus1) + 1;
     }
 
-
     [[nodiscard]]
-    constexpr std::uint32_t
-    max_pic_order_cnt_lsb() const noexcept
-    {
-        return std::uint32_t{1}
-            << (log2_max_pic_order_cnt_lsb_minus4 + 4);
+    constexpr std::uint32_t max_pic_order_cnt_lsb() const noexcept {
+        return std::uint32_t{1} << (log2_max_pic_order_cnt_lsb_minus4 + 4);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    luma_bit_depth() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            bit_depth_luma_minus8 + 8);
+    constexpr std::uint8_t luma_bit_depth() const noexcept {
+        return static_cast<std::uint8_t>(bit_depth_luma_minus8 + 8);
     }
 
-
     [[nodiscard]]
-    constexpr std::uint8_t
-    chroma_bit_depth() const noexcept
-    {
-        return static_cast<std::uint8_t>(
-            bit_depth_chroma_minus8 + 8);
+    constexpr std::uint8_t chroma_bit_depth() const noexcept {
+        return static_cast<std::uint8_t>(bit_depth_chroma_minus8 + 8);
     }
 
-
     [[nodiscard]]
-    constexpr bool has_scaling_list() const noexcept
-    {
-        return scaling_list_enabled_flag &&
-               sps_scaling_list_data_present_flag;
+    constexpr bool has_scaling_list() const noexcept {
+        return scaling_list_enabled_flag && sps_scaling_list_data_present_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool has_vui() const noexcept
-    {
+    constexpr bool has_vui() const noexcept {
         return vui_parameters_present_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool has_short_term_rps() const noexcept
-    {
+    constexpr bool has_short_term_rps() const noexcept {
         return reference_picture_sets.num_short_term_ref_pic_sets != 0;
     }
 
-
     [[nodiscard]]
-    constexpr bool has_long_term_rps() const noexcept
-    {
-        return reference_picture_sets
-            .long_term_ref_pics_present_flag;
+    constexpr bool has_long_term_rps() const noexcept {
+        return reference_picture_sets.long_term_ref_pics_present_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool has_range_extension() const noexcept
-    {
+    constexpr bool has_range_extension() const noexcept {
         return extension.range_extension_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool has_scc_extension() const noexcept
-    {
+    constexpr bool has_scc_extension() const noexcept {
         return extension.scc_extension_flag;
     }
 
-
     [[nodiscard]]
-    constexpr bool valid() const noexcept
-    {
-        return
-            sps_video_parameter_set_id < 16 &&
-            sps_max_sub_layers_minus1 < 8 &&
-            sps_seq_parameter_set_id < 16 &&
-            pic_width_in_luma_samples != 0 &&
-            pic_height_in_luma_samples != 0;
+    constexpr bool valid() const noexcept {
+        return sps_video_parameter_set_id < 16 && sps_max_sub_layers_minus1 < 8 &&
+               sps_seq_parameter_set_id < 16 && pic_width_in_luma_samples != 0 &&
+               pic_height_in_luma_samples != 0;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -895,28 +770,19 @@ struct SequenceParameterSet {
  * -----------------------------------------------------------
  */
 
-inline void initialize_sps(
-    SequenceParameterSet& sps)
-{
+inline void initialize_sps(SequenceParameterSet& sps) {
     sps = {};
 
-    sps.chroma_format =
-        ChromaFormat::YUV420;
+    sps.chroma_format = ChromaFormat::YUV420;
 
-    sps.bit_depth = {
-        8,
-        8
-    };
+    sps.bit_depth = {8, 8};
 
-    for (auto& entry :
-         sps.sub_layer_ordering_info) {
+    for (auto& entry : sps.sub_layer_ordering_info) {
         entry = {};
     }
 
-    initialize_scaling_list_data(
-        sps.scaling_list);
+    initialize_scaling_list_data(sps.scaling_list);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -924,18 +790,11 @@ inline void initialize_sps(
  * -----------------------------------------------------------
  */
 
-inline void derive_sps_bit_depth(
-    SequenceParameterSet& sps)
-{
-    sps.bit_depth.luma =
-        static_cast<std::uint8_t>(
-            sps.bit_depth_luma_minus8 + 8);
+inline void derive_sps_bit_depth(SequenceParameterSet& sps) {
+    sps.bit_depth.luma = static_cast<std::uint8_t>(sps.bit_depth_luma_minus8 + 8);
 
-    sps.bit_depth.chroma =
-        static_cast<std::uint8_t>(
-            sps.bit_depth_chroma_minus8 + 8);
+    sps.bit_depth.chroma = static_cast<std::uint8_t>(sps.bit_depth_chroma_minus8 + 8);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -943,45 +802,30 @@ inline void derive_sps_bit_depth(
  * -----------------------------------------------------------
  */
 
-inline void derive_sps_geometry(
-    SequenceParameterSet& sps)
-{
-    sps.geometry.coded_width =
-        sps.pic_width_in_luma_samples;
+inline void derive_sps_geometry(SequenceParameterSet& sps) {
+    sps.geometry.coded_width = sps.pic_width_in_luma_samples;
 
-    sps.geometry.coded_height =
-        sps.pic_height_in_luma_samples;
+    sps.geometry.coded_height = sps.pic_height_in_luma_samples;
 
-    const auto display =
-        apply_window(
-            sps.pic_width_in_luma_samples,
-            sps.pic_height_in_luma_samples,
-            sps.chroma_format,
-            sps.conformance_window);
+    const auto display = apply_window(
+        sps.pic_width_in_luma_samples,
+        sps.pic_height_in_luma_samples,
+        sps.chroma_format,
+        sps.conformance_window
+    );
 
-    sps.geometry.display_width =
-        display.width;
+    sps.geometry.display_width = display.width;
 
-    sps.geometry.display_height =
-        display.height;
+    sps.geometry.display_height = display.height;
 
-    sps.geometry.min_cb_size =
-        sps.coding_blocks
-            .min_luma_coding_block_size();
+    sps.geometry.min_cb_size = sps.coding_blocks.min_luma_coding_block_size();
 
-    sps.geometry.max_cb_size =
-        sps.coding_blocks
-            .max_luma_coding_block_size();
+    sps.geometry.max_cb_size = sps.coding_blocks.max_luma_coding_block_size();
 
-    sps.geometry.min_tb_size =
-        sps.coding_blocks
-            .min_luma_transform_block_size();
+    sps.geometry.min_tb_size = sps.coding_blocks.min_luma_transform_block_size();
 
-    sps.geometry.max_tb_size =
-        sps.coding_blocks
-            .max_luma_transform_block_size();
+    sps.geometry.max_tb_size = sps.coding_blocks.max_luma_transform_block_size();
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -989,31 +833,17 @@ inline void derive_sps_geometry(
  * -----------------------------------------------------------
  */
 
-inline void initialize_sps_rps(
-    SequenceParameterSet& sps)
-{
-    const auto count =
-        sps.reference_picture_sets
-            .num_short_term_ref_pic_sets;
+inline void initialize_sps_rps(SequenceParameterSet& sps) {
+    const auto count = sps.reference_picture_sets.num_short_term_ref_pic_sets;
 
-    sps.reference_picture_sets
-        .short_term_ref_pic_sets
-        .clear();
+    sps.reference_picture_sets.short_term_ref_pic_sets.clear();
 
-    sps.reference_picture_sets
-        .short_term_ref_pic_sets
-        .resize(count);
+    sps.reference_picture_sets.short_term_ref_pic_sets.resize(count);
 
-    for (std::uint32_t i = 0;
-         i < count;
-         ++i) {
-
-        sps.reference_picture_sets
-            .short_term_ref_pic_sets[i]
-            .index = i;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        sps.reference_picture_sets.short_term_ref_pic_sets[i].index = i;
     }
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1021,11 +851,8 @@ inline void initialize_sps_rps(
  * -----------------------------------------------------------
  */
 
-inline void initialize_sps_long_term_rps(
-    SequenceParameterSet& sps)
-{
-    auto& lt =
-        sps.reference_picture_sets;
+inline void initialize_sps_long_term_rps(SequenceParameterSet& sps) {
+    auto& lt = sps.reference_picture_sets;
 
     if (!lt.long_term_ref_pics_present_flag) {
         lt.num_long_term_ref_pics_sps = 0;
@@ -1034,14 +861,10 @@ inline void initialize_sps_long_term_rps(
         return;
     }
 
-    lt.lt_ref_pic_poc_lsb_sps.resize(
-        lt.num_long_term_ref_pics_sps);
+    lt.lt_ref_pic_poc_lsb_sps.resize(lt.num_long_term_ref_pics_sps);
 
-    lt.used_by_curr_pic_lt_sps_flag.resize(
-        lt.num_long_term_ref_pics_sps,
-        false);
+    lt.used_by_curr_pic_lt_sps_flag.resize(lt.num_long_term_ref_pics_sps, false);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1050,9 +873,7 @@ inline void initialize_sps_long_term_rps(
  */
 
 [[nodiscard]]
-constexpr bool validate_sps_base(
-    const SequenceParameterSet& sps) noexcept
-{
+constexpr bool validate_sps_base(const SequenceParameterSet& sps) noexcept {
     if (sps.sps_video_parameter_set_id >= 16) {
         return false;
     }
@@ -1065,13 +886,11 @@ constexpr bool validate_sps_base(
         return false;
     }
 
-    if (sps.pic_width_in_luma_samples == 0 ||
-        sps.pic_height_in_luma_samples == 0) {
+    if (sps.pic_width_in_luma_samples == 0 || sps.pic_height_in_luma_samples == 0) {
         return false;
     }
 
-    if (sps.bit_depth_luma_minus8 > 8 ||
-        sps.bit_depth_chroma_minus8 > 8) {
+    if (sps.bit_depth_luma_minus8 > 8 || sps.bit_depth_chroma_minus8 > 8) {
         return false;
     }
 
@@ -1082,17 +901,12 @@ constexpr bool validate_sps_base(
     return true;
 }
 
-
 /*
  * Validate chroma-specific SPS syntax.
  */
 [[nodiscard]]
-constexpr bool validate_sps_chroma(
-    const SequenceParameterSet& sps) noexcept
-{
-    if (!is_valid_chroma_format(
-            static_cast<std::uint32_t>(
-                sps.chroma_format))) {
+constexpr bool validate_sps_chroma(const SequenceParameterSet& sps) noexcept {
+    if (!is_valid_chroma_format(static_cast<std::uint32_t>(sps.chroma_format))) {
         return false;
     }
 
@@ -1100,47 +914,36 @@ constexpr bool validate_sps_chroma(
      * separate_colour_plane_flag is only legal for
      * 4:4:4.
      */
-    if (sps.separate_colour_plane_flag &&
-        sps.chroma_format !=
-            ChromaFormat::YUV444) {
+    if (sps.separate_colour_plane_flag && sps.chroma_format != ChromaFormat::YUV444) {
         return false;
     }
 
     return true;
 }
-
 
 /*
  * Validate SPS RPS container dimensions.
  */
 [[nodiscard]]
-inline bool validate_sps_rps(
-    const SequenceParameterSet& sps) noexcept
-{
-    const auto& rps =
-        sps.reference_picture_sets;
+inline bool validate_sps_rps(const SequenceParameterSet& sps) noexcept {
+    const auto& rps = sps.reference_picture_sets;
 
-    if (rps.short_term_ref_pic_sets.size() !=
-        rps.num_short_term_ref_pic_sets) {
+    if (rps.short_term_ref_pic_sets.size() != rps.num_short_term_ref_pic_sets) {
         return false;
     }
 
     if (rps.long_term_ref_pics_present_flag) {
-
-        if (rps.lt_ref_pic_poc_lsb_sps.size() !=
-            rps.num_long_term_ref_pics_sps) {
+        if (rps.lt_ref_pic_poc_lsb_sps.size() != rps.num_long_term_ref_pics_sps) {
             return false;
         }
 
-        if (rps.used_by_curr_pic_lt_sps_flag.size() !=
-            rps.num_long_term_ref_pics_sps) {
+        if (rps.used_by_curr_pic_lt_sps_flag.size() != rps.num_long_term_ref_pics_sps) {
             return false;
         }
     }
 
     return true;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1149,14 +952,10 @@ inline bool validate_sps_rps(
  */
 
 [[nodiscard]]
-inline const ShortTermRefPicSet*
-sps_short_term_rps(
-    const SequenceParameterSet& sps,
-    std::size_t index) noexcept
-{
-    const auto& sets =
-        sps.reference_picture_sets
-            .short_term_ref_pic_sets;
+inline const ShortTermRefPicSet* sps_short_term_rps(
+    const SequenceParameterSet& sps, std::size_t index
+) noexcept {
+    const auto& sets = sps.reference_picture_sets.short_term_ref_pic_sets;
 
     if (index >= sets.size()) {
         return nullptr;
@@ -1164,17 +963,12 @@ sps_short_term_rps(
 
     return &sets[index];
 }
-
 
 [[nodiscard]]
-inline ShortTermRefPicSet*
-sps_short_term_rps(
-    SequenceParameterSet& sps,
-    std::size_t index) noexcept
-{
-    auto& sets =
-        sps.reference_picture_sets
-            .short_term_ref_pic_sets;
+inline ShortTermRefPicSet* sps_short_term_rps(
+    SequenceParameterSet& sps, std::size_t index
+) noexcept {
+    auto& sets = sps.reference_picture_sets.short_term_ref_pic_sets;
 
     if (index >= sets.size()) {
         return nullptr;
@@ -1182,7 +976,6 @@ sps_short_term_rps(
 
     return &sets[index];
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1190,13 +983,10 @@ sps_short_term_rps(
  * -----------------------------------------------------------
  */
 
-inline constexpr std::uint8_t
-    kMaxSpsSubLayersMinus1 = 7;
+inline constexpr std::uint8_t kMaxSpsSubLayersMinus1 = 7;
 
-inline constexpr std::uint8_t
-    kMaxSpsVideoParameterSetId = 15;
+inline constexpr std::uint8_t kMaxSpsVideoParameterSetId = 15;
 
-inline constexpr std::uint8_t
-    kMaxSpsSequenceParameterSetId = 15;
+inline constexpr std::uint8_t kMaxSpsSequenceParameterSetId = 15;
 
-} // namespace bs
+}  // namespace bs

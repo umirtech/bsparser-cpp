@@ -34,25 +34,19 @@
 #include <string>
 #include <vector>
 
-
 namespace {
 
-void
-print_help(
-    const char* prog)
-{
-    std::cout
-        << "Usage: " << prog << " <input> [options]\n\n"
-        << "  --codec <hevc|avc|auto>   codec path (default: auto)\n"
-        << "  --format <annexb|length>  NAL framing (default: annexb)\n"
-        << "  --length-size <1..4>       length-prefix width (default: 4)\n"
-        << "  --out <file>               output (.json / .html / .htm)\n"
-        << "  --json                     force JSON output\n"
-        << "  --html                     force HTML output\n"
-        << "  -h, --help                 show this help\n\n"
-        << "With no --out the JSON report is written to stdout.\n";
+void print_help(const char* prog) {
+    std::cout << "Usage: " << prog << " <input> [options]\n\n"
+              << "  --codec <hevc|avc|auto>   codec path (default: auto)\n"
+              << "  --format <annexb|length>  NAL framing (default: annexb)\n"
+              << "  --length-size <1..4>       length-prefix width (default: 4)\n"
+              << "  --out <file>               output (.json / .html / .htm)\n"
+              << "  --json                     force JSON output\n"
+              << "  --html                     force HTML output\n"
+              << "  -h, --help                 show this help\n\n"
+              << "With no --out the JSON report is written to stdout.\n";
 }
-
 
 /*
  * Very small auto-detector: inspect the first NAL unit.
@@ -63,22 +57,16 @@ print_help(
  * parameter set, otherwise AVC when the AVC type is in range, else HEVC.
  */
 [[nodiscard]]
-bs::Codec
-detect_codec(
-    std::span<const std::uint8_t> data)
-{
+bs::Codec detect_codec(std::span<const std::uint8_t> data) {
     std::size_t i = 0;
 
     /*
      * Skip a leading Annex-B start code if present.
      */
-    if (data.size() >= 4 &&
-        data[0] == 0x00 && data[1] == 0x00 &&
-        data[2] == 0x00 && data[3] == 0x01) {
+    if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
+        data[3] == 0x01) {
         i = 4;
-    } else if (data.size() >= 3 &&
-               data[0] == 0x00 && data[1] == 0x00 &&
-               data[2] == 0x01) {
+    } else if (data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01) {
         i = 3;
     }
 
@@ -90,8 +78,7 @@ detect_codec(
     const unsigned hevc_type = (b0 >> 1) & 0x3F;
     const unsigned avc_type = b0 & 0x1F;
 
-    if (hevc_type == 32 || hevc_type == 33 ||
-        hevc_type == 34) {
+    if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34) {
         return bs::Codec::Hevc;
     }
 
@@ -102,25 +89,16 @@ detect_codec(
     return bs::Codec::Hevc;
 }
 
-
-enum class OutputKind {
-    Json,
-    Html
-};
-
+enum class OutputKind { Json, Html };
 
 [[nodiscard]]
-OutputKind
-infer_kind(
-    const std::string& path)
-{
+OutputKind infer_kind(const std::string& path) {
     const auto pos = path.find_last_of('.');
     if (pos == std::string::npos) {
         return OutputKind::Json;
     }
 
-    const std::string ext =
-        path.substr(pos + 1);
+    const std::string ext = path.substr(pos + 1);
 
     if (ext == "html" || ext == "htm") {
         return OutputKind::Html;
@@ -129,13 +107,9 @@ infer_kind(
     return OutputKind::Json;
 }
 
-} // namespace
+}  // namespace
 
-
-int main(
-    int argc,
-    char** argv)
-{
+int main(int argc, char** argv) {
     using namespace bs;
 
     if (argc < 2) {
@@ -160,15 +134,13 @@ int main(
             return 0;
         }
 
-        auto need_value =
-            [&](const char* name) -> const char* {
-                if (i + 1 >= argc) {
-                    std::cerr << "error: " << name
-                              << " requires a value\n";
-                    std::exit(1);
-                }
-                return argv[++i];
-            };
+        auto need_value = [&](const char* name) -> const char* {
+            if (i + 1 >= argc) {
+                std::cerr << "error: " << name << " requires a value\n";
+                std::exit(1);
+            }
+            return argv[++i];
+        };
 
         if (arg == "--codec") {
             codec_arg = need_value("--codec");
@@ -176,11 +148,7 @@ int main(
             format_arg = need_value("--format");
         } else if (arg == "--length-size") {
             length_size =
-                static_cast<unsigned>(
-                    std::strtoul(
-                        need_value("--length-size"),
-                        nullptr,
-                        10));
+                static_cast<unsigned>(std::strtoul(need_value("--length-size"), nullptr, 10));
         } else if (arg == "--out") {
             out_path = need_value("--out");
             have_out = true;
@@ -189,15 +157,13 @@ int main(
         } else if (arg == "--html") {
             force_html = true;
         } else if (arg[0] == '-' && arg != "-") {
-            std::cerr << "error: unknown option '"
-                      << arg << "'\n";
+            std::cerr << "error: unknown option '" << arg << "'\n";
             print_help(argv[0]);
             return 1;
         } else if (input_path.empty()) {
             input_path = arg;
         } else {
-            std::cerr << "error: unexpected argument '"
-                      << arg << "'\n";
+            std::cerr << "error: unexpected argument '" << arg << "'\n";
             return 1;
         }
     }
@@ -218,24 +184,17 @@ int main(
     } else if (codec_arg == "avc") {
         codec = Codec::Avc;
     } else if (codec_arg == "auto") {
-        std::ifstream probe(
-            input_path,
-            std::ios::binary);
+        std::ifstream probe(input_path, std::ios::binary);
         if (!probe) {
-            std::cerr << "error: cannot open '"
-                      << input_path << "'\n";
+            std::cerr << "error: cannot open '" << input_path << "'\n";
             return 1;
         }
         const std::vector<std::uint8_t> head(
-            (std::istreambuf_iterator<char>(probe)),
-            std::istreambuf_iterator<char>());
-        codec = detect_codec(
-            std::span<const std::uint8_t>(
-                head.data(),
-                head.size()));
+            (std::istreambuf_iterator<char>(probe)), std::istreambuf_iterator<char>()
+        );
+        codec = detect_codec(std::span<const std::uint8_t>(head.data(), head.size()));
     } else {
-        std::cerr << "error: unknown --codec '"
-                  << codec_arg << "'\n";
+        std::cerr << "error: unknown --codec '" << codec_arg << "'\n";
         return 1;
     }
 
@@ -246,12 +205,10 @@ int main(
 
     if (format_arg == "annexb") {
         mode = NalFramingMode::AnnexB;
-    } else if (format_arg == "length" ||
-               format_arg == "length-prefixed") {
+    } else if (format_arg == "length" || format_arg == "length-prefixed") {
         mode = NalFramingMode::LengthPrefixed;
     } else {
-        std::cerr << "error: unknown --format '"
-                  << format_arg << "'\n";
+        std::cerr << "error: unknown --format '" << format_arg << "'\n";
         return 1;
     }
 
@@ -263,39 +220,28 @@ int main(
     /*
      * Load the stream.
      */
-    std::ifstream in(
-        input_path,
-        std::ios::binary);
+    std::ifstream in(input_path, std::ios::binary);
 
     if (!in) {
-        std::cerr << "error: cannot open '"
-                  << input_path << "'\n";
+        std::cerr << "error: cannot open '" << input_path << "'\n";
         return 1;
     }
 
     const std::vector<std::uint8_t> bytes(
-        (std::istreambuf_iterator<char>(in)),
-        std::istreambuf_iterator<char>());
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()
+    );
 
     if (bytes.size() < 3) {
         std::cerr << "error: input too small\n";
         return 1;
     }
 
-    std::span<const std::uint8_t> data{
-        bytes.data(),
-        bytes.size()
-    };
+    std::span<const std::uint8_t> data{bytes.data(), bytes.size()};
 
     /*
      * Parse + build the report.
      */
-    cli::Report report =
-        cli::build_report(
-            codec,
-            data,
-            mode,
-            length_size);
+    cli::Report report = cli::build_report(codec, data, mode, length_size);
 
     /*
      * Determine output kind.
@@ -311,29 +257,19 @@ int main(
     }
 
     const std::string payload =
-        (kind == OutputKind::Html)
-            ? cli::to_html(report)
-            : cli::to_json(report);
+        (kind == OutputKind::Html) ? cli::to_html(report) : cli::to_json(report);
 
     if (have_out) {
-        std::ofstream out(
-            out_path,
-            std::ios::binary);
+        std::ofstream out(out_path, std::ios::binary);
 
         if (!out) {
-            std::cerr << "error: cannot write '"
-                      << out_path << "'\n";
+            std::cerr << "error: cannot write '" << out_path << "'\n";
             return 1;
         }
 
-        out.write(
-            payload.data(),
-            static_cast<std::streamsize>(
-                payload.size()));
+        out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
 
-        std::cout
-            << "wrote " << payload.size() << " bytes to "
-            << out_path << "\n";
+        std::cout << "wrote " << payload.size() << " bytes to " << out_path << "\n";
     } else {
         std::cout << payload;
     }
@@ -348,13 +284,9 @@ int main(
         }
     }
 
-    std::cout
-        << "codec=" << report.codec
-        << " framing=" << report.framing
-        << " nals=" << report.entries.size()
-        << " parsed=" << report.parsed
-        << " vcl=" << vcl
-        << "\n";
+    std::cout << "codec=" << report.codec << " framing=" << report.framing
+              << " nals=" << report.entries.size() << " parsed=" << report.parsed << " vcl=" << vcl
+              << "\n";
 
     return 0;
 }

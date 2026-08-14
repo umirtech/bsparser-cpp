@@ -17,7 +17,6 @@ namespace bs {
  * values, rather than the bitstream encoding itself.
  */
 struct VuiParameters {
-
     /*
      * -------------------------------------------------------
      * Source / coding characteristics
@@ -40,7 +39,6 @@ struct VuiParameters {
      */
     bool non_projected_constraint_flag = false;
 
-
     /*
      * -------------------------------------------------------
      * Aspect ratio
@@ -54,7 +52,6 @@ struct VuiParameters {
      */
     AspectRatio aspect_ratio{};
 
-
     /*
      * -------------------------------------------------------
      * Overscan
@@ -65,7 +62,6 @@ struct VuiParameters {
 
     bool overscan_appropriate_flag = false;
 
-
     /*
      * -------------------------------------------------------
      * Video signal
@@ -74,7 +70,6 @@ struct VuiParameters {
 
     VideoSignalType video_signal{};
 
-
     /*
      * -------------------------------------------------------
      * Chroma sample location
@@ -82,7 +77,6 @@ struct VuiParameters {
      */
 
     ChromaLocationInfo chroma_location{};
-
 
     /*
      * -------------------------------------------------------
@@ -96,7 +90,6 @@ struct VuiParameters {
 
     bool frame_field_info_present_flag = false;
 
-
     /*
      * -------------------------------------------------------
      * Default display window
@@ -106,7 +99,6 @@ struct VuiParameters {
     bool default_display_window_flag = false;
 
     Window default_display_window{};
-
 
     /*
      * -------------------------------------------------------
@@ -124,7 +116,6 @@ struct VuiParameters {
      */
     TimingInfo timing{};
 
-
     /*
      * -------------------------------------------------------
      * HRD
@@ -135,14 +126,11 @@ struct VuiParameters {
 
     HrdParameters hrd{};
 
-
-
-
     /*
-    * -------------------------------------------------------
-    * Bitstream restriction
-    * -------------------------------------------------------
-    */
+     * -------------------------------------------------------
+     * Bitstream restriction
+     * -------------------------------------------------------
+     */
 
     bool bitstream_restriction_flag = false;
 
@@ -162,8 +150,6 @@ struct VuiParameters {
 
     std::uint32_t log2_max_mv_length_vertical = 0;
 
-
-
     /*
      * -------------------------------------------------------
      * Helpers
@@ -171,42 +157,35 @@ struct VuiParameters {
      */
 
     [[nodiscard]]
-    constexpr bool has_aspect_ratio() const noexcept
-    {
+    constexpr bool has_aspect_ratio() const noexcept {
         return aspect_ratio_info_present_flag;
     }
 
     [[nodiscard]]
-    constexpr bool has_video_signal() const noexcept
-    {
+    constexpr bool has_video_signal() const noexcept {
         return video_signal.present;
     }
 
     [[nodiscard]]
-    constexpr bool has_chroma_location() const noexcept
-    {
+    constexpr bool has_chroma_location() const noexcept {
         return chroma_location.present;
     }
 
     [[nodiscard]]
-    constexpr bool has_default_display_window() const noexcept
-    {
+    constexpr bool has_default_display_window() const noexcept {
         return default_display_window_flag;
     }
 
     [[nodiscard]]
-    constexpr bool has_timing() const noexcept
-    {
+    constexpr bool has_timing() const noexcept {
         return vui_timing_info_present_flag;
     }
 
     [[nodiscard]]
-    constexpr bool has_hrd() const noexcept
-    {
+    constexpr bool has_hrd() const noexcept {
         return hrd_parameters_present_flag;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -225,44 +204,35 @@ struct SampleAspectRatioTableEntry {
     std::uint16_t height;
 };
 
-
 /*
  * ISO/IEC / ITU-T predefined aspect ratios.
  *
  * These are useful for consumers of parsed SPS metadata.
  */
-inline constexpr SampleAspectRatioTableEntry
-    kAspectRatioTable[] = {
-        { 1,   1,   1   }, // 1:1
-        { 2,  12,  11  }, // 12:11
-        { 3,  10,  11  }, // 10:11
-        { 4,  16,  11  }, // 16:11
-        { 5,  40,  33  }, // 40:33
-        { 6,  24,  11  }, // 24:11
-        { 7,  20,  11  }, // 20:11
-        { 8,  32,  11  }, // 32:11
-        { 9,  80,  33  }, // 80:33
-        { 10,  18,  11  }, // 18:11
-        { 11,  15,  11  }, // 15:11
-        { 12,  64,  33  }, // 64:33
-        { 13,  160, 99  }, // 160:99
-        { 14,  4,   3   }, // 4:3
-        { 15,  3,   2   }, // 3:2
-        { 16,  2,   1   }  // 2:1
-    };
-
+inline constexpr SampleAspectRatioTableEntry kAspectRatioTable[] = {
+    {1, 1, 1},      // 1:1
+    {2, 12, 11},    // 12:11
+    {3, 10, 11},    // 10:11
+    {4, 16, 11},    // 16:11
+    {5, 40, 33},    // 40:33
+    {6, 24, 11},    // 24:11
+    {7, 20, 11},    // 20:11
+    {8, 32, 11},    // 32:11
+    {9, 80, 33},    // 80:33
+    {10, 18, 11},   // 18:11
+    {11, 15, 11},   // 15:11
+    {12, 64, 33},   // 64:33
+    {13, 160, 99},  // 160:99
+    {14, 4, 3},     // 4:3
+    {15, 3, 2},     // 3:2
+    {16, 2, 1}      // 2:1
+};
 
 [[nodiscard]]
-constexpr SampleAspectRatio
-aspect_ratio_from_idc(
-    std::uint8_t idc) noexcept
-{
+constexpr SampleAspectRatio aspect_ratio_from_idc(std::uint8_t idc) noexcept {
     for (const auto& entry : kAspectRatioTable) {
         if (entry.idc == idc) {
-            return {
-                entry.width,
-                entry.height
-            };
+            return {entry.width, entry.height};
         }
     }
 
@@ -271,12 +241,8 @@ aspect_ratio_from_idc(
      *
      * Return an invalid SAR rather than inventing a ratio.
      */
-    return {
-        0,
-        0
-    };
+    return {0, 0};
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -294,7 +260,6 @@ struct DisplayDimensions {
     std::uint32_t height = 0;
 };
 
-
 /*
  * Calculate the display dimensions after applying the
  * SPS conformance window.
@@ -303,64 +268,50 @@ struct DisplayDimensions {
  * chroma_format_idc.
  */
 [[nodiscard]]
-constexpr DisplayDimensions
-apply_window(
-    std::uint32_t width,
-    std::uint32_t height,
-    ChromaFormat chroma_format,
-    const Window& window) noexcept
-{
+constexpr DisplayDimensions apply_window(
+    std::uint32_t width, std::uint32_t height, ChromaFormat chroma_format, const Window& window
+) noexcept {
     std::uint32_t sub_width_c = 1;
     std::uint32_t sub_height_c = 1;
 
     switch (chroma_format) {
-    case ChromaFormat::Monochrome:
-        sub_width_c = 1;
-        sub_height_c = 1;
-        break;
+        case ChromaFormat::Monochrome:
+            sub_width_c = 1;
+            sub_height_c = 1;
+            break;
 
-    case ChromaFormat::YUV420:
-        sub_width_c = 2;
-        sub_height_c = 2;
-        break;
+        case ChromaFormat::YUV420:
+            sub_width_c = 2;
+            sub_height_c = 2;
+            break;
 
-    case ChromaFormat::YUV422:
-        sub_width_c = 2;
-        sub_height_c = 1;
-        break;
+        case ChromaFormat::YUV422:
+            sub_width_c = 2;
+            sub_height_c = 1;
+            break;
 
-    case ChromaFormat::YUV444:
-        sub_width_c = 1;
-        sub_height_c = 1;
-        break;
+        case ChromaFormat::YUV444:
+            sub_width_c = 1;
+            sub_height_c = 1;
+            break;
     }
 
     const std::uint64_t horizontal_crop =
-        static_cast<std::uint64_t>(
-            window.left_offset +
-            window.right_offset) *
-        sub_width_c;
+        static_cast<std::uint64_t>(window.left_offset + window.right_offset) * sub_width_c;
 
     const std::uint64_t vertical_crop =
-        static_cast<std::uint64_t>(
-            window.top_offset +
-            window.bottom_offset) *
-        sub_height_c;
+        static_cast<std::uint64_t>(window.top_offset + window.bottom_offset) * sub_height_c;
 
-    if (horizontal_crop >= width ||
-        vertical_crop >= height) {
+    if (horizontal_crop >= width || vertical_crop >= height) {
         return {};
     }
 
     return {
-        static_cast<std::uint32_t>(
-            width - horizontal_crop),
+        static_cast<std::uint32_t>(width - horizontal_crop),
 
-        static_cast<std::uint32_t>(
-            height - vertical_crop)
+        static_cast<std::uint32_t>(height - vertical_crop)
     };
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -369,15 +320,12 @@ apply_window(
  */
 
 [[nodiscard]]
-constexpr double frame_rate(
-    const VuiParameters& vui) noexcept
-{
+constexpr double frame_rate(const VuiParameters& vui) noexcept {
     if (!vui.vui_timing_info_present_flag) {
         return 0.0;
     }
 
-    if (vui.timing.num_units_in_tick == 0 ||
-        vui.timing.time_scale == 0) {
+    if (vui.timing.num_units_in_tick == 0 || vui.timing.time_scale == 0) {
         return 0.0;
     }
 
@@ -387,13 +335,9 @@ constexpr double frame_rate(
      * The actual picture rate may additionally depend on
      * fixed_pic_rate / temporal-layer / HRD semantics.
      */
-    return static_cast<double>(
-               vui.timing.time_scale) /
-           (2.0 *
-            static_cast<double>(
-                vui.timing.num_units_in_tick));
+    return static_cast<double>(vui.timing.time_scale) /
+           (2.0 * static_cast<double>(vui.timing.num_units_in_tick));
 }
-
 
 /*
  * Return whether the VUI describes a progressive source.
@@ -403,22 +347,16 @@ constexpr double frame_rate(
  * determination.
  */
 [[nodiscard]]
-constexpr bool progressive_source(
-    const VuiParameters& vui) noexcept
-{
-    return vui.progressive_source_flag &&
-           !vui.interlaced_source_flag;
+constexpr bool progressive_source(const VuiParameters& vui) noexcept {
+    return vui.progressive_source_flag && !vui.interlaced_source_flag;
 }
-
 
 /*
  * Return whether the VUI describes an interlaced source.
  */
 [[nodiscard]]
-constexpr bool interlaced_source(
-    const VuiParameters& vui) noexcept
-{
+constexpr bool interlaced_source(const VuiParameters& vui) noexcept {
     return vui.interlaced_source_flag;
 }
 
-} // namespace bs
+}  // namespace bs

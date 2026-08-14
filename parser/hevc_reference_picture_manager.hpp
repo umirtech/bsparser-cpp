@@ -41,7 +41,6 @@ namespace bs {
  *     reference-picture state
  */
 
-
 /*
  * -----------------------------------------------------------
  * Short-term reference picture
@@ -49,7 +48,6 @@ namespace bs {
  */
 
 struct ShortTermReferencePicture {
-
     /*
      * Picture order count of the reference picture.
      */
@@ -84,12 +82,10 @@ struct ShortTermReferencePicture {
      * Used by the current picture as a reference.
      */
     [[nodiscard]]
-    constexpr bool is_reference() const noexcept
-    {
+    constexpr bool is_reference() const noexcept {
         return used_by_curr_pic;
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -98,40 +94,28 @@ struct ShortTermReferencePicture {
  */
 
 struct ReferencePictureList {
-
     std::vector<ShortTermReferencePicture> entries;
 
-
     [[nodiscard]]
-    std::size_t size() const noexcept
-    {
+    std::size_t size() const noexcept {
         return entries.size();
     }
 
-
     [[nodiscard]]
-    bool empty() const noexcept
-    {
+    bool empty() const noexcept {
         return entries.empty();
     }
 
-
-    void clear()
-    {
+    void clear() {
         entries.clear();
     }
 
-
-    void reserve(std::size_t count)
-    {
+    void reserve(std::size_t count) {
         entries.reserve(count);
     }
 
-
     [[nodiscard]]
-    const ShortTermReferencePicture*
-    at(std::size_t index) const noexcept
-    {
+    const ShortTermReferencePicture* at(std::size_t index) const noexcept {
         if (index >= entries.size()) {
             return nullptr;
         }
@@ -139,11 +123,8 @@ struct ReferencePictureList {
         return &entries[index];
     }
 
-
     [[nodiscard]]
-    ShortTermReferencePicture*
-    at(std::size_t index) noexcept
-    {
+    ShortTermReferencePicture* at(std::size_t index) noexcept {
         if (index >= entries.size()) {
             return nullptr;
         }
@@ -152,7 +133,6 @@ struct ReferencePictureList {
     }
 };
 
-
 /*
  * -----------------------------------------------------------
  * Current-picture POC state
@@ -160,7 +140,6 @@ struct ReferencePictureList {
  */
 
 struct PictureOrderCountState {
-
     /*
      * Current picture POC.
      */
@@ -186,12 +165,10 @@ struct PictureOrderCountState {
      */
     bool previous_valid = false;
 
-
     /*
      * Reset temporal POC state.
      */
-    void reset() noexcept
-    {
+    void reset() noexcept {
         current_poc = 0;
         previous_poc = 0;
         previous_poc_msb = 0;
@@ -200,7 +177,6 @@ struct PictureOrderCountState {
     }
 };
 
-
 /*
  * -----------------------------------------------------------
  * Reference-picture manager
@@ -208,8 +184,7 @@ struct PictureOrderCountState {
  */
 
 class ReferencePictureManager {
-private:
-
+   private:
     PictureOrderCountState poc_state_{};
 
     /*
@@ -217,28 +192,20 @@ private:
      *
      * This contains pictures known to the reference manager.
      */
-    std::vector<ShortTermReferencePicture>
-        reference_pictures_{};
+    std::vector<ShortTermReferencePicture> reference_pictures_{};
 
-
-public:
-
+   public:
     ReferencePictureManager() = default;
 
-    ReferencePictureManager(
-        const ReferencePictureManager&) = default;
+    ReferencePictureManager(const ReferencePictureManager&) = default;
 
-    ReferencePictureManager(
-        ReferencePictureManager&&) noexcept = default;
+    ReferencePictureManager(ReferencePictureManager&&) noexcept = default;
 
-    ReferencePictureManager& operator=(
-        const ReferencePictureManager&) = default;
+    ReferencePictureManager& operator=(const ReferencePictureManager&) = default;
 
-    ReferencePictureManager& operator=(
-        ReferencePictureManager&&) noexcept = default;
+    ReferencePictureManager& operator=(ReferencePictureManager&&) noexcept = default;
 
     ~ReferencePictureManager() = default;
-
 
     /*
      * -------------------------------------------------------
@@ -246,24 +213,18 @@ public:
      * -------------------------------------------------------
      */
 
-    void reset() noexcept
-    {
+    void reset() noexcept {
         poc_state_.reset();
         reference_pictures_.clear();
     }
 
-
-    void reset_poc() noexcept
-    {
+    void reset_poc() noexcept {
         poc_state_.reset();
     }
 
-
-    void clear_references() noexcept
-    {
+    void clear_references() noexcept {
         reference_pictures_.clear();
     }
-
 
     /*
      * -------------------------------------------------------
@@ -272,36 +233,24 @@ public:
      */
 
     [[nodiscard]]
-    const PictureOrderCountState&
-    poc_state() const noexcept
-    {
+    const PictureOrderCountState& poc_state() const noexcept {
         return poc_state_;
     }
 
-
     [[nodiscard]]
-    PictureOrderCountState&
-    poc_state() noexcept
-    {
+    PictureOrderCountState& poc_state() noexcept {
         return poc_state_;
     }
 
-
     [[nodiscard]]
-    std::int32_t
-    current_poc() const noexcept
-    {
+    std::int32_t current_poc() const noexcept {
         return poc_state_.current_poc;
     }
 
-
     [[nodiscard]]
-    std::int32_t
-    previous_poc() const noexcept
-    {
+    std::int32_t previous_poc() const noexcept {
         return poc_state_.previous_poc;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -324,61 +273,42 @@ public:
      */
 
     [[nodiscard]]
-    static std::int32_t
-    derive_poc_msb(
+    static std::int32_t derive_poc_msb(
         std::int32_t previous_poc_msb,
         std::uint32_t previous_poc_lsb,
         std::uint32_t current_poc_lsb,
-        std::uint32_t max_poc_lsb) noexcept
-    {
+        std::uint32_t max_poc_lsb
+    ) noexcept {
         if (max_poc_lsb == 0) {
             return previous_poc_msb;
         }
 
-        const std::int64_t max_lsb =
-            static_cast<std::int64_t>(
-                max_poc_lsb);
+        const std::int64_t max_lsb = static_cast<std::int64_t>(max_poc_lsb);
 
-        const std::int64_t half =
-            max_lsb / 2;
+        const std::int64_t half = max_lsb / 2;
 
-        const std::int64_t prev_lsb =
-            static_cast<std::int64_t>(
-                previous_poc_lsb);
+        const std::int64_t prev_lsb = static_cast<std::int64_t>(previous_poc_lsb);
 
-        const std::int64_t curr_lsb =
-            static_cast<std::int64_t>(
-                current_poc_lsb);
+        const std::int64_t curr_lsb = static_cast<std::int64_t>(current_poc_lsb);
 
-        std::int64_t poc_msb =
-            static_cast<std::int64_t>(
-                previous_poc_msb);
+        std::int64_t poc_msb = static_cast<std::int64_t>(previous_poc_msb);
 
-        if ((curr_lsb < prev_lsb) &&
-            ((prev_lsb - curr_lsb) >= half)) {
-
+        if ((curr_lsb < prev_lsb) && ((prev_lsb - curr_lsb) >= half)) {
             poc_msb += max_lsb;
-        }
-        else if ((curr_lsb > prev_lsb) &&
-                 ((curr_lsb - prev_lsb) > half)) {
-
+        } else if ((curr_lsb > prev_lsb) && ((curr_lsb - prev_lsb) > half)) {
             poc_msb -= max_lsb;
         }
 
-        if (poc_msb >
-                std::numeric_limits<std::int32_t>::max()) {
+        if (poc_msb > std::numeric_limits<std::int32_t>::max()) {
             return std::numeric_limits<std::int32_t>::max();
         }
 
-        if (poc_msb <
-                std::numeric_limits<std::int32_t>::min()) {
+        if (poc_msb < std::numeric_limits<std::int32_t>::min()) {
             return std::numeric_limits<std::int32_t>::min();
         }
 
-        return static_cast<std::int32_t>(
-            poc_msb);
+        return static_cast<std::int32_t>(poc_msb);
     }
-
 
     /*
      * -------------------------------------------------------
@@ -392,108 +322,72 @@ public:
      */
 
     [[nodiscard]]
-    std::int32_t
-    derive_current_poc(
-        std::uint32_t pic_order_cnt_lsb,
-        std::uint32_t max_pic_order_cnt_lsb)
-    {
-        if (!poc_state_.previous_valid ||
-            max_pic_order_cnt_lsb == 0) {
+    std::int32_t derive_current_poc(
+        std::uint32_t pic_order_cnt_lsb, std::uint32_t max_pic_order_cnt_lsb
+    ) {
+        if (!poc_state_.previous_valid || max_pic_order_cnt_lsb == 0) {
+            const auto poc = static_cast<std::int32_t>(pic_order_cnt_lsb);
 
-            const auto poc =
-                static_cast<std::int32_t>(
-                    pic_order_cnt_lsb);
+            poc_state_.previous_poc = poc;
 
-            poc_state_.previous_poc =
-                poc;
+            poc_state_.previous_poc_msb = 0;
 
-            poc_state_.previous_poc_msb =
-                0;
+            poc_state_.previous_poc_lsb = pic_order_cnt_lsb;
 
-            poc_state_.previous_poc_lsb =
-                pic_order_cnt_lsb;
+            poc_state_.current_poc = poc;
 
-            poc_state_.current_poc =
-                poc;
-
-            poc_state_.previous_valid =
-                true;
+            poc_state_.previous_valid = true;
 
             return poc;
         }
 
-        const auto poc_msb =
-            derive_poc_msb(
-                poc_state_.previous_poc_msb,
-                poc_state_.previous_poc_lsb,
-                pic_order_cnt_lsb,
-                max_pic_order_cnt_lsb);
+        const auto poc_msb = derive_poc_msb(
+            poc_state_.previous_poc_msb,
+            poc_state_.previous_poc_lsb,
+            pic_order_cnt_lsb,
+            max_pic_order_cnt_lsb
+        );
 
         const std::int64_t poc =
-            static_cast<std::int64_t>(
-                poc_msb) +
-            static_cast<std::int64_t>(
-                pic_order_cnt_lsb);
+            static_cast<std::int64_t>(poc_msb) + static_cast<std::int64_t>(pic_order_cnt_lsb);
 
         std::int32_t result = 0;
 
-        if (poc >
-            std::numeric_limits<std::int32_t>::max()) {
+        if (poc > std::numeric_limits<std::int32_t>::max()) {
+            result = std::numeric_limits<std::int32_t>::max();
 
-            result =
-                std::numeric_limits<std::int32_t>::max();
-
-        } else if (
-            poc <
-            std::numeric_limits<std::int32_t>::min()) {
-
-            result =
-                std::numeric_limits<std::int32_t>::min();
+        } else if (poc < std::numeric_limits<std::int32_t>::min()) {
+            result = std::numeric_limits<std::int32_t>::min();
 
         } else {
-
-            result =
-                static_cast<std::int32_t>(
-                    poc);
+            result = static_cast<std::int32_t>(poc);
         }
 
-        poc_state_.previous_poc =
-            poc_state_.current_poc;
+        poc_state_.previous_poc = poc_state_.current_poc;
 
-        poc_state_.previous_poc_msb =
-            poc_msb;
+        poc_state_.previous_poc_msb = poc_msb;
 
-        poc_state_.previous_poc_lsb =
-            pic_order_cnt_lsb;
+        poc_state_.previous_poc_lsb = pic_order_cnt_lsb;
 
-        poc_state_.current_poc =
-            result;
+        poc_state_.current_poc = result;
 
-        poc_state_.previous_valid =
-            true;
+        poc_state_.previous_valid = true;
 
         return result;
     }
-
 
     /*
      * Explicitly set current POC.
      *
      * Useful for IDR pictures and tests.
      */
-    void set_current_poc(
-        std::int32_t poc) noexcept
-    {
-        poc_state_.previous_poc =
-            poc_state_.current_poc;
+    void set_current_poc(std::int32_t poc) noexcept {
+        poc_state_.previous_poc = poc_state_.current_poc;
 
-        poc_state_.current_poc =
-            poc;
+        poc_state_.current_poc = poc;
 
-        poc_state_.previous_valid =
-            true;
+        poc_state_.previous_valid = true;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -502,18 +396,12 @@ public:
      */
 
     [[nodiscard]]
-    std::size_t
-    reference_picture_count() const noexcept
-    {
+    std::size_t reference_picture_count() const noexcept {
         return reference_pictures_.size();
     }
 
-
     [[nodiscard]]
-    const ShortTermReferencePicture*
-    reference_picture(
-        std::size_t index) const noexcept
-    {
+    const ShortTermReferencePicture* reference_picture(std::size_t index) const noexcept {
         if (index >= reference_pictures_.size()) {
             return nullptr;
         }
@@ -521,36 +409,23 @@ public:
         return &reference_pictures_[index];
     }
 
-
-    void add_reference_picture(
-        const ShortTermReferencePicture& picture)
-    {
+    void add_reference_picture(const ShortTermReferencePicture& picture) {
         reference_pictures_.push_back(picture);
     }
 
-
-    void add_reference_picture(
-        ShortTermReferencePicture&& picture)
-    {
-        reference_pictures_.push_back(
-            std::move(picture));
+    void add_reference_picture(ShortTermReferencePicture&& picture) {
+        reference_pictures_.push_back(std::move(picture));
     }
-
 
     /*
      * Remove a picture from the reference buffer.
      */
-    bool remove_reference_picture(
-        std::int32_t poc) noexcept
-    {
-        const auto it =
-            std::find_if(
-                reference_pictures_.begin(),
-                reference_pictures_.end(),
-                [poc](
-                    const ShortTermReferencePicture& picture) {
-                    return picture.poc == poc;
-                });
+    bool remove_reference_picture(std::int32_t poc) noexcept {
+        const auto it = std::find_if(
+            reference_pictures_.begin(),
+            reference_pictures_.end(),
+            [poc](const ShortTermReferencePicture& picture) { return picture.poc == poc; }
+        );
 
         if (it == reference_pictures_.end()) {
             return false;
@@ -560,23 +435,16 @@ public:
         return true;
     }
 
-
     /*
      * Find a reference picture by POC.
      */
     [[nodiscard]]
-    const ShortTermReferencePicture*
-    find_reference_picture(
-        std::int32_t poc) const noexcept
-    {
-        const auto it =
-            std::find_if(
-                reference_pictures_.begin(),
-                reference_pictures_.end(),
-                [poc](
-                    const ShortTermReferencePicture& picture) {
-                    return picture.poc == poc;
-                });
+    const ShortTermReferencePicture* find_reference_picture(std::int32_t poc) const noexcept {
+        const auto it = std::find_if(
+            reference_pictures_.begin(),
+            reference_pictures_.end(),
+            [poc](const ShortTermReferencePicture& picture) { return picture.poc == poc; }
+        );
 
         if (it == reference_pictures_.end()) {
             return nullptr;
@@ -584,7 +452,6 @@ public:
 
         return &*it;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -596,71 +463,49 @@ public:
      */
 
     [[nodiscard]]
-    ReferencePictureList
-    build_explicit_short_term_list(
-        const ShortTermRefPicSet& rps,
-        std::int32_t current_poc) const
-    {
+    ReferencePictureList build_explicit_short_term_list(
+        const ShortTermRefPicSet& rps, std::int32_t current_poc
+    ) const {
         ReferencePictureList result{};
 
-        result.reserve(
-            rps.negative_pics.size() +
-            rps.positive_pics.size());
+        result.reserve(rps.negative_pics.size() + rps.positive_pics.size());
 
         /*
          * Negative pictures.
          */
-        for (const auto& picture :
-             rps.negative_pics) {
-
+        for (const auto& picture : rps.negative_pics) {
             ShortTermReferencePicture reference{};
 
-            reference.delta_poc =
-                picture.delta_poc;
+            reference.delta_poc = picture.delta_poc;
 
-            reference.poc =
-                current_poc +
-                picture.delta_poc;
+            reference.poc = current_poc + picture.delta_poc;
 
-            reference.used_by_curr_pic =
-                picture.used_by_curr_pic;
+            reference.used_by_curr_pic = picture.used_by_curr_pic;
 
-            reference.long_term =
-                false;
+            reference.long_term = false;
 
-            result.entries.push_back(
-                reference);
+            result.entries.push_back(reference);
         }
-
 
         /*
          * Positive pictures.
          */
-        for (const auto& picture :
-             rps.positive_pics) {
-
+        for (const auto& picture : rps.positive_pics) {
             ShortTermReferencePicture reference{};
 
-            reference.delta_poc =
-                picture.delta_poc;
+            reference.delta_poc = picture.delta_poc;
 
-            reference.poc =
-                current_poc +
-                picture.delta_poc;
+            reference.poc = current_poc + picture.delta_poc;
 
-            reference.used_by_curr_pic =
-                picture.used_by_curr_pic;
+            reference.used_by_curr_pic = picture.used_by_curr_pic;
 
-            reference.long_term =
-                false;
+            reference.long_term = false;
 
-            result.entries.push_back(
-                reference);
+            result.entries.push_back(reference);
         }
 
         return result;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -685,16 +530,14 @@ public:
      */
 
     [[nodiscard]]
-    ReferencePictureList
-    build_inter_predicted_list(
+    ReferencePictureList build_inter_predicted_list(
         const ShortTermRefPicSet& current,
         const ShortTermRefPicSet& reference,
-        std::int32_t current_poc) const
-    {
+        std::int32_t current_poc
+    ) const {
         ReferencePictureList result{};
 
-        const auto& prediction =
-            current.inter_prediction;
+        const auto& prediction = current.inter_prediction;
 
         /*
          * Build the reference RPS delta list.
@@ -704,27 +547,19 @@ public:
          *     negative pictures
          *     positive pictures
          */
-        std::vector<std::int32_t>
-            reference_delta_pocs;
+        std::vector<std::int32_t> reference_delta_pocs;
 
         reference_delta_pocs.reserve(
-            reference.negative_pics.size() +
-            reference.positive_pics.size());
+            reference.negative_pics.size() + reference.positive_pics.size()
+        );
 
-        for (const auto& picture :
-             reference.negative_pics) {
-
-            reference_delta_pocs.push_back(
-                picture.delta_poc);
+        for (const auto& picture : reference.negative_pics) {
+            reference_delta_pocs.push_back(picture.delta_poc);
         }
 
-        for (const auto& picture :
-             reference.positive_pics) {
-
-            reference_delta_pocs.push_back(
-                picture.delta_poc);
+        for (const auto& picture : reference.positive_pics) {
+            reference_delta_pocs.push_back(picture.delta_poc);
         }
-
 
         /*
          * DeltaRps.
@@ -732,10 +567,7 @@ public:
         const std::int32_t delta_rps =
             prediction.delta_rps != 0
                 ? prediction.delta_rps
-                : calculate_delta_rps(
-                    prediction.delta_rps_sign,
-                    prediction.abs_delta_rps_minus1);
-
+                : calculate_delta_rps(prediction.delta_rps_sign, prediction.abs_delta_rps_minus1);
 
         /*
          * The syntax has one extra entry corresponding to
@@ -747,24 +579,12 @@ public:
          *
          * for the zero entry.
          */
-        const std::size_t reference_count =
-            reference_delta_pocs.size();
+        const std::size_t reference_count = reference_delta_pocs.size();
 
+        for (std::size_t j = 0; j <= reference_count; ++j) {
+            const std::int32_t ref_delta_poc = (j < reference_count) ? reference_delta_pocs[j] : 0;
 
-        for (std::size_t j = 0;
-             j <= reference_count;
-             ++j) {
-
-            const std::int32_t
-                ref_delta_poc =
-                (j < reference_count)
-                    ? reference_delta_pocs[j]
-                    : 0;
-
-            const std::int32_t
-                delta_poc =
-                ref_delta_poc +
-                delta_rps;
+            const std::int32_t delta_poc = ref_delta_poc + delta_rps;
 
             /*
              * Determine the corresponding prediction flags.
@@ -773,15 +593,11 @@ public:
             bool use_delta = false;
 
             if (j < prediction.entries.size()) {
+                const auto& entry = prediction.entries[j];
 
-                const auto& entry =
-                    prediction.entries[j];
+                used = entry.used_by_curr_pic_flag;
 
-                used =
-                    entry.used_by_curr_pic_flag;
-
-                use_delta =
-                    entry.use_delta_flag;
+                use_delta = entry.use_delta_flag;
             }
 
             /*
@@ -799,21 +615,15 @@ public:
 
             ShortTermReferencePicture picture{};
 
-            picture.delta_poc =
-                delta_poc;
+            picture.delta_poc = delta_poc;
 
-            picture.poc =
-                current_poc +
-                delta_poc;
+            picture.poc = current_poc + delta_poc;
 
-            picture.used_by_curr_pic =
-                used;
+            picture.used_by_curr_pic = used;
 
-            picture.long_term =
-                false;
+            picture.long_term = false;
 
-            result.entries.push_back(
-                picture);
+            result.entries.push_back(picture);
         }
 
         /*
@@ -822,17 +632,13 @@ public:
          * Keep the semantic result ordered by delta POC.
          */
         std::stable_sort(
-            result.entries.begin(),
-            result.entries.end(),
-            [](const auto& lhs,
-               const auto& rhs) {
-                return lhs.delta_poc <
-                       rhs.delta_poc;
-            });
+            result.entries.begin(), result.entries.end(), [](const auto& lhs, const auto& rhs) {
+                return lhs.delta_poc < rhs.delta_poc;
+            }
+        );
 
         return result;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -841,41 +647,32 @@ public:
      */
 
     [[nodiscard]]
-    ReferencePictureList
-    build_short_term_rps(
+    ReferencePictureList build_short_term_rps(
         const std::vector<ShortTermRefPicSet>& rps_sets,
         std::size_t rps_index,
-        std::int32_t current_poc) const
-    {
+        std::int32_t current_poc
+    ) const {
         ReferencePictureList empty{};
 
         if (rps_index >= rps_sets.size()) {
             return empty;
         }
 
-        const auto& rps =
-            rps_sets[rps_index];
+        const auto& rps = rps_sets[rps_index];
 
         if (!rps.inter_ref_pic_set_prediction_flag) {
-            return build_explicit_short_term_list(
-                rps,
-                current_poc);
+            return build_explicit_short_term_list(rps, current_poc);
         }
 
         const auto reference_index =
-            static_cast<std::size_t>(
-                rps.inter_prediction.reference_rps_idx);
+            static_cast<std::size_t>(rps.inter_prediction.reference_rps_idx);
 
         if (reference_index >= rps_sets.size()) {
             return empty;
         }
 
-        return build_inter_predicted_list(
-            rps,
-            rps_sets[reference_index],
-            current_poc);
+        return build_inter_predicted_list(rps, rps_sets[reference_index], current_poc);
     }
-
 
     /*
      * -------------------------------------------------------
@@ -894,49 +691,32 @@ public:
      */
 
     [[nodiscard]]
-    static ReferencePictureList
-    build_list0(
-        const ReferencePictureList& short_term)
-    {
+    static ReferencePictureList build_list0(const ReferencePictureList& short_term) {
         ReferencePictureList result{};
 
         /*
          * Negative POCs first.
          */
-        for (const auto& picture :
-             short_term.entries) {
-
-            if (picture.delta_poc < 0 &&
-                picture.used_by_curr_pic) {
-
-                result.entries.push_back(
-                    picture);
+        for (const auto& picture : short_term.entries) {
+            if (picture.delta_poc < 0 && picture.used_by_curr_pic) {
+                result.entries.push_back(picture);
             }
         }
 
         /*
          * Then positive POCs.
          */
-        for (const auto& picture :
-             short_term.entries) {
-
-            if (picture.delta_poc > 0 &&
-                picture.used_by_curr_pic) {
-
-                result.entries.push_back(
-                    picture);
+        for (const auto& picture : short_term.entries) {
+            if (picture.delta_poc > 0 && picture.used_by_curr_pic) {
+                result.entries.push_back(picture);
             }
         }
 
         return result;
     }
 
-
     [[nodiscard]]
-    static ReferencePictureList
-    build_list1(
-        const ReferencePictureList& short_term)
-    {
+    static ReferencePictureList build_list1(const ReferencePictureList& short_term) {
         ReferencePictureList result{};
 
         /*
@@ -945,31 +725,20 @@ public:
          *     StCurrAfter
          *     StCurrBefore
          */
-        for (const auto& picture :
-             short_term.entries) {
-
-            if (picture.delta_poc > 0 &&
-                picture.used_by_curr_pic) {
-
-                result.entries.push_back(
-                    picture);
+        for (const auto& picture : short_term.entries) {
+            if (picture.delta_poc > 0 && picture.used_by_curr_pic) {
+                result.entries.push_back(picture);
             }
         }
 
-        for (const auto& picture :
-             short_term.entries) {
-
-            if (picture.delta_poc < 0 &&
-                picture.used_by_curr_pic) {
-
-                result.entries.push_back(
-                    picture);
+        for (const auto& picture : short_term.entries) {
+            if (picture.delta_poc < 0 && picture.used_by_curr_pic) {
+                result.entries.push_back(picture);
             }
         }
 
         return result;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -981,29 +750,23 @@ public:
      */
 
     [[nodiscard]]
-    static ReferencePictureList
-    apply_list_modification(
-        const ReferencePictureList& source,
-        const std::vector<std::uint32_t>& indices)
-    {
+    static ReferencePictureList apply_list_modification(
+        const ReferencePictureList& source, const std::vector<std::uint32_t>& indices
+    ) {
         ReferencePictureList result{};
 
-        result.entries.reserve(
-            indices.size());
+        result.entries.reserve(indices.size());
 
         for (const auto index : indices) {
-
             if (index >= source.entries.size()) {
                 continue;
             }
 
-            result.entries.push_back(
-                source.entries[index]);
+            result.entries.push_back(source.entries[index]);
         }
 
         return result;
     }
-
 
     /*
      * -------------------------------------------------------
@@ -1011,21 +774,15 @@ public:
      * -------------------------------------------------------
      */
 
-    void activate_reference_list(
-        const ReferencePictureList& list)
-    {
-        for (const auto& picture :
-             list.entries) {
-
+    void activate_reference_list(const ReferencePictureList& list) {
+        for (const auto& picture : list.entries) {
             if (!picture.used_by_curr_pic) {
                 continue;
             }
 
-            add_reference_picture(
-                picture);
+            add_reference_picture(picture);
         }
     }
-
 
     /*
      * -------------------------------------------------------
@@ -1033,19 +790,17 @@ public:
      * -------------------------------------------------------
      */
 
-    void remove_unused_references()
-    {
+    void remove_unused_references() {
         reference_pictures_.erase(
             std::remove_if(
                 reference_pictures_.begin(),
                 reference_pictures_.end(),
-                [](const auto& picture) {
-                    return !picture.used_by_curr_pic;
-                }),
-            reference_pictures_.end());
+                [](const auto& picture) { return !picture.used_by_curr_pic; }
+            ),
+            reference_pictures_.end()
+        );
     }
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -1054,20 +809,16 @@ public:
  */
 
 [[nodiscard]]
-inline std::int32_t
-derive_pic_order_cnt_msb(
+inline std::int32_t derive_pic_order_cnt_msb(
     std::int32_t previous_poc_msb,
     std::uint32_t previous_poc_lsb,
     std::uint32_t current_poc_lsb,
-    std::uint32_t max_poc_lsb) noexcept
-{
+    std::uint32_t max_poc_lsb
+) noexcept {
     return ReferencePictureManager::derive_poc_msb(
-        previous_poc_msb,
-        previous_poc_lsb,
-        current_poc_lsb,
-        max_poc_lsb);
+        previous_poc_msb, previous_poc_lsb, current_poc_lsb, max_poc_lsb
+    );
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -1076,16 +827,12 @@ derive_pic_order_cnt_msb(
  */
 
 [[nodiscard]]
-inline ReferencePictureList
-derive_short_term_reference_list(
-    const ShortTermRefPicSet& rps,
-    std::int32_t current_poc)
-{
+inline ReferencePictureList derive_short_term_reference_list(
+    const ShortTermRefPicSet& rps, std::int32_t current_poc
+) {
     ReferencePictureManager manager{};
 
-    return manager.build_explicit_short_term_list(
-        rps,
-        current_poc);
+    return manager.build_explicit_short_term_list(rps, current_poc);
 }
 
-} // namespace bs
+}  // namespace bs

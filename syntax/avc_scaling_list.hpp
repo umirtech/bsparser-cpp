@@ -13,7 +13,6 @@ namespace avc {
  * seq_scaling_list_present_flag[6..7]   -> 8x8 matrices
  */
 struct ScalingList {
-
     std::array<bool, 6> present_4x4{};
     std::array<std::array<std::uint8_t, 16>, 6> list_4x4{};
 
@@ -21,5 +20,5 @@ struct ScalingList {
     std::array<std::array<std::uint8_t, 64>, 2> list_8x8{};
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

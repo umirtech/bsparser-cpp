@@ -34,7 +34,6 @@ namespace bs {
  * All payloads remain backed by the original std::span.
  */
 
-
 /*
  * -----------------------------------------------------------
  * Dispatch error
@@ -42,18 +41,11 @@ namespace bs {
  */
 
 class BsNalParseError : public std::runtime_error {
-public:
-    explicit BsNalParseError(const char* message)
-        : std::runtime_error(message)
-    {
-    }
+   public:
+    explicit BsNalParseError(const char* message) : std::runtime_error(message) {}
 
-    explicit BsNalParseError(const std::string& message)
-        : std::runtime_error(message)
-    {
-    }
+    explicit BsNalParseError(const std::string& message) : std::runtime_error(message) {}
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -61,12 +53,7 @@ public:
  * -----------------------------------------------------------
  */
 
-enum class NalParseResult : std::uint8_t {
-    Parsed,
-    Ignored,
-    Unsupported
-};
-
+enum class NalParseResult : std::uint8_t { Parsed, Ignored, Unsupported };
 
 /*
  * -----------------------------------------------------------
@@ -91,42 +78,35 @@ enum class NalParseResult : std::uint8_t {
  */
 
 struct BsNalHandlers {
-
     /*
      * VPS_NUT
      */
-    void (*vps)(
-        const NalUnit&) = nullptr;
+    void (*vps)(const NalUnit&) = nullptr;
 
     /*
      * SPS_NUT
      */
-    void (*sps)(
-        const NalUnit&) = nullptr;
+    void (*sps)(const NalUnit&) = nullptr;
 
     /*
      * PPS_NUT
      */
-    void (*pps)(
-        const NalUnit&) = nullptr;
+    void (*pps)(const NalUnit&) = nullptr;
 
     /*
      * PREFIX_SEI_NUT
      */
-    void (*prefix_sei)(
-        const NalUnit&) = nullptr;
+    void (*prefix_sei)(const NalUnit&) = nullptr;
 
     /*
      * SUFFIX_SEI_NUT
      */
-    void (*suffix_sei)(
-        const NalUnit&) = nullptr;
+    void (*suffix_sei)(const NalUnit&) = nullptr;
 
     /*
      * VCL NAL units.
      */
-    void (*slice)(
-        const NalUnit&) = nullptr;
+    void (*slice)(const NalUnit&) = nullptr;
 
     /*
      * NAL types which are valid but not currently parsed.
@@ -138,10 +118,8 @@ struct BsNalHandlers {
      *     EOB
      *     filler
      */
-    void (*unsupported)(
-        const NalUnit&) = nullptr;
+    void (*unsupported)(const NalUnit&) = nullptr;
 };
-
 
 /*
  * -----------------------------------------------------------
@@ -150,16 +128,10 @@ struct BsNalHandlers {
  */
 
 [[nodiscard]]
-constexpr bool
-is_parameter_set_type(
-    NalUnitType type) noexcept
-{
-    return
-        type == NalUnitType::VPS_NUT ||
-        type == NalUnitType::SPS_NUT ||
-        type == NalUnitType::PPS_NUT;
+constexpr bool is_parameter_set_type(NalUnitType type) noexcept {
+    return type == NalUnitType::VPS_NUT || type == NalUnitType::SPS_NUT ||
+           type == NalUnitType::PPS_NUT;
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -167,128 +139,115 @@ is_parameter_set_type(
  * -----------------------------------------------------------
  */
 
-inline NalParseResult
-dispatch_nal(
-    const NalUnit& nal,
-    const BsNalHandlers& handlers)
-{
+inline NalParseResult dispatch_nal(const NalUnit& nal, const BsNalHandlers& handlers) {
     if (!validate_nal_unit(nal)) {
-        throw BsNalParseError(
-            "HEVC NAL dispatcher: invalid NAL header");
+        throw BsNalParseError("HEVC NAL dispatcher: invalid NAL header");
     }
 
     switch (nal.type()) {
+            /*
+             * -------------------------------------------------------
+             * VPS
+             * -------------------------------------------------------
+             */
 
-    /*
-     * -------------------------------------------------------
-     * VPS
-     * -------------------------------------------------------
-     */
+        case NalUnitType::VPS_NUT:
 
-    case NalUnitType::VPS_NUT:
-
-        if (handlers.vps == nullptr) {
-            return NalParseResult::Unsupported;
-        }
-
-        handlers.vps(nal);
-        
-        return NalParseResult::Parsed;
-
-
-    /*
-     * -------------------------------------------------------
-     * SPS
-     * -------------------------------------------------------
-     */
-
-    case NalUnitType::SPS_NUT:
-
-        if (handlers.sps == nullptr) {
-            return NalParseResult::Unsupported;
-        }
-
-        handlers.sps(nal);
-        return NalParseResult::Parsed;
-
-
-    /*
-     * -------------------------------------------------------
-     * PPS
-     * -------------------------------------------------------
-     */
-
-    case NalUnitType::PPS_NUT:
-
-        if (handlers.pps == nullptr) {
-            return NalParseResult::Unsupported;
-        }
-
-        handlers.pps(nal);
-        return NalParseResult::Parsed;
-
-
-    /*
-     * -------------------------------------------------------
-     * Prefix SEI
-     * -------------------------------------------------------
-     */
-
-    case NalUnitType::PREFIX_SEI_NUT:
-
-        if (handlers.prefix_sei == nullptr) {
-            return NalParseResult::Unsupported;
-        }
-
-        handlers.prefix_sei(nal);
-        return NalParseResult::Parsed;
-
-
-    /*
-     * -------------------------------------------------------
-     * Suffix SEI
-     * -------------------------------------------------------
-     */
-
-    case NalUnitType::SUFFIX_SEI_NUT:
-
-        if (handlers.suffix_sei == nullptr) {
-            return NalParseResult::Unsupported;
-        }
-
-        handlers.suffix_sei(nal);
-        return NalParseResult::Parsed;
-
-
-    /*
-     * -------------------------------------------------------
-     * VCL / slice
-     * -------------------------------------------------------
-     */
-
-    default:
-
-        if (nal.is_vcl()) {
-
-            if (handlers.slice == nullptr) {
+            if (handlers.vps == nullptr) {
                 return NalParseResult::Unsupported;
             }
 
-            handlers.slice(nal);
+            handlers.vps(nal);
+
             return NalParseResult::Parsed;
-        }
 
-        /*
-         * Valid HEVC non-VCL NAL which isn't handled yet.
-         */
-        if (handlers.unsupported != nullptr) {
-            handlers.unsupported(nal);
-        }
+            /*
+             * -------------------------------------------------------
+             * SPS
+             * -------------------------------------------------------
+             */
 
-        return NalParseResult::Ignored;
+        case NalUnitType::SPS_NUT:
+
+            if (handlers.sps == nullptr) {
+                return NalParseResult::Unsupported;
+            }
+
+            handlers.sps(nal);
+            return NalParseResult::Parsed;
+
+            /*
+             * -------------------------------------------------------
+             * PPS
+             * -------------------------------------------------------
+             */
+
+        case NalUnitType::PPS_NUT:
+
+            if (handlers.pps == nullptr) {
+                return NalParseResult::Unsupported;
+            }
+
+            handlers.pps(nal);
+            return NalParseResult::Parsed;
+
+            /*
+             * -------------------------------------------------------
+             * Prefix SEI
+             * -------------------------------------------------------
+             */
+
+        case NalUnitType::PREFIX_SEI_NUT:
+
+            if (handlers.prefix_sei == nullptr) {
+                return NalParseResult::Unsupported;
+            }
+
+            handlers.prefix_sei(nal);
+            return NalParseResult::Parsed;
+
+            /*
+             * -------------------------------------------------------
+             * Suffix SEI
+             * -------------------------------------------------------
+             */
+
+        case NalUnitType::SUFFIX_SEI_NUT:
+
+            if (handlers.suffix_sei == nullptr) {
+                return NalParseResult::Unsupported;
+            }
+
+            handlers.suffix_sei(nal);
+            return NalParseResult::Parsed;
+
+            /*
+             * -------------------------------------------------------
+             * VCL / slice
+             * -------------------------------------------------------
+             */
+
+        default:
+
+            if (nal.is_vcl()) {
+                if (handlers.slice == nullptr) {
+                    return NalParseResult::Unsupported;
+                }
+
+                handlers.slice(nal);
+                return NalParseResult::Parsed;
+            }
+
+            /*
+             * Valid HEVC non-VCL NAL which isn't handled yet.
+             */
+            if (handlers.unsupported != nullptr) {
+                handlers.unsupported(nal);
+            }
+
+            return NalParseResult::Ignored;
     }
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -296,19 +255,13 @@ dispatch_nal(
  * -----------------------------------------------------------
  */
 
-inline NalParseResult
-parse_and_dispatch_nal(
-    std::span<const std::uint8_t> bytes,
-    const BsNalHandlers& handlers)
-{
-    const NalUnit nal =
-        parse_nal_unit(bytes);
+inline NalParseResult parse_and_dispatch_nal(
+    std::span<const std::uint8_t> bytes, const BsNalHandlers& handlers
+) {
+    const NalUnit nal = parse_nal_unit(bytes);
 
-    return dispatch_nal(
-        nal,
-        handlers);
+    return dispatch_nal(nal, handlers);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -317,26 +270,15 @@ parse_and_dispatch_nal(
  */
 
 template <typename Framer>
-inline std::size_t
-dispatch_framed_nals(
-    Framer& framer,
-    const BsNalHandlers& handlers)
-{
+inline std::size_t dispatch_framed_nals(Framer& framer, const BsNalHandlers& handlers) {
     std::size_t parsed_count = 0;
 
     while (framer.valid()) {
+        const auto bytes = framer.nal();
 
-        const auto bytes =
-            framer.nal();
+        const auto result = parse_and_dispatch_nal(bytes, handlers);
 
-        const auto result =
-            parse_and_dispatch_nal(
-                bytes,
-                handlers);
-
-        if (result ==
-            NalParseResult::Parsed) {
-
+        if (result == NalParseResult::Parsed) {
             ++parsed_count;
         }
 
@@ -346,25 +288,19 @@ dispatch_framed_nals(
     return parsed_count;
 }
 
-
 /*
  * -----------------------------------------------------------
  * Annex-B convenience dispatcher
  * -----------------------------------------------------------
  */
 
-inline std::size_t
-dispatch_annex_b(
-    std::span<const std::uint8_t> data,
-    const BsNalHandlers& handlers)
-{
+inline std::size_t dispatch_annex_b(
+    std::span<const std::uint8_t> data, const BsNalHandlers& handlers
+) {
     AnnexBNalIterator framer{data};
 
-    return dispatch_framed_nals(
-        framer,
-        handlers);
+    return dispatch_framed_nals(framer, handlers);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -372,22 +308,13 @@ dispatch_annex_b(
  * -----------------------------------------------------------
  */
 
-inline std::size_t
-dispatch_length_prefixed(
-    std::span<const std::uint8_t> data,
-    unsigned length_size,
-    const BsNalHandlers& handlers)
-{
-    LengthPrefixedNalIterator framer{
-        data,
-        length_size
-    };
+inline std::size_t dispatch_length_prefixed(
+    std::span<const std::uint8_t> data, unsigned length_size, const BsNalHandlers& handlers
+) {
+    LengthPrefixedNalIterator framer{data, length_size};
 
-    return dispatch_framed_nals(
-        framer,
-        handlers);
+    return dispatch_framed_nals(framer, handlers);
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -395,34 +322,25 @@ dispatch_length_prefixed(
  * -----------------------------------------------------------
  */
 
-inline std::size_t
-dispatch_nals(
+inline std::size_t dispatch_nals(
     std::span<const std::uint8_t> data,
     NalFramingMode mode,
     const BsNalHandlers& handlers,
-    unsigned length_size = 4)
-{
+    unsigned length_size = 4
+) {
     switch (mode) {
+        case NalFramingMode::AnnexB:
+            return dispatch_annex_b(data, handlers);
 
-    case NalFramingMode::AnnexB:
-        return dispatch_annex_b(
-            data,
-            handlers);
+        case NalFramingMode::LengthPrefixed:
+            return dispatch_length_prefixed(data, length_size, handlers);
 
-    case NalFramingMode::LengthPrefixed:
-        return dispatch_length_prefixed(
-            data,
-            length_size,
-            handlers);
-
-    default:
-        break;
+        default:
+            break;
     }
 
-    throw BsNalParseError(
-        "HEVC dispatcher: unsupported framing mode");
+    throw BsNalParseError("HEVC dispatcher: unsupported framing mode");
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -450,22 +368,13 @@ dispatch_nals(
  */
 
 template <typename Parser, typename Consumer>
-inline void
-parse_nal_with(
-    const NalUnit& nal,
-    Parser&& parser,
-    Consumer&& consumer)
-{
-    auto reader =
-        make_nal_rbsp_reader(nal);
+inline void parse_nal_with(const NalUnit& nal, Parser&& parser, Consumer&& consumer) {
+    auto reader = make_nal_rbsp_reader(nal);
 
-    auto value =
-        std::forward<Parser>(parser)(reader);
+    auto value = std::forward<Parser>(parser)(reader);
 
-    std::forward<Consumer>(consumer)(
-        std::move(value));
+    std::forward<Consumer>(consumer)(std::move(value));
 }
-
 
 /*
  * -----------------------------------------------------------
@@ -488,4 +397,4 @@ parse_nal_with(
  * safer integration point.
  */
 
-} // namespace bs
+}  // namespace bs

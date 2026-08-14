@@ -20,9 +20,7 @@ struct SeiMessage {
     std::span<const std::uint8_t> payload{};
 };
 
-
 struct ParsedSei {
-
     /*
      * De-emulation-prevented RBSP storage.
      *
@@ -34,5 +32,5 @@ struct ParsedSei {
     std::vector<SeiMessage> messages{};
 };
 
-} // namespace avc
-} // namespace bs
+}  // namespace avc
+}  // namespace bs

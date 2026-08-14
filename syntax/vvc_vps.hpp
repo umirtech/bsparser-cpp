@@ -14,7 +14,6 @@ namespace vvc {
  * RBSP are modelled here.
  */
 struct VideoParameterSet {
-
     std::uint8_t vps_id = 0;
 
     std::uint8_t max_layers_minus1 = 0;
@@ -27,13 +26,11 @@ struct VideoParameterSet {
 
     std::vector<std::uint8_t> layer_ids;
 
-
     [[nodiscard]]
-    bool valid() const noexcept
-    {
+    bool valid() const noexcept {
         return vps_id <= 15;
     }
 };
 
-} // namespace vvc
-} // namespace bs
+}  // namespace vvc
+}  // namespace bs
