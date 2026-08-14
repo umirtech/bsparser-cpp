@@ -1,6 +1,6 @@
-/*
+﻿/*
  * ---------------------------------------------------------------------------
- * bs_cli — command-line bitstream parser
+ * bs_cli - command-line bitstream parser
  * ---------------------------------------------------------------------------
  *
  * Parses an HEVC (.hevc) or AVC (.h264) Annex-B / length-prefixed stream using
