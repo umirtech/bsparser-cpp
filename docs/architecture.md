@@ -623,6 +623,45 @@ per-codec dispatch logic.
 
 ---
 
+## 5b. Additional codecs (VVC / AV1 / VP9 / VP8)
+
+The unified API was extended to cover VVC, AV1, VP9 and VP8 using the same
+layered model as HEVC/AVC: per-codec `syntax/` models + `parser/` parsers,
+codec-agnostic framing, a `Codec` enum value, a `*ParsedHandlers` type and a
+`bs::parse` overload.
+
+| Codec | Framing (`NalFramingMode`) | Unit layer | Parsed |
+|---|---|---|---|
+| VVC | Annex-B / length-prefixed (shared) | 2-byte NAL header | DCI/OPI/VPS/SPS/PPS/PH, slice headers |
+| AV1 | `Obu` (Annex-B start codes **and** low-overhead ULEB128 sizes) | OBU header | sequence + frame headers |
+| VP9 | `Ivf` | IVF frame | uncompressed frame headers |
+| VP8 | `Ivf` | IVF frame | uncompressed frame headers |
+
+Key reuse:
+
+- **VVC** reuses the HEVC bit readers verbatim — it keeps the same RBSP
+  emulation-prevention scheme (`00 00 03`), so `RbspReader` (slice/PH) and
+  `RbspBitstreamReader` (parameter sets) apply unchanged. Only the NAL header
+  layout and the syntax parsers are new.
+- **AV1** adds two small codec-agnostic components: a **boolean arithmetic
+  decoder** (`bitstream/boolean_decoder.hpp`) because AV1 headers are
+  entropy-coded, and an **OBU framer** (`parser/obu_framer.hpp`) that handles
+  both Annex-B start codes and low-overhead (size-field) OBUs.
+- **VP8/VP9** use the plain bit reader (`bitstream/plain_bit_reader.hpp`, no
+  emulation prevention) and an **IVF framer** (`parser/ivf_framer.hpp`).
+
+VP8/VP9/AV1 have no SPS/PPS, so their `State` holds no parameter-set manager;
+VVC adds a `vvc::ParameterSetManager` (DCI/OPI/VPS/SPS/PPS/PH) alongside the
+HEVC/AVC managers.
+
+The new syntax parsers parse the *leading header fields* (IDs, dimensions,
+chroma, flags); the full VVC/AV1 RBSP depth (scaling lists, RPL, ALF/LMCS
+tables, …) is not yet modelled. Sample streams in `tests/fuzz/corpus/`
+(`vvc_sample.266`, `av1_sample.obu`, `vp9_sample.ivf`, `vp8_sample.ivf`) were
+generated with `ffmpeg` (`libvvenc`, `libaom-av1`, `libvpx`, `libvpx-vp9`).
+
+---
+
 ## 6. Directory map
 
 ```
@@ -658,6 +697,8 @@ bsparser/
 │   │                               bounds, more_rbsp_data) — PS/SEI parsing
 │   ├── rbsp_reader.hpp             zero-allocation sequential RbspReader —
 │   │                               slice-header parsing (forward reads only)
+│   ├── plain_bit_reader.hpp        MSB-first bit reader, no EP — VP8/VP9
+│   ├── boolean_decoder.hpp         AV1 boolean arithmetic decoder
 │   └── bitstream_reader.hpp
 ├── parser/
 │   ├── hevc_nal_parser.hpp           HEVC NAL dispatch + handler callbacks
@@ -680,6 +721,11 @@ bsparser/
 │   ├── avc_sps_parser.hpp · avc_pps_parser.hpp
 │   ├── avc_slice_parser.hpp        AVC slice header (7.3.3.1)
 │   └── avc_sei_parser.hpp          AVC SEI (type/size with 0xFF extension)
+│   │
+│   ├── vvc_nal_unit_parser.hpp · vvc_vps/sps/pps/dci/opi/ph/slice_parser.hpp
+│   ├── vvc_parameter_set_manager.hpp   VVC DCI/OPI/VPS/SPS/PPS/PH store
+│   ├── obu_framer.hpp · av1_obu_parser.hpp · av1_sequence/frame_header_parser.hpp
+│   ├── ivf_framer.hpp · vp8_frame_header_parser.hpp · vp9_frame_header_parser.hpp
 ├── syntax/                        immutable parsed models
 │   ├── hevc_common.hpp                 shared enums/constants (HEVC)
 │   ├── hevc_nal_unit.hpp · hevc_nal_unit_header.hpp
@@ -692,6 +738,10 @@ bsparser/
 │   ├── avc_nal_unit.hpp · avc_sps.hpp · avc_pps.hpp
 │   ├── avc_slice_header.hpp        (ref list mod · MMCO · pred weight table)
 │   ├── avc_sei.hpp · avc_vui.hpp · avc_scaling_list.hpp
+│   │
+│   ├── vvc_common.hpp · vvc_nal_unit.hpp · vvc_dci/opi/vps/sps/pps/ph/slice.hpp
+│   ├── av1_common.hpp · av1_obu.hpp · av1_sequence_header.hpp · av1_frame_header.hpp
+│   └── vp8_frame_header.hpp · vp9_frame_header.hpp
 ├── logging/
 │   └── log.hpp                    BS_LOG_* macros, BS_ENABLE_TRACE gate
 ├── tests/

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "ivf_framer.hpp"
+#include "obu_framer.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -666,7 +669,9 @@ split_length_prefixed(
 
 enum class NalFramingMode : std::uint8_t {
     AnnexB,
-    LengthPrefixed
+    LengthPrefixed,
+    Obu,
+    Ivf
 };
 
 
@@ -692,6 +697,26 @@ split_nal_units(
         return split_length_prefixed(
             data,
             length_size);
+
+    case NalFramingMode::Obu: {
+        std::vector<FramedNalSpan> out;
+        av1::ObuFramer framer{data};
+        while (framer.valid()) {
+            out.push_back(framer.obu());
+            framer.next();
+        }
+        return out;
+    }
+
+    case NalFramingMode::Ivf: {
+        std::vector<FramedNalSpan> out;
+        IvfFramer framer{data};
+        while (framer.valid()) {
+            out.push_back(framer.frame());
+            framer.next();
+        }
+        return out;
+    }
     }
 
     throw NalFramingError(

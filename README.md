@@ -1,16 +1,30 @@
 # bsparser
 
-A fast, header-only **C++20** bitstream syntax parser for **H.265/HEVC** and
-**H.264/AVC**, with a stable **C API** for non-C++20 consumers and FFI. It
-parses the container/NAL layer and every syntax field (VPS/SPS/PPS, slice
-headers, SEI) — it does **not** decode pixels.
+A fast, header-only **C++20** bitstream syntax parser for **H.265/HEVC**,
+**H.264/AVC**, **H.266/VVC**, **AV1**, **VP9** and **VP8**, with a stable
+**C API** for non-C++20 consumers and FFI. It parses the container/NAL layer
+and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
+**not** decode pixels.
 
-- **Zero-copy**: all NALs and parameter sets are views into your input buffer.
+- **Zero-copy**: all NALs, OBUs and frames are views into your input buffer.
 - **Two APIs, one library**: `#include "bsparser.h"` picks the C++20 templates
   for C++20 compilers, or the compiled C library otherwise.
 - **Auto parameter-set management**: a `bs::State` stores VPS/SPS/PPS as they
   appear, so slice handlers resolve dependencies for you.
-- **Verified**: accuracy is checked field-by-field against `ffmpeg` output.
+- **Verified**: HEVC/AVC accuracy is checked field-by-field against `ffmpeg`;
+  VVC/AV1/VP9/VP8 are tested against streams produced by `ffmpeg`
+  (`libvvenc`, `libaom-av1`, `libvpx`, `libvpx-vp9`).
+
+## Codec support
+
+| Codec | Framing | Parsed |
+|---|---|---|
+| H.265/HEVC | Annex-B / length-prefixed | VPS/SPS/PPS, slice headers, SEI |
+| H.264/AVC | Annex-B / length-prefixed | SPS/PPS, slice headers, SEI |
+| H.266/VVC | Annex-B / length-prefixed | NAL headers, DCI/OPI/VPS/SPS/PPS/PH, slice headers |
+| AV1 | Annex-B OBU / low-overhead OBU | sequence + frame headers |
+| VP9 | IVF | frame headers |
+| VP8 | IVF | frame headers |
 
 ---
 
@@ -63,12 +77,34 @@ int main()
 }
 ```
 
-`bs::parse` returns the number of NALs parsed (ignore it with `(void)` if you
+`bs::parse` returns the number of units parsed (ignore it with `(void)` if you
 don't need it) and is overloaded on the handler type — `BsNalHandlers` (raw NAL
-views), `HevcParsedHandlers` / `AvcParsedHandlers` (typed structs), or a
+views), the per-codec `*ParsedHandlers` (typed structs), or a
 `bs::StructReport` (value snapshot). Parameter sets are stored in the `State`
 automatically; call `state->clear()` when reusing a `State` across independent
 streams.
+
+Each codec has its own `State` codec, `*ParsedHandlers` type and framing mode:
+
+```cpp
+// VVC (Annex-B)
+auto s = bs::create_state(bs::Codec::Vvc);
+bs::VvcParsedHandlers h{};
+h.pps = [](const bs::vvc::PictureParameterSet& pps) { /* ... */ };
+bs::parse(*s, data, bs::NalFramingMode::AnnexB, h);
+
+// AV1 (OBU framing)
+auto s = bs::create_state(bs::Codec::Av1);
+bs::Av1ParsedHandlers h{};
+h.sequence_header = [](const bs::av1::SequenceHeader& sh) { /* ... */ };
+bs::parse(*s, data, bs::NalFramingMode::Obu, h);
+
+// VP9 / VP8 (IVF container)
+auto s = bs::create_state(bs::Codec::Vp9);
+bs::Vp9ParsedHandlers h{};
+h.frame_header = [](const bs::vp9::FrameHeader& fh) { /* ... */ };
+bs::parse(*s, data, bs::NalFramingMode::Ivf, h);
+```
 
 ---
 

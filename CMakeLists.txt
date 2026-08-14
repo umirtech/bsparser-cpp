@@ -338,6 +338,52 @@ add_test(
 
 
 # ---------------------------------------------------------------------------
+# Additional codecs: VVC / AV1 / VP9 / VP8
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Additional codecs: VVC / AV1 / VP9 / VP8
+# ---------------------------------------------------------------------------
+
+set(BS_NEW_CODEC_TESTS
+    Vvc  vvc_sample.266
+    Av1  av1_sample.obu
+    Vp9  vp9_sample.ivf
+    Vp8  vp8_sample.ivf
+)
+
+list(LENGTH BS_NEW_CODEC_TESTS BS_NEW_CODEC_TEST_COUNT)
+math(EXPR BS_NEW_CODEC_TEST_MAX "${BS_NEW_CODEC_TEST_COUNT} - 1")
+
+foreach(idx RANGE 0 ${BS_NEW_CODEC_TEST_MAX} 2)
+
+    list(GET BS_NEW_CODEC_TESTS ${idx} codec)
+    math(EXPR nxt "${idx} + 1")
+    list(GET BS_NEW_CODEC_TESTS ${nxt} sample)
+
+    string(TOLOWER ${codec} name)
+
+    add_executable(
+        bs_${name}_test
+        tests/${name}_test.cpp
+    )
+
+    target_link_libraries(
+        bs_${name}_test
+        PRIVATE
+            bs
+    )
+
+    add_test(
+        NAME bs_${name}_test
+        COMMAND bs_${name}_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${sample}
+    )
+
+endforeach()
+
+
+# ---------------------------------------------------------------------------
 # Fuzzing
 # ---------------------------------------------------------------------------
 #
