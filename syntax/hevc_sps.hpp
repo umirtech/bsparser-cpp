@@ -46,6 +46,15 @@ using SpsSubLayerOrderingInfo = SubLayerOrderingInfo;
  * the actual block sizes.
  */
 
+/*
+ * 1u << e, with e clamped to [0, 31] so fuzzed/malformed SPS fields
+ * cannot trigger undefined behavior on shift exponents >= 32.
+ */
+[[nodiscard]]
+constexpr std::uint32_t pow2_clamped(unsigned e) noexcept {
+    return std::uint32_t{1} << (e >= 32u ? 31u : e);
+}
+
 struct SpsCodingBlockParameters {
     /*
      * log2_min_luma_coding_block_size_minus3
@@ -85,26 +94,28 @@ struct SpsCodingBlockParameters {
 
     [[nodiscard]]
     constexpr std::uint32_t min_luma_coding_block_size() const noexcept {
-        return std::uint32_t{1} << (log2_min_luma_coding_block_size_minus3 + 3);
+        return pow2_clamped(log2_min_luma_coding_block_size_minus3 + 3);
     }
 
     [[nodiscard]]
     constexpr std::uint32_t max_luma_coding_block_size() const noexcept {
-        return std::uint32_t{1}
-               << (log2_min_luma_coding_block_size_minus3 +
-                   log2_diff_max_min_luma_coding_block_size + 3);
+        return pow2_clamped(
+            log2_min_luma_coding_block_size_minus3 +
+            log2_diff_max_min_luma_coding_block_size + 3
+        );
     }
 
     [[nodiscard]]
     constexpr std::uint32_t min_luma_transform_block_size() const noexcept {
-        return std::uint32_t{1} << (log2_min_luma_transform_block_size_minus2 + 2);
+        return pow2_clamped(log2_min_luma_transform_block_size_minus2 + 2);
     }
 
     [[nodiscard]]
     constexpr std::uint32_t max_luma_transform_block_size() const noexcept {
-        return std::uint32_t{1}
-               << (log2_min_luma_transform_block_size_minus2 +
-                   log2_diff_max_min_luma_transform_block_size + 2);
+        return pow2_clamped(
+            log2_min_luma_transform_block_size_minus2 +
+            log2_diff_max_min_luma_transform_block_size + 2
+        );
     }
 };
 

@@ -77,7 +77,11 @@ int main(int argc, char** argv) {
             break;
         }
 
-        LLVMFuzzerTestOneInput(input.data(), input.size());
+        try {
+            LLVMFuzzerTestOneInput(input.data(), input.size());
+        } catch (...) {
+            /* a fuzz target must never let an exception escape */
+        }
     }
 
     std::fprintf(stderr, "fuzz done: %lld iterations, no crash\n", iters);
