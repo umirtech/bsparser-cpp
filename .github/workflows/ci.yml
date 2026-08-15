@@ -48,7 +48,7 @@ jobs:
 
       - name: Test (ctest)
         id: test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Accuracy (verify_c vs ffmpeg references)
         if: matrix.deep == true
