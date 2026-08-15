@@ -10,6 +10,10 @@
 #include <stdexcept>
 #include <vector>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 namespace bs {
 
 /*
@@ -143,6 +147,33 @@ inline std::uint64_t sw_allzero(std::uint64_t v) noexcept {
     return ~v & 0x8080808080808080ULL;
 }
 
+/*
+ * Count trailing zeros of a non-zero 64-bit value.
+ *
+ * GCC/Clang provide __builtin_ctzll; MSVC uses _BitScanForward64
+ * (x86-64/ARM64) or _BitScanForward on 32-bit halves.
+ */
+[[nodiscard]]
+inline int ctz64(std::uint64_t v) noexcept {
+#if defined(_MSC_VER)
+    unsigned long index = 0;
+
+#if defined(_M_X64) || defined(_M_ARM64)
+    _BitScanForward64(&index, v);
+#else
+    if (_BitScanForward(&index, static_cast<unsigned long>(v & 0xFFFFFFFFu)) != 0) {
+        return static_cast<int>(index);
+    }
+    _BitScanForward(&index, static_cast<unsigned long>(v >> 32));
+    return static_cast<int>(index) + 32;
+#endif
+
+    return static_cast<int>(index);
+#else
+    return __builtin_ctzll(v);
+#endif
+}
+
 }  // namespace
 
 /*
@@ -178,7 +209,7 @@ inline std::size_t annex_b_find_start_code(
         const std::uint64_t match = o & (z << 8) & (z << 16);
 
         if (match != 0) {
-            const int bit = __builtin_ctzll(match);
+            const int bit = ctz64(match);
 
             const int j = bit / 8;
 
