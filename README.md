@@ -27,7 +27,7 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 |---|---|---|---|---|
 | linux-x64 | FAIL | PASS | FAIL | n/a |
 
-_Last run: `cb09d41` on `cb09d41`._
+_Last run: `532efba` on `532efba`._
 
 <!-- CI:RESULTS:END -->
 
