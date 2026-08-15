@@ -9,6 +9,20 @@
 #include <vector>
 #include <chrono>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
+static inline int ctz32(unsigned v) noexcept {
+#if defined(_MSC_VER)
+    unsigned long index;
+    _BitScanForward(&index, v);
+    return static_cast<int>(index);
+#else
+    return __builtin_ctz(v);
+#endif
+}
+
 static std::vector<std::uint8_t> make_stream(std::size_t size) {
     std::mt19937 rng(1234);
     std::uniform_int_distribution<int> dist(0, 255);
@@ -52,7 +66,7 @@ static std::size_t simd_find(const std::uint8_t* d, std::size_t n, std::size_t f
         /* result bit k set => "00 00 01" starts at buffer pos i + k */
         unsigned r = (unsigned)(z & (z >> 1) & (o >> 2)) & 0x3FFFu;
         if (r) {
-            unsigned k = (unsigned)__builtin_ctz(r);
+            unsigned k = (unsigned)ctz32(r);
             std::size_t start = i + k;
             if (start >= 1 && d[start - 1] == 0 && start - 1 >= from)
                 return start - 1;
