@@ -15,6 +15,24 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
   VVC/AV1/VP9/VP8 are tested against streams produced by `ffmpeg`
   (`libvvenc`, `libaom-av1`, `libvpx`, `libvpx-vp9`).
 
+
+
+<!-- CI:RESULTS:START -->
+
+## CI results
+
+[![CI](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml)
+
+| Platform | Build | Tests (30) | Accuracy | Real samples |
+|---|---|---|---|---|
+| linux-x64 | FAIL | PASS | FAIL | n/a |
+
+_Last run: `cb09d41` on `cb09d41`._
+
+<!-- CI:RESULTS:END -->
+
+
+
 ## Codec support
 
 | Codec | Framing | Parsed |
@@ -210,17 +228,3 @@ tools/                dev/verification tools (bench, verify_c, …)
 tests/                unit, integration and fuzz tests
 docs/architecture.md  architecture documentation
 ```
-
-<!-- CI:RESULTS:START -->
-
-## CI results
-
-[![CI](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml)
-
-| Platform | Build | Tests (30) | Accuracy | Real samples |
-|---|---|---|---|---|
-| linux-x64 | FAIL | PASS | FAIL | n/a |
-
-_Last run: `cb09d41` on `cb09d41`._
-
-<!-- CI:RESULTS:END -->
