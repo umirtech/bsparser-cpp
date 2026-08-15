@@ -11,11 +11,12 @@ Usage: python tools/compare_ffmpeg.py <file...>
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
 
-BS_CLI = "build/bs_cli.exe"
+BS_CLI = os.path.join("build", "bs_cli" + (".exe" if os.name == "nt" else ""))
 
 # ---------------------------------------------------------------------------
 # ffmpeg trace parsing

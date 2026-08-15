@@ -15,7 +15,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFEST = os.path.join(ROOT, "tests", "real", "manifest.json")
-BS_CLI = os.path.join(ROOT, "build", "bs_cli.exe")
+BS_CLI = os.path.join(ROOT, "build", "bs_cli" + (".exe" if os.name == "nt" else ""))
 COMPARE = os.path.join(ROOT, "tools", "compare_ffmpeg.py")
 
 
