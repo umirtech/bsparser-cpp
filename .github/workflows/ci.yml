@@ -76,7 +76,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "build=${{ job.status }}" >> "$GITHUB_OUTPUT"
+          echo "build=${{ steps.build.outcome }}" >> "$GITHUB_OUTPUT"
           echo "tests=${{ steps.test.outcome }}" >> "$GITHUB_OUTPUT"
           echo "accuracy=${{ steps.accuracy.outcome }}" >> "$GITHUB_OUTPUT"
           echo "real=${{ steps.real.outcome }}" >> "$GITHUB_OUTPUT"
@@ -117,24 +117,34 @@ jobs:
           def st(v):
               return "PASS" if v == "success" else ("FAIL" if v == "failure" else "n/a")
 
+          # Always render the full matrix; fill statuses from the job outputs
+          # (which may be incomplete if a leg was cancelled or never ran).
+          default_platforms = ["linux-x64", "linux-arm64", "windows-x64", "windows-arm64"]
           platforms = arr(os.environ["PLATFORMS"])
-          builds    = [st(x) for x in arr(os.environ["BUILDS"])]
-          tests     = [st(x) for x in arr(os.environ["TESTS"])]
-          accuracy  = [st(x) for x in arr(os.environ["ACCURACY"])]
-          real      = [st(x) for x in arr(os.environ["REAL"])]
-          repo      = os.environ["REPO"]
-          sha       = os.environ["SHA"][:7]
+          builds    = arr(os.environ["BUILDS"])
+          tests     = arr(os.environ["TESTS"])
+          accuracy  = arr(os.environ["ACCURACY"])
+          real      = arr(os.environ["REAL"])
+
+          status = {}
+          for i, name in enumerate(platforms):
+              if not name:
+                  continue
+              status[name] = (
+                  st(builds[i]) if i < len(builds) else "n/a",
+                  st(tests[i]) if i < len(tests) else "n/a",
+                  st(accuracy[i]) if i < len(accuracy) else "n/a",
+                  st(real[i]) if i < len(real) else "n/a",
+              )
 
           rows = []
-          for i in range(len(platforms)):
-              rows.append("| {} | {} | {} | {} | {} |".format(
-                  platforms[i],
-                  builds[i] if i < len(builds) else "n/a",
-                  tests[i] if i < len(tests) else "n/a",
-                  accuracy[i] if i < len(accuracy) else "n/a",
-                  real[i] if i < len(real) else "n/a",
-              ))
-          table = "\n".join(rows) if rows else "| _no results_ | | | | |"
+          for name in default_platforms:
+              b, t, a, r = status.get(name, ("n/a", "n/a", "n/a", "n/a"))
+              rows.append(f"| {name} | {b} | {t} | {a} | {r} |")
+          table = "\n".join(rows)
+
+          repo = os.environ["REPO"]
+          sha = os.environ["SHA"][:7]
 
           block = (
               "## CI results\n\n"
@@ -143,7 +153,7 @@ jobs:
               "| Platform | Build | Tests (30) | Accuracy | Real samples |\n"
               "|---|---|---|---|---|\n"
               "{1}\n\n"
-              "_Last run: `{2}` on `{3}`._\n".format(repo, table, sha, sha)
+              "_Last run: `{2}` on `{2}`._\n".format(repo, table, sha)
           )
           block = "<!-- CI:RESULTS:START -->\n\n" + block + "\n<!-- CI:RESULTS:END -->"
 
