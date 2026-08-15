@@ -210,3 +210,17 @@ tools/                dev/verification tools (bench, verify_c, …)
 tests/                unit, integration and fuzz tests
 docs/architecture.md  architecture documentation
 ```
+
+<!-- CI:RESULTS:START -->
+
+## CI results
+
+[![CI](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml)
+
+| Platform | Build | Tests (30) | Accuracy | Real samples |
+|---|---|---|---|---|
+| linux-x64 | FAIL | PASS | FAIL | n/a |
+
+_Last run: `cb09d41` on `cb09d41`._
+
+<!-- CI:RESULTS:END -->
