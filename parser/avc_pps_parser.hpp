@@ -45,14 +45,14 @@ inline PictureParameterSet parse_picture_parameter_set(RbspBitstreamReader& read
 
         switch (map.slice_group_map_type) {
             case 0:
-                for (unsigned i = 0; i < num_slice_groups; ++i) {
+                for (int i = 0; i < num_slice_groups; ++i) {
                     map.run_length_minus1[i] =
                         detail::read_ue_max(reader, "run_length_minus1", 0xFFFFFu);
                 }
                 break;
 
             case 2:
-                for (unsigned i = 0; i < num_slice_groups - 1; ++i) {
+                for (int i = 0; i < num_slice_groups - 1; ++i) {
                     map.top_left[i] = detail::read_ue_max(reader, "top_left", 0xFFFFFu);
 
                     map.bottom_right[i] = detail::read_ue_max(reader, "bottom_right", 0xFFFFFu);
