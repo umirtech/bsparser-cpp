@@ -827,9 +827,13 @@ constexpr bool weighted_prediction_present(const SliceSegmentHeader& header) noe
 
 /*
  * Return the number of long-term references.
+ *
+ * Not constexpr: std::vector::size() is only constexpr in newer standard
+ * libraries (libstdc++ >= 12, MSVC STL), which would break builds with
+ * older toolchains (e.g. the musl-cross GCC 11).
  */
 [[nodiscard]]
-constexpr std::size_t long_term_reference_count(const SliceSegmentHeader& header) noexcept {
+inline std::size_t long_term_reference_count(const SliceSegmentHeader& header) noexcept {
     return header.long_term_references.size();
 }
 
