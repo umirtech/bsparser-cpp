@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-x64
+            deep: true
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+          - os: windows-2025
+            name: windows-x64
+          - os: windows-11-arm
+            name: windows-arm64
+    runs-on: ${{ matrix.os }}
+    outputs:
+      platform: ${{ matrix.name }}
+      build: ${{ steps.summary.outputs.build }}
+      tests: ${{ steps.summary.outputs.tests }}
+      accuracy: ${{ steps.summary.outputs.accuracy }}
+      real: ${{ steps.summary.outputs.real }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        id: build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install ffmpeg (accuracy / validation reference)
+        if: matrix.deep == true
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Test (ctest)
+        id: test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Accuracy (verify_c vs ffmpeg references)
+        if: matrix.deep == true
+        id: accuracy
+        shell: bash
+        run: |
+          c++ -x c++ -std=c++20 -I. -Icapi -Ibitstream -Ilogging -Iparser -Isyntax \
+            -c tools/verify_c.c -o build/verify_c.o
+          c++ build/verify_c.o build/libbs_capi.a -o build/verify_c
+          ./build/verify_c tests/fuzz/corpus/hevc_hdr10.hevc \
+            tests/fuzz/reference/hevc_hdr10.txt hevc
+          ./build/verify_c tests/fuzz/corpus/avc_hdr.h264 \
+            tests/fuzz/reference/avc_hdr.txt avc
+
+      - name: Real-sample validation (download + ffmpeg trace compare)
+        if: matrix.deep == true
+        id: real
+        shell: bash
+        run: |
+          python3 tools/download_real_samples.py
+          python3 tools/validate_real.py
+
+      - name: Summarize
+        id: summary
+        if: always()
+        shell: bash
+        run: |
+          echo "build=${{ job.status }}" >> "$GITHUB_OUTPUT"
+          echo "tests=${{ steps.test.outcome }}" >> "$GITHUB_OUTPUT"
+          echo "accuracy=${{ steps.accuracy.outcome }}" >> "$GITHUB_OUTPUT"
+          echo "real=${{ steps.real.outcome }}" >> "$GITHUB_OUTPUT"
+
+  report:
+    name: Update README
+    if: always()
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+
+      - name: Render results into README.md
+        shell: bash
+        env:
+          PLATFORMS: ${{ toJSON(needs.build.outputs.platform) }}
+          BUILDS: ${{ toJSON(needs.build.outputs.build) }}
+          TESTS: ${{ toJSON(needs.build.outputs.tests) }}
+          ACCURACY: ${{ toJSON(needs.build.outputs.accuracy) }}
+          REAL: ${{ toJSON(needs.build.outputs.real) }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, re
+
+          def arr(v):
+              try:
+                  d = json.loads(v)
+                  return d if isinstance(d, list) else [d]
+              except Exception:
+                  return []
+
+          def st(v):
+              return "PASS" if v == "success" else ("FAIL" if v == "failure" else "n/a")
+
+          platforms = arr(os.environ["PLATFORMS"])
+          builds    = [st(x) for x in arr(os.environ["BUILDS"])]
+          tests     = [st(x) for x in arr(os.environ["TESTS"])]
+          accuracy  = [st(x) for x in arr(os.environ["ACCURACY"])]
+          real      = [st(x) for x in arr(os.environ["REAL"])]
+          repo      = os.environ["REPO"]
+          sha       = os.environ["SHA"][:7]
+
+          rows = []
+          for i in range(len(platforms)):
+              rows.append("| {} | {} | {} | {} | {} |".format(
+                  platforms[i],
+                  builds[i] if i < len(builds) else "n/a",
+                  tests[i] if i < len(tests) else "n/a",
+                  accuracy[i] if i < len(accuracy) else "n/a",
+                  real[i] if i < len(real) else "n/a",
+              ))
+          table = "\n".join(rows) if rows else "| _no results_ | | | | |"
+
+          block = (
+              "## CI results\n\n"
+              "[![CI](https://github.com/{0}/actions/workflows/ci.yml/badge.svg)]"
+              "(https://github.com/{0}/actions/workflows/ci.yml)\n\n"
+              "| Platform | Build | Tests (30) | Accuracy | Real samples |\n"
+              "|---|---|---|---|---|\n"
+              "{1}\n\n"
+              "_Last run: `{2}` on `{3}`._\n".format(repo, table, sha, sha)
+          )
+          block = "<!-- CI:RESULTS:START -->\n\n" + block + "\n<!-- CI:RESULTS:END -->"
+
+          path = "README.md"
+          with open(path, encoding="utf-8") as f:
+              content = f.read()
+
+          m = re.compile(r"<!-- CI:RESULTS:START -->.*?<!-- CI:RESULTS:END -->", re.S)
+          if m.search(content):
+              content = m.sub(block, content)
+          else:
+              content = content.rstrip() + "\n\n" + block + "\n"
+
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+          EOF
+
+      - name: Commit README results
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "ci: update README results [skip ci]"
+            git push
+          fi
