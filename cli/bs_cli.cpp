@@ -106,8 +106,6 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
         /*
          * AVC parameter sets: SPS = 0x67 / 0x27, PPS = 0x68 / 0x28.
          */
-        const unsigned avc_type = b0 & 0x1F;
-
         if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28) {
             ++avc_ps;
         }

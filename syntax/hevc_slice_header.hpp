@@ -55,12 +55,12 @@ struct RefPicListModificationData {
     RefPicListModification list1{};
 
     [[nodiscard]]
-    bool modifies_l0() const noexcept {
+    constexpr bool modifies_l0() const noexcept {
         return list0.modification_flag;
     }
 
     [[nodiscard]]
-    bool modifies_l1() const noexcept {
+    constexpr bool modifies_l1() const noexcept {
         return list1.modification_flag;
     }
 };
