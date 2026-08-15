@@ -18,6 +18,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * strdup is POSIX and spelled _strdup on MSVC; provide a portable copy so
+ * the tool builds on every CI platform.
+ */
+static char* bs_strdup(const char* s) {
+    size_t n = strlen(s) + 1;
+    char* p = (char*)malloc(n);
+    if (p) {
+        memcpy(p, s, n);
+    }
+    return p;
+}
+
 /* ---- captured parser output ---- */
 static int g_profile_idc = -1;
 static int g_level_idc = -1;
@@ -44,7 +57,7 @@ static void store_ref(const char* key, long val) {
         }
     }
     if (ref_n < MAX_REF) {
-        ref_key[ref_n] = _strdup(key);
+        ref_key[ref_n] = bs_strdup(key);
         ref_val[ref_n] = val;
         ++ref_n;
     }
