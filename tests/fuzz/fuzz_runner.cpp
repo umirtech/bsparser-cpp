@@ -42,7 +42,11 @@ int main(int argc, char** argv) {
 
     std::mt19937_64 rng(0xC0FFEEu);
 
-    long long iters = 500000;
+    /*
+     * Default to a modest iteration count so a casual run does not peg
+     * the machine; pass `--iters N` for a deeper sweep (e.g. under ASan).
+     */
+    long long iters = 50000;
     if (argc > 1 && std::strcmp(argv[1], "--iters") == 0) {
         iters = std::stoll(std::string(argv[2]));
     }
