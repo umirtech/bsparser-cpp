@@ -119,6 +119,32 @@ add_test(
 )
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Picture order count derivation (H.265 §8.3.1 / H.264 §8.2.1 / H.266 §8.3.1)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+add_executable(
+    bs_poc_test
+    tests/poc_test.cpp
+)
+
+target_link_libraries(
+    bs_poc_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_poc_test
+    COMMAND bs_poc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_main.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/av1_sample.obu
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/vp9_sample.ivf
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/vp8_sample.ivf
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/vvc_sample.266
+)
+
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #Command - line parser / report exporter
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 

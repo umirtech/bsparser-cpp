@@ -1195,6 +1195,7 @@ inline void bs_conv(const ::bs::avc::SliceHeader& src, BsAvcSliceHeader& dst) {
     dst.slice_group_change_cycle = (uint32_t)src.slice_group_change_cycle;
     dst.sp_for_switch_flag = (src.sp_for_switch_flag ? 1 : 0);
     dst.slice_qs_delta = (int32_t)src.slice_qs_delta;
+    dst.derived_poc = (int32_t)src.derived_poc;
 }
 
 inline void bs_conv(

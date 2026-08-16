@@ -68,6 +68,12 @@ struct FrameHeader {
      */
     bool frame_size_from_refs = false;
 
+    /*
+     * Decode-order index of this frame, filled by the unified dispatch layer.
+     * VP9 has no POC; the display order of a raw stream is the decode order.
+     */
+    std::int32_t presentation_order = 0;
+
     [[nodiscard]]
     bool valid() const noexcept {
         return frame_marker == 0b10u;
