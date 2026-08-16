@@ -26,11 +26,11 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 | Platform | Build | Tests (30) | Accuracy | Real samples |
 |---|---|---|---|---|
 | linux-x64 | n/a | n/a | n/a | n/a |
-| linux-arm64 | PASS | PASS | PASS | n/a |
+| linux-arm64 | PASS | PASS | PASS | PASS |
 | windows-x64 | n/a | n/a | n/a | n/a |
 | windows-arm64 | n/a | n/a | n/a | n/a |
 
-_Last run: `350449f` on `350449f`._
+_Last run: `abbc817` on `abbc817`._
 
 <!-- CI:RESULTS:END -->
 
