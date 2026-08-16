@@ -166,9 +166,13 @@ void run_input(std::span<const std::uint8_t> input) {
         while (framer.valid()) {
             const auto bytes = framer.nal();
 
-            const bs::NalUnit nal = bs::parse_nal_unit(bytes);
+            try {
+                const bs::NalUnit nal = bs::parse_nal_unit(bytes);
 
-            handle_nal(state, nal);
+                handle_nal(state, nal);
+            } catch (...) {
+                /* malformed NAL: skip it and keep going */
+            }
 
             framer.next();
         }
@@ -183,9 +187,15 @@ void run_input(std::span<const std::uint8_t> input) {
     {
         FuzzState state;
 
-        const bs::NalUnit nal = bs::parse_nal_unit(input);
+        bs::NalUnit nal;
 
-        handle_nal(state, nal);
+        if (bs::try_parse_nal_unit(input, nal)) {
+            try {
+                handle_nal(state, nal);
+            } catch (...) {
+                /* malformed payload: skip */
+            }
+        }
     }
 }
 
