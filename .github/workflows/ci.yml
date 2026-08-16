@@ -21,10 +21,13 @@ jobs:
             deep: true
           - os: ubuntu-24.04-arm
             name: linux-arm64
+            deep: true
           - os: windows-2025
             name: windows-x64
+            deep: true
           - os: windows-11-arm
             name: windows-arm64
+            deep: true
     runs-on: ${{ matrix.os }}
     outputs:
       platform: ${{ matrix.name }}
@@ -44,7 +47,11 @@ jobs:
 
       - name: Install ffmpeg (accuracy / validation reference)
         if: matrix.deep == true
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        uses: AnimMouse/setup-ffmpeg@v1
+      
+      - name: Verify ffmpeg
+        if: matrix.deep == true
+        run: ffmpeg -version
 
       - name: Test (ctest)
         id: test
