@@ -505,6 +505,7 @@ inline Report build_report(
 
                 SliceSegmentHeader sh;
                 bool resolved = false;
+                std::uint32_t max_poc_lsb = 16;
 
                 if (detail::g_state) {
                     if (auto* mgr = detail::g_state->hevc_sets()) {
@@ -517,6 +518,7 @@ inline Report build_report(
                         const auto sets = mgr->resolve_pps(static_cast<std::uint8_t>(pps_id));
                         if (sets.pps != nullptr && sets.sps != nullptr) {
                             sh = parse_with(*sets.sps, *sets.pps);
+                            max_poc_lsb = sets.sps->max_pic_order_cnt_lsb();
                             resolved = true;
                         }
                     }
@@ -524,6 +526,17 @@ inline Report build_report(
 
                 if (!resolved) {
                     sh = parse_with({}, {});
+                }
+
+                /*
+                 * Drive the state's HEVC POC tracker (H.265 §8.3.1) so the
+                 * report carries the derived presentation-order POC.
+                 */
+                std::int32_t derived_poc = 0;
+                if (auto* poc = detail::g_state ? detail::g_state->hevc_poc() : nullptr) {
+                    derived_poc = poc->derive(
+                        nut, nal.temporal_id(), sh.slice_pic_order_cnt_lsb, max_poc_lsb
+                    );
                 }
 
                 static const char* st[] = {"B", "P", "I"};
@@ -539,6 +552,7 @@ inline Report build_report(
                     {"dependent_slice", sh.dependent_slice_segment_flag ? "1" : "0"},
                     {"slice_qp_delta", std::to_string(sh.slice_qp_delta)},
                     {"poc_lsb", std::to_string(sh.slice_pic_order_cnt_lsb)},
+                    {"derived_poc", std::to_string(derived_poc)},
                     {"sao_luma", sh.slice_sao_luma_flag ? "1" : "0"},
                     {"sao_chroma", sh.slice_sao_chroma_flag ? "1" : "0"},
                 };
@@ -662,6 +676,7 @@ inline Report build_report(
 
                 avc::SliceHeader sh;
                 bool resolved = false;
+                const avc::SequenceParameterSet* resolved_sps = nullptr;
 
                 if (detail::g_state) {
                     if (auto* mgr = detail::g_state->avc_sets()) {
@@ -672,6 +687,7 @@ inline Report build_report(
                         const auto sets = mgr->resolve(static_cast<std::uint8_t>(pps_id));
                         if (sets.pps != nullptr && sets.sps != nullptr) {
                             sh = parse_with(*sets.sps, *sets.pps);
+                            resolved_sps = sets.sps;
                             resolved = true;
                         }
                     }
@@ -679,6 +695,22 @@ inline Report build_report(
 
                 if (!resolved) {
                     sh = parse_with({}, {});
+                }
+
+                /*
+                 * Drive the state's AVC POC tracker (H.264 §8.2.1) so the
+                 * report carries the derived presentation-order POC.
+                 */
+                std::int32_t derived_poc = 0;
+                if (auto* poc = detail::g_state ? detail::g_state->avc_poc() : nullptr) {
+                    if (resolved_sps != nullptr) {
+                        derived_poc = poc->derive(
+                            sh,
+                            *resolved_sps,
+                            nal.type() == avc::NalUnitType::SliceIdr,
+                            nal.header.nal_ref_idc
+                        );
+                    }
                 }
 
                 static const char* st[] = {"P", "B", "I", "SP", "SI"};
@@ -694,6 +726,7 @@ inline Report build_report(
                     {"frame_num", std::to_string(sh.frame_num)},
                     {"idr_pic_id", std::to_string(sh.idr_pic_id)},
                     {"pic_order_cnt_lsb", std::to_string(sh.pic_order_cnt_lsb)},
+                    {"derived_poc", std::to_string(derived_poc)},
                     {"slice_qp_delta", std::to_string(sh.slice_qp_delta)},
                 };
             } catch (...) {
@@ -724,9 +757,8 @@ inline Report build_report(
         };
 
         report.parsed = parse(*state, data, mode, handlers, length_size);
-    } else if (
-        codec == Codec::Vvc || codec == Codec::Av1 || codec == Codec::Vp9 || codec == Codec::Vp8
-    ) {
+    } else if (codec == Codec::Vvc || codec == Codec::Av1 || codec == Codec::Vp9 ||
+               codec == Codec::Vp8) {
         report.codec = (codec == Codec::Vvc)   ? "VVC"
                        : (codec == Codec::Av1) ? "AV1"
                        : (codec == Codec::Vp9) ? "VP9"
@@ -749,8 +781,42 @@ inline Report build_report(
 
                         if (nal.is_vcl()) {
                             try {
-                                RbspReader r(nal.payload_bytes());
-                                auto sh = vvc::parse_slice_header(r);
+                                vvc::SliceHeader sh;
+                                bool resolved = false;
+                                if (detail::g_state) {
+                                    if (auto* mgr = detail::g_state->vvc_sets()) {
+                                        RbspReader r1(nal.payload_bytes());
+                                        vvc::SliceHeader lead =
+                                            vvc::parse_slice_header(r1, nullptr, nullptr);
+                                        const vvc::PictureHeader* stored_ph = mgr->ph();
+                                        const std::uint32_t pps_id =
+                                            lead.picture_header_in_slice_header_flag
+                                                ? static_cast<std::uint32_t>(lead.pps_id)
+                                                : (stored_ph != nullptr ? stored_ph->pps_id : 0u);
+                                        const auto sets =
+                                            mgr->resolve(static_cast<std::uint8_t>(pps_id));
+                                        if (sets.sps != nullptr) {
+                                            RbspReader r2(nal.payload_bytes());
+                                            sh = vvc::parse_slice_header(r2, sets.sps, sets.pps);
+                                            if (!sh.picture_header_in_slice_header_flag &&
+                                                stored_ph != nullptr) {
+                                                sh.ph = *stored_ph;
+                                            }
+                                            if (sh.ph.poc_lsb_bits != 0) {
+                                                if (auto* poc = detail::g_state->vvc_poc()) {
+                                                    sh.derived_poc = poc->derive(
+                                                        nal.nal_type(), nal.temporal_id(), sh.ph
+                                                    );
+                                                }
+                                            }
+                                            resolved = true;
+                                        }
+                                    }
+                                }
+                                if (!resolved) {
+                                    RbspReader r0(nal.payload_bytes());
+                                    sh = vvc::parse_slice_header(r0, nullptr, nullptr);
+                                }
                                 static const char* st[] = {"B", "P", "I"};
                                 const char* stn = static_cast<unsigned>(sh.slice_type) <= 2u
                                                       ? st[static_cast<unsigned>(sh.slice_type)]
@@ -759,6 +825,8 @@ inline Report build_report(
                                 fields = {
                                     {"pps_id", std::to_string(sh.pps_id)},
                                     {"slice_type", stn},
+                                    {"poc_lsb", std::to_string(sh.ph.poc_lsb)},
+                                    {"derived_poc", std::to_string(sh.derived_poc)},
                                 };
                             } catch (...) {
                                 summary = "Slice (unparsable)";
@@ -782,6 +850,11 @@ inline Report build_report(
                                     }
                                     case vvc::NalUnitType::SpsNut: {
                                         auto sps = vvc::parse_sps(r);
+                                        if (detail::g_state) {
+                                            if (auto* mgr = detail::g_state->vvc_sets()) {
+                                                mgr->store_sps(sps);
+                                            }
+                                        }
                                         summary = "SPS id=" + std::to_string(sps.sps_id);
                                         fields = {
                                             {"sps_id", std::to_string(sps.sps_id)},
@@ -792,11 +865,18 @@ inline Report build_report(
                                              std::to_string(sps.chroma_format_idc)},
                                             {"log2_ctu_size",
                                              std::to_string(sps.log2_ctu_size_minus5 + 5)},
+                                            {"log2_max_poc_lsb_minus4",
+                                             std::to_string(sps.log2_max_pic_order_cnt_lsb_minus4)},
                                         };
                                         break;
                                     }
                                     case vvc::NalUnitType::PpsNut: {
                                         auto pps = vvc::parse_pps(r);
+                                        if (detail::g_state) {
+                                            if (auto* mgr = detail::g_state->vvc_sets()) {
+                                                mgr->store_pps(pps);
+                                            }
+                                        }
                                         summary = "PPS id=" + std::to_string(pps.pps_id) + " " +
                                                   std::to_string(pps.pic_width_in_luma_samples) +
                                                   "x" +
@@ -813,9 +893,32 @@ inline Report build_report(
                                     }
                                     case vvc::NalUnitType::PhNut: {
                                         auto ph = vvc::parse_ph(r);
+                                        if (detail::g_state) {
+                                            if (auto* mgr = detail::g_state->vvc_sets()) {
+                                                const auto sets = mgr->resolve(
+                                                    static_cast<std::uint8_t>(ph.pps_id)
+                                                );
+                                                if (sets.sps != nullptr) {
+                                                    RbspReader r2(nal.payload_bytes());
+                                                    ph = vvc::parse_ph(r2, sets.sps);
+                                                }
+                                                mgr->store_ph(ph);
+                                            }
+                                        }
                                         summary =
-                                            "Picture Header pps_id=" + std::to_string(ph.pps_id);
-                                        fields = {{"pps_id", std::to_string(ph.pps_id)}};
+                                            "Picture Header pps_id=" + std::to_string(ph.pps_id) +
+                                            " poc_lsb=" + std::to_string(ph.poc_lsb);
+                                        fields = {
+                                            {"pps_id", std::to_string(ph.pps_id)},
+                                            {"poc_lsb", std::to_string(ph.poc_lsb)},
+                                            {"non_ref_pic", ph.non_ref_pic_flag ? "1" : "0"},
+                                        };
+                                        if (ph.poc_msb_cycle_present_flag) {
+                                            fields.emplace_back(
+                                                "msb_cycle_val",
+                                                std::to_string(ph.poc_msb_cycle_val)
+                                            );
+                                        }
                                         break;
                                     }
                                     case vvc::NalUnitType::DciNut: {
@@ -869,6 +972,7 @@ inline Report build_report(
 
         } else if (codec == Codec::Av1) {
             av1::ObuFramer framer{data};
+            av1::SequenceHeader seq{};
             std::size_t i = 0;
             while (framer.valid()) {
                 const auto span = framer.obu();
@@ -880,12 +984,15 @@ inline Report build_report(
 
                     if (obu.type() == static_cast<std::uint8_t>(av1::ObuType::SequenceHeader)) {
                         auto sh = av1::parse_sequence_header(obu.payload_bytes());
+                        seq = sh;
                         summary = "Sequence Header profile=" + std::to_string(sh.seq_profile);
                         fields = {
                             {"seq_profile", std::to_string(sh.seq_profile)},
                             {"still_picture", sh.still_picture ? "1" : "0"},
                             {"reduced_still_picture_header",
                              sh.reduced_still_picture_header ? "1" : "0"},
+                            {"enable_order_hint", sh.enable_order_hint ? "1" : "0"},
+                            {"order_hint_bits", std::to_string(sh.order_hint_bits())},
                         };
                         if (sh.dimensions_present) {
                             fields.emplace_back(
@@ -897,13 +1004,11 @@ inline Report build_report(
                             summary += " " + std::to_string(sh.max_frame_width) + "x" +
                                        std::to_string(sh.max_frame_height);
                         }
-                    } else if (
-                        obu.type() == static_cast<std::uint8_t>(av1::ObuType::FrameHeader) ||
-                        obu.type() ==
-                            static_cast<std::uint8_t>(av1::ObuType::RedundantFrameHeader) ||
-                        obu.type() == static_cast<std::uint8_t>(av1::ObuType::Frame)
-                    ) {
-                        auto fh = av1::parse_frame_header(obu.payload_bytes());
+                    } else if (obu.type() == static_cast<std::uint8_t>(av1::ObuType::FrameHeader) ||
+                               obu.type() ==
+                                   static_cast<std::uint8_t>(av1::ObuType::RedundantFrameHeader) ||
+                               obu.type() == static_cast<std::uint8_t>(av1::ObuType::Frame)) {
+                        auto fh = av1::parse_frame_header(obu.payload_bytes(), seq);
                         static const char* ft[] = {"KEY", "INTER", "INTRA_ONLY", "SWITCH"};
                         const char* ftn = static_cast<unsigned>(fh.frame_type) <= 3u
                                               ? ft[static_cast<unsigned>(fh.frame_type)]
@@ -912,6 +1017,8 @@ inline Report build_report(
                         fields = {
                             {"frame_type", ftn},
                             {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"show_existing_frame", fh.show_existing_frame ? "1" : "0"},
+                            {"order_hint", std::to_string(fh.order_hint)},
                             {"error_resilient_mode", fh.error_resilient_mode ? "1" : "0"},
                             {"disable_cdf_update", fh.disable_cdf_update ? "1" : "0"},
                             {"allow_screen_content_tools",
@@ -943,6 +1050,7 @@ inline Report build_report(
                 const auto frame = framer.frame();
                 try {
                     auto fh = vp9::parse_frame_header(frame);
+                    fh.presentation_order = static_cast<std::int32_t>(i);
                     const bool key = fh.frame_type == vp9::FrameType::KeyFrame;
                     const std::string summary = std::string(key ? "Key" : "Inter") + " frame " +
                                                 std::to_string(fh.width) + "x" +
@@ -959,6 +1067,8 @@ inline Report build_report(
                             {"profile", std::to_string(fh.profile)},
                             {"frame_type", key ? "KEY" : "INTER"},
                             {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"show_existing_frame", fh.show_existing_frame ? "1" : "0"},
+                            {"presentation_order", std::to_string(fh.presentation_order)},
                             {"error_resilient_mode", fh.error_resilient_mode ? "1" : "0"},
                             {"width", std::to_string(fh.width)},
                             {"height", std::to_string(fh.height)},
@@ -981,6 +1091,7 @@ inline Report build_report(
                 const auto frame = framer.frame();
                 try {
                     auto fh = vp8::parse_frame_header(frame);
+                    fh.presentation_order = static_cast<std::int32_t>(i);
                     const std::string summary = std::string(fh.key_frame ? "Key" : "Inter") +
                                                 " frame " + std::to_string(fh.width) + "x" +
                                                 std::to_string(fh.height);
@@ -995,6 +1106,7 @@ inline Report build_report(
                             {"key_frame", fh.key_frame ? "1" : "0"},
                             {"version", std::to_string(fh.version)},
                             {"show_frame", fh.show_frame ? "1" : "0"},
+                            {"presentation_order", std::to_string(fh.presentation_order)},
                             {"first_part_size", std::to_string(fh.first_part_size)},
                             {"width", std::to_string(fh.width)},
                             {"height", std::to_string(fh.height)},
@@ -1221,7 +1333,8 @@ inline std::string to_html(const Report& report) {
     os << "<body>\n";
     os << "<header>\n";
     os << "<h1>bsparser <span class=\"dot\">&bull;</span> "
-          "<span class=\"codec\">" << json_escape(report.codec) << "</span> bitstream report</h1>\n";
+          "<span class=\"codec\">"
+       << json_escape(report.codec) << "</span> bitstream report</h1>\n";
     os << "<div class=\"meta\">\n";
     os << "<span class=\"chip\">framing: <b>" << json_escape(report.framing) << "</b></span>\n";
     os << "<span class=\"chip\">NAL units: <b>" << report.entries.size() << "</b></span>\n";
@@ -1238,7 +1351,8 @@ inline std::string to_html(const Report& report) {
     os << "</div>\n";
     os << "<select id=\"typeFilter\"><option value=\"\">All types</option></select>\n";
     os << "<label class=\"toggle\"><input id=\"vclOnly\" type=\"checkbox\"> VCL only</label>\n";
-    os << "<label class=\"toggle\"><input id=\"nonVclOnly\" type=\"checkbox\"> Non-VCL only</label>\n";
+    os << "<label class=\"toggle\"><input id=\"nonVclOnly\" type=\"checkbox\"> Non-VCL "
+          "only</label>\n";
     os << "<span class=\"count\" id=\"count\"></span>\n";
     os << "</div>\n";
     os << "<div class=\"layout\">\n";

@@ -77,6 +77,26 @@ class BooleanDecoder {
         return byte_pos_ < data_.size() || bit_pos_ != 0;
     }
 
+    /*
+     * Read an unsigned variable-length code (uvlc, AV1 §9.3): count leading
+     * zero bits, then read that many suffix bits.
+     *
+     *     value = (1 << leadingZeros) - 1 + suffix
+     */
+    std::uint32_t read_uvlc() {
+        std::uint32_t leading_zeros = 0;
+
+        while (leading_zeros < 32u && !read_bool(128u)) {
+            ++leading_zeros;
+        }
+
+        if (leading_zeros == 0u) {
+            return 0;
+        }
+
+        return (std::uint32_t{1} << leading_zeros) - 1u + read_literal(leading_zeros);
+    }
+
    private:
     /*
      * One raw bit from the compressed byte stream, MSB first.

@@ -52,6 +52,7 @@
 #include <parser/avc_sei_parser.hpp>
 #include <parser/avc_slice_parser.hpp>
 #include <parser/avc_sps_parser.hpp>
+#include <parser/avc_poc.hpp>
 #include <parser/av1_frame_header_parser.hpp>
 #include <parser/av1_obu_parser.hpp>
 #include <parser/av1_sequence_header_parser.hpp>
@@ -62,6 +63,7 @@
 #include <parser/hevc_slice_parser.hpp>
 #include <parser/hevc_sps_parser.hpp>
 #include <parser/hevc_vps_parser.hpp>
+#include <parser/hevc_poc.hpp>
 #include <parser/ivf_framer.hpp>
 #include <parser/nal_framer.hpp>
 #include <parser/obu_framer.hpp>
@@ -76,6 +78,7 @@
 #include <parser/vvc_slice_parser.hpp>
 #include <parser/vvc_sps_parser.hpp>
 #include <parser/vvc_vps_parser.hpp>
+#include <parser/vvc_poc.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -224,14 +227,17 @@ class StateImpl {
         switch (codec_) {
             case Codec::Hevc:
                 hevc_->clear();
+                hevc_poc_.reset();
                 break;
 
             case Codec::Avc:
                 avc_->clear();
+                avc_poc_.reset();
                 break;
 
             case Codec::Vvc:
                 vvc_->clear();
+                vvc_poc_.reset();
                 break;
 
             case Codec::Av1:
@@ -256,6 +262,30 @@ class StateImpl {
         return *vvc_;
     }
 
+    [[nodiscard]]
+    HevcPocState& hevc_poc() noexcept {
+        return hevc_poc_;
+    }
+
+    [[nodiscard]]
+    avc::PocState& avc_poc() noexcept {
+        return avc_poc_;
+    }
+
+    [[nodiscard]]
+    vvc::PocState& vvc_poc() noexcept {
+        return vvc_poc_;
+    }
+
+    /*
+     * Last-seen AV1 sequence header (provides OrderHintBits and the
+     * screen-content / integer-MV selection for frame headers).
+     */
+    [[nodiscard]]
+    av1::SequenceHeader& av1_seq() noexcept {
+        return av1_seq_;
+    }
+
    private:
     Codec codec_;
 
@@ -264,6 +294,19 @@ class StateImpl {
     std::unique_ptr<avc::ParameterSetManager> avc_{};
 
     std::unique_ptr<vvc::ParameterSetManager> vvc_{};
+
+    /*
+     * Per-codec POC trackers (H.265 §8.3.1 / H.264 §8.2.1 / H.266 §8.3.1).
+     * Held here so POC state survives across chunked bs::parse() calls on
+     * the same State.
+     */
+    HevcPocState hevc_poc_{};
+
+    avc::PocState avc_poc_{};
+
+    vvc::PocState vvc_poc_{};
+
+    av1::SequenceHeader av1_seq_{};
 };
 
 /*
@@ -435,6 +478,18 @@ inline std::size_t dispatch_state_hevc(
                         SliceSegmentHeader hdr = parse_slice_segment_header(
                             r2, *resolved.sps, *resolved.pps, nut, nal.temporal_id()
                         );
+                        /*
+                         * Derive the presentation-order POC (H.265 §8.3.1)
+                         * from the slice POC LSB and refresh NumPocTotalCurr,
+                         * which is built relative to the picture POC.
+                         */
+                        hdr.derived_poc = impl.hevc_poc().derive(
+                            nut,
+                            nal.temporal_id(),
+                            hdr.slice_pic_order_cnt_lsb,
+                            resolved.sps->max_pic_order_cnt_lsb()
+                        );
+                        derive_num_poc_total_curr(*resolved.sps, hdr);
                         ph.slice(hdr);
                     }
                 } catch (...) {
@@ -513,6 +568,15 @@ inline std::size_t dispatch_state_avc(
                                 *resolved.sps,
                                 *resolved.pps,
                                 t,
+                                static_cast<std::uint8_t>(nal.header.nal_ref_idc)
+                            );
+                            /*
+                             * Derive the presentation-order POC (H.264 §8.2.1).
+                             */
+                            hdr.derived_poc = impl.avc_poc().derive(
+                                hdr,
+                                *resolved.sps,
+                                t == avc::NalUnitType::SliceIdr,
                                 static_cast<std::uint8_t>(nal.header.nal_ref_idc)
                             );
                             ph.slice(hdr);
@@ -601,11 +665,28 @@ inline std::size_t dispatch_state_vvc(
                 }
 
                 case vvc::NalUnitType::PhNut: {
-                    RbspReader r(nal.payload_bytes());
-                    vvc::PictureHeader phdr = vvc::parse_ph(r);
-                    manager.store_ph(phdr);
-                    if (ph.ph)
-                        ph.ph(phdr);
+                    /*
+                     * The POC LSB width comes from the SPS referenced by the
+                     * PH's pps_id, which is decoded inside the header.  Two
+                     * passes: read pps_id, resolve the SPS, then re-read the
+                     * full PH with the SPS-derived POC configuration.
+                     */
+                    RbspReader r1(nal.payload_bytes());
+                    vvc::PictureHeader lead = vvc::parse_ph(r1);
+
+                    const auto resolved = manager.resolve(static_cast<std::uint8_t>(lead.pps_id));
+
+                    if (resolved.sps != nullptr) {
+                        RbspReader r2(nal.payload_bytes());
+                        vvc::PictureHeader phdr = vvc::parse_ph(r2, resolved.sps);
+                        manager.store_ph(phdr);
+                        if (ph.ph)
+                            ph.ph(phdr);
+                    } else {
+                        manager.store_ph(lead);
+                        if (ph.ph)
+                            ph.ph(lead);
+                    }
                     break;
                 }
 
@@ -615,14 +696,42 @@ inline std::size_t dispatch_state_vvc(
 
             if (ph.slice && nal.is_vcl()) {
                 try {
+                    /*
+                     * The picture header may be embedded in the slice header
+                     * (sh_picture_header_in_slice_header_flag), in which case
+                     * the POC LSB width needs the SPS referenced by the
+                     * embedded PH's pps_id.  Two passes like the HEVC/AVC
+                     * slices: read pps_id, resolve the SPS, re-parse.
+                     */
                     RbspReader r1(nal.payload_bytes());
-                    const std::uint32_t pps_id = r1.read_ue();
+                    vvc::SliceHeader lead = vvc::parse_slice_header(r1, nullptr, nullptr);
+
+                    const vvc::PictureHeader* stored_ph = manager.ph();
+
+                    const std::uint32_t pps_id =
+                        lead.picture_header_in_slice_header_flag
+                            ? static_cast<std::uint32_t>(lead.pps_id)
+                            : (stored_ph != nullptr ? stored_ph->pps_id : 0u);
 
                     const auto resolved = manager.resolve(static_cast<std::uint8_t>(pps_id));
 
-                    if (resolved.pps != nullptr && resolved.sps != nullptr) {
+                    if (resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
-                        vvc::SliceHeader hdr = vvc::parse_slice_header(r2);
+                        vvc::SliceHeader hdr =
+                            vvc::parse_slice_header(r2, resolved.sps, resolved.pps);
+
+                        if (!hdr.picture_header_in_slice_header_flag && stored_ph != nullptr) {
+                            hdr.ph = *stored_ph;
+                        }
+
+                        /*
+                         * Derive the presentation-order POC (H.266 §8.3.1)
+                         * from the picture header and this slice's NAL type.
+                         */
+                        if (hdr.ph.poc_lsb_bits != 0) {
+                            hdr.derived_poc =
+                                impl.vvc_poc().derive(nal.nal_type(), nal.temporal_id(), hdr.ph);
+                        }
                         ph.slice(hdr);
                     }
                 } catch (...) {
@@ -646,8 +755,11 @@ inline std::size_t dispatch_state_vvc(
  * AV1 OBU framing + dispatch.
  */
 template <typename Framer>
-inline std::size_t dispatch_state_av1(StateImpl&, Framer& framer, const Av1ParsedHandlers& ph) {
+inline std::size_t dispatch_state_av1(
+    StateImpl& impl, Framer& framer, const Av1ParsedHandlers& ph
+) {
     std::size_t parsed_count = 0;
+    std::size_t frame_count = 0;
 
     while (framer.valid()) {
         const auto bytes = framer.obu();
@@ -657,8 +769,9 @@ inline std::size_t dispatch_state_av1(StateImpl&, Framer& framer, const Av1Parse
 
             switch (static_cast<int>(obu.type())) {
                 case static_cast<int>(av1::ObuType::SequenceHeader): {
+                    av1::SequenceHeader sh = av1::parse_sequence_header(obu.payload_bytes());
+                    impl.av1_seq() = sh;
                     if (ph.sequence_header) {
-                        av1::SequenceHeader sh = av1::parse_sequence_header(obu.payload_bytes());
                         ph.sequence_header(sh);
                     }
                     break;
@@ -668,7 +781,10 @@ inline std::size_t dispatch_state_av1(StateImpl&, Framer& framer, const Av1Parse
                 case static_cast<int>(av1::ObuType::RedundantFrameHeader):
                 case static_cast<int>(av1::ObuType::Frame): {
                     if (ph.frame_header) {
-                        av1::FrameHeader fh = av1::parse_frame_header(obu.payload_bytes());
+                        av1::FrameHeader fh =
+                            av1::parse_frame_header(obu.payload_bytes(), impl.av1_seq());
+                        fh.presentation_order = static_cast<std::int32_t>(frame_count);
+                        ++frame_count;
                         ph.frame_header(fh);
                     }
                     break;
@@ -704,6 +820,12 @@ inline std::size_t dispatch_state_vp_frame(
 
         try {
             Header header = parse(bytes);
+
+            /*
+             * No POC in VP8/VP9: the display order of a raw stream is the
+             * decode order, exposed as presentation_order.
+             */
+            header.presentation_order = static_cast<std::int32_t>(parsed_count);
 
             if (handler != nullptr) {
                 handler(header);
@@ -799,6 +921,27 @@ class State {
     [[nodiscard]]
     const vvc::ParameterSetManager* vvc_sets() const noexcept {
         return impl_->codec() == Codec::Vvc ? &impl_->vvc() : nullptr;
+    }
+
+    /*
+     * Per-codec POC trackers (H.265 §8.3.1 / H.264 §8.2.1 / H.266 §8.3.1).
+     * These are updated automatically by the unified parse() dispatcher; they
+     * are exposed so callers can also drive the derivation themselves (e.g.
+     * CLI report builders that re-parse slice headers).
+     */
+    [[nodiscard]]
+    HevcPocState* hevc_poc() noexcept {
+        return impl_->codec() == Codec::Hevc ? &impl_->hevc_poc() : nullptr;
+    }
+
+    [[nodiscard]]
+    avc::PocState* avc_poc() noexcept {
+        return impl_->codec() == Codec::Avc ? &impl_->avc_poc() : nullptr;
+    }
+
+    [[nodiscard]]
+    vvc::PocState* vvc_poc() noexcept {
+        return impl_->codec() == Codec::Vvc ? &impl_->vvc_poc() : nullptr;
     }
 
    private:

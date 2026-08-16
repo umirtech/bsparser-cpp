@@ -107,6 +107,12 @@ struct SliceHeader {
 
     bool sp_for_switch_flag = false;
     std::int32_t slice_qs_delta = 0;
+
+    /*
+     * Presentation-order POC (H.264 §8.2.1), filled by the unified
+     * dispatch layer's avc::PocState; 0 when parsing outside a State.
+     */
+    std::int32_t derived_poc = 0;
 };
 
 }  // namespace avc

@@ -847,6 +847,7 @@ typedef struct BsAvcSliceHeader {
     uint32_t slice_group_change_cycle;
     uint8_t sp_for_switch_flag;
     int32_t slice_qs_delta;
+    int32_t derived_poc;
 } BsAvcSliceHeader;
 
 typedef struct BsHevcAmbientViewingEnvironment {

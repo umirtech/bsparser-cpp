@@ -48,6 +48,12 @@ struct FrameHeader {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
 
+    /*
+     * Decode-order index of this frame, filled by the unified dispatch layer.
+     * VP8 has no POC; the display order of a raw stream is the decode order.
+     */
+    std::int32_t presentation_order = 0;
+
     [[nodiscard]]
     bool valid() const noexcept {
         return !key_frame || start_code_ok;
