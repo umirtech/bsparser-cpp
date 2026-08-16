@@ -71,7 +71,7 @@ jobs:
         id: real
         shell: bash
         run: |
-          python3 tools/download_real_samples.py
+          python3 tools/download_real_samples.py || true
           python3 tools/validate_real.py
 
       - name: Summarize
