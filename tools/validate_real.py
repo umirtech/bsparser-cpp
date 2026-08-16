@@ -33,13 +33,14 @@ def main():
         return 1
 
     fails = 0
+    skipped = 0
     print(f"validating {len(samples)} real samples\n")
 
     for s in samples:
         path = os.path.join(ROOT, s["local"].replace("/", os.sep))
         if not os.path.isfile(path):
-            print(f"MISSING  {s['name']}  (run tools/download_real_samples.py)")
-            fails += 1
+            print(f"[SKIP] {s['name']:<26} missing (download failed; see tools/download_real_samples.py)")
+            skipped += 1
             continue
 
         p = run([BS_CLI, path, "--out", "NUL"])
@@ -61,8 +62,17 @@ def main():
         print(f"[{mark}] {s['name']:<26} ours={ours:<6} trace={status} "
               f"(expected {expected})")
 
-    print(f"\n{len(samples) - fails}/{len(samples)} samples OK")
-    return 1 if fails else 0
+    if skipped:
+        print(f"\n{len(samples) - fails - skipped}/{len(samples)} samples OK "
+              f"({skipped} skipped: not downloaded)")
+    else:
+        print(f"\n{len(samples) - fails}/{len(samples)} samples OK")
+    if fails:
+        return 1
+    if skipped == len(samples):
+        print("no samples available to validate (all downloads failed)")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
