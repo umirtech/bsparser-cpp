@@ -117,3 +117,12 @@ real_big.mkv
 tests/real/*
 !tests/real/manifest.json
 
+# -----------------------------------------------------------------------------
+# Docker (cross-arch test containers)
+# -----------------------------------------------------------------------------
+.dockerignore
+docker/
+scripts/test-docker.sh
+scripts/test-container.sh
+.github/workflows/docker-test.yml
+

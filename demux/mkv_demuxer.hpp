@@ -56,7 +56,7 @@ inline bool read_vint(
     std::span<const std::uint8_t> d,
     std::size_t& pos,
     std::uint64_t& value,
-    std::size_t& length,
+    std::uint64_t& length,
     bool id
 ) {
     if (pos >= d.size()) {
@@ -104,12 +104,12 @@ inline bool read_vint(
 }
 
 inline bool read_size(std::span<const std::uint8_t> d, std::size_t& pos, std::uint64_t& value) {
-    std::size_t len = 0;
+    std::uint64_t len = 0;
     return read_vint(d, pos, value, len, false);
 }
 
 inline bool read_id(std::span<const std::uint8_t> d, std::size_t& pos, std::uint64_t& value) {
-    std::size_t len = 0;
+    std::uint64_t len = 0;
     return read_vint(d, pos, value, len, true);
 }
 
@@ -127,8 +127,7 @@ inline void parse_track_entry(std::span<const std::uint8_t> d, VideoTrack& track
     std::size_t p = 0;
 
     while (p < d.size()) {
-        std::uint64_t id, size;
-        std::size_t id_len;
+        std::uint64_t id, size, id_len;
 
         if (!read_vint(d, p, id, id_len, true)) {
             break;
