@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -62,12 +59,11 @@ jobs:
         id: accuracy
         shell: bash
         run: |
-          c++ -x c++ -std=c++20 -I. -Icapi -Ibitstream -Ilogging -Iparser -Isyntax \
-            -c tools/verify_c.c -o build/verify_c.o
-          c++ build/verify_c.o build/libbs_capi.a -o build/verify_c
-          ./build/verify_c tests/fuzz/corpus/hevc_hdr10.hevc \
+          cmake --build build --config Release --target bs_verify_c
+          BS_VERIFY_C=$(find build -type f \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) -print -quit)
+          "$BS_VERIFY_C" tests/fuzz/corpus/hevc_hdr10.hevc \
             tests/fuzz/reference/hevc_hdr10.txt hevc
-          ./build/verify_c tests/fuzz/corpus/avc_hdr.h264 \
+          "$BS_VERIFY_C" tests/fuzz/corpus/avc_hdr.h264 \
             tests/fuzz/reference/avc_hdr.txt avc
 
       - name: Real-sample validation (download + ffmpeg trace compare)
