@@ -256,6 +256,34 @@ add_test(
 )
 
 
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#C API accuracy verifier (verify_c vs FFmpeg-derived reference files)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#
+#Built through CMake (not a hand-rolled link line) so the library name and
+#location are resolved by the build system on every platform / toolchain
+#(libbs_capi.a on GCC, bs_capi.lib on MSVC) instead of being hardcoded.
+
+add_executable(
+    bs_verify_c
+    tools/verify_c.c
+)
+
+target_link_libraries(
+    bs_verify_c
+    PRIVATE
+        bs_capi
+)
+
+#The only translation unit is C, but it links a C++ static lib, so link
+#with the C++ driver to pull in the C++ runtime.
+set_target_properties(
+    bs_verify_c
+    PROPERTIES
+        LINKER_LANGUAGE CXX
+)
+
+
 
 add_executable(
     bs_hevc_test
