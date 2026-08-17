@@ -30,7 +30,7 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 | windows-x64 | n/a | n/a | n/a |
 | windows-arm64 | n/a | n/a | n/a |
 
-_Last run: `af4595f`._
+_Last run: `dfa5161`._
 
 <!-- CI:RESULTS:END -->
 
