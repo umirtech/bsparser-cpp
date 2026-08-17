@@ -130,7 +130,7 @@ jobs:
 
           rows = []
           for name in default_platforms:
-              b, t, a, r = status.get(name, ("n/a", "n/a", "n/a", "n/a"))
+              b, t, a = status.get(name, ("n/a", "n/a", "n/a"))
               rows.append(f"| {name} | {b} | {t} | {a} |")
           table = "\n".join(rows)
 
