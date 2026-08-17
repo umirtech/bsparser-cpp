@@ -1,12 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-
-  pull_request:
-
   workflow_dispatch:
 
 permissions:
@@ -15,38 +9,40 @@ permissions:
 jobs:
   build:
     name: build (${{ matrix.name }})
-
     strategy:
       fail-fast: false
-
       matrix:
         include:
           - os: ubuntu-24.04
             name: linux-x64
             deep: true
-
           - os: ubuntu-24.04-arm
             name: linux-arm64
             deep: true
-
           - os: windows-2025
             name: windows-x64
             deep: true
-
           - os: windows-11-arm
             name: windows-arm64
             deep: true
 
     runs-on: ${{ matrix.os }}
 
+    outputs:
+      platform: ${{ matrix.name }}
+      build: ${{ steps.summary.outputs.build }}
+      tests: ${{ steps.summary.outputs.tests }}
+      accuracy: ${{ steps.summary.outputs.accuracy }}
+      real: ${{ steps.summary.outputs.real }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
+        id: build
         run: cmake --build build --config Release --parallel
 
       - name: Install ffmpeg
@@ -58,40 +54,26 @@ jobs:
         run: ffmpeg -version
 
       - name: Test (ctest)
-        run: ctest --test-dir build -C Release --output-on-failure
-
-      - name: Build accuracy verifier
-        if: matrix.deep == true
-        run: cmake --build build --config Release --target bs_verify_c
+        id: test
+        run: cmake --build build --config Release --target test
 
       - name: Accuracy
         if: matrix.deep == true
+        id: accuracy
         shell: bash
         run: |
-          BS_VERIFY_C=$(find build -type f \
-            \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) \
-            -print -quit)
+          cmake --build build --config Release --target bs_verify_c
+          BS_VERIFY_C=$(find build -type f \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) -print -quit)
+          "$BS_VERIFY_C" tests/fuzz/corpus/hevc_hdr10.hevc \
+            tests/fuzz/reference/hevc_hdr10.txt hevc
+          "$BS_VERIFY_C" tests/fuzz/corpus/avc_hdr.h264 \
+            tests/fuzz/reference/avc_hdr.txt avc
 
-          if [ -z "$BS_VERIFY_C" ]; then
-            echo "ERROR: bs_verify_c executable not found"
-            exit 1
-          fi
-
-          echo "Using verifier:"
-          echo "$BS_VERIFY_C"
-
-          echo
-          echo "=== HEVC HDR10 ==="
-
-          "$BS_VERIFY_C" \
-            tests/fuzz/corpus/hevc_hdr10.hevc \
-            tests/fuzz/reference/hevc_hdr10.txt \
-            hevc
-
-          echo
-          echo "=== AVC HDR ==="
-
-          "$BS_VERIFY_C" \
-            tests/fuzz/corpus/avc_hdr.h264 \
-            tests/fuzz/reference/avc_hdr.txt \
-            avc
+      - name: Summarize
+        id: summary
+        if: always()
+        shell: bash
+        run: |
+          echo "build=${{ steps.build.outcome }}" >> "$GITHUB_OUTPUT"
+          echo "tests=${{ steps.test.outcome }}" >> "$GITHUB_OUTPUT"
+          echo "accuracy=${{ steps.accuracy.outcome }}" >> "$GITHUB_OUTPUT"
