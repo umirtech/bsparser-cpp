@@ -23,15 +23,6 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 
 [![CI](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/umirtech/bsparser-cpp/actions/workflows/ci.yml)
 
-| Platform | Build | Tests (30) | Accuracy |
-|---|---|---|---|
-| linux-x64 | n/a | n/a | n/a |
-| linux-arm64 | PASS | PASS | PASS |
-| windows-x64 | n/a | n/a | n/a |
-| windows-arm64 | n/a | n/a | n/a |
-
-_Last run: `dfa5161`._
-
 <!-- CI:RESULTS:END -->
 
 
