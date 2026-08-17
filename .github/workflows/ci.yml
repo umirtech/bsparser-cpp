@@ -94,7 +94,6 @@ jobs:
           BUILDS: ${{ toJSON(needs.build.outputs.build) }}
           TESTS: ${{ toJSON(needs.build.outputs.tests) }}
           ACCURACY: ${{ toJSON(needs.build.outputs.accuracy) }}
-          REAL: ${{ toJSON(needs.build.outputs.real) }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
