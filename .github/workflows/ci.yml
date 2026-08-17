@@ -25,13 +25,9 @@ jobs:
           - os: windows-11-arm
             name: windows-arm64
             deep: true
+
     runs-on: ${{ matrix.os }}
-    outputs:
-      platform: ${{ matrix.name }}
-      build: ${{ steps.summary.outputs.build }}
-      tests: ${{ steps.summary.outputs.tests }}
-      accuracy: ${{ steps.summary.outputs.accuracy }}
-      real: ${{ steps.summary.outputs.real }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +41,7 @@ jobs:
       - name: Install ffmpeg
         if: matrix.deep == true
         uses: AnimMouse/setup-ffmpeg@v1
-      
+
       - name: Verify ffmpeg
         if: matrix.deep == true
         run: ffmpeg -version
@@ -60,107 +56,197 @@ jobs:
         shell: bash
         run: |
           cmake --build build --config Release --target bs_verify_c
-          BS_VERIFY_C=$(find build -type f \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) -print -quit)
-          "$BS_VERIFY_C" tests/fuzz/corpus/hevc_hdr10.hevc \
-            tests/fuzz/reference/hevc_hdr10.txt hevc
-          "$BS_VERIFY_C" tests/fuzz/corpus/avc_hdr.h264 \
-            tests/fuzz/reference/avc_hdr.txt avc
 
-      - name: Summarize
-        id: summary
+          BS_VERIFY_C=$(find build -type f \
+            \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) \
+            -print -quit)
+
+          if [ -z "$BS_VERIFY_C" ]; then
+            echo "bs_verify_c executable not found"
+            exit 1
+          fi
+
+          "$BS_VERIFY_C" \
+            tests/fuzz/corpus/hevc_hdr10.hevc \
+            tests/fuzz/reference/hevc_hdr10.txt \
+            hevc
+
+          "$BS_VERIFY_C" \
+            tests/fuzz/corpus/avc_hdr.h264 \
+            tests/fuzz/reference/avc_hdr.txt \
+            avc
+
+      - name: Write result
         if: always()
         shell: bash
+        env:
+          PLATFORM: ${{ matrix.name }}
+          BUILD_STATUS: ${{ steps.build.outcome }}
+          TEST_STATUS: ${{ steps.test.outcome }}
+          ACCURACY_STATUS: ${{ steps.accuracy.outcome }}
         run: |
-          echo "build=${{ steps.build.outcome }}" >> "$GITHUB_OUTPUT"
-          echo "tests=${{ steps.test.outcome }}" >> "$GITHUB_OUTPUT"
-          echo "accuracy=${{ steps.accuracy.outcome }}" >> "$GITHUB_OUTPUT"
+          mkdir -p ci-result
+
+          python3 - <<'PY'
+          import json
+          import os
+
+          result = {
+              "platform": os.environ["PLATFORM"],
+              "build": os.environ.get("BUILD_STATUS", ""),
+              "tests": os.environ.get("TEST_STATUS", ""),
+              "accuracy": os.environ.get("ACCURACY_STATUS", ""),
+          }
+
+          with open("ci-result/result.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, indent=2)
+
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-result-${{ matrix.name }}
+          path: ci-result/result.json
+          if-no-files-found: error
+          retention-days: 1
 
   report:
     name: Update README
     if: always()
     needs: build
     runs-on: ubuntu-24.04
+
     permissions:
       contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
 
+      - name: Download CI results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-result-*
+          path: ci-results
+          merge-multiple: true
+
       - name: Render results into README.md
         shell: bash
         env:
-          PLATFORMS: ${{ toJSON(needs.build.outputs.platform) }}
-          BUILDS: ${{ toJSON(needs.build.outputs.build) }}
-          TESTS: ${{ toJSON(needs.build.outputs.tests) }}
-          ACCURACY: ${{ toJSON(needs.build.outputs.accuracy) }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
-          python3 - <<'EOF'
-          import json, os, re
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
 
-          def arr(v):
+          def status(value):
+              if value == "success":
+                  return "PASS"
+              if value == "failure":
+                  return "FAIL"
+              if value == "cancelled":
+                  return "CANCELLED"
+              if value == "skipped":
+                  return "SKIPPED"
+              return "n/a"
+
+          default_platforms = [
+              "linux-x64",
+              "linux-arm64",
+              "windows-x64",
+              "windows-arm64",
+          ]
+
+          results_dir = Path("ci-results")
+
+          results = {}
+
+          for result_file in results_dir.rglob("result.json"):
               try:
-                  d = json.loads(v)
-                  return d if isinstance(d, list) else [d]
-              except Exception:
-                  return []
+                  with result_file.open(encoding="utf-8") as f:
+                      data = json.load(f)
 
-          def st(v):
-              return "PASS" if v == "success" else ("FAIL" if v == "failure" else "n/a")
+                  platform = data.get("platform")
 
-          # Always render the full matrix; fill statuses from the job outputs
-          # (which may be incomplete if a leg was cancelled or never ran).
-          default_platforms = ["linux-x64", "linux-arm64", "windows-x64", "windows-arm64"]
-          platforms = arr(os.environ["PLATFORMS"])
-          builds    = arr(os.environ["BUILDS"])
-          tests     = arr(os.environ["TESTS"])
-          accuracy  = arr(os.environ["ACCURACY"])
+                  if platform:
+                      results[platform] = {
+                          "build": status(data.get("build")),
+                          "tests": status(data.get("tests")),
+                          "accuracy": status(data.get("accuracy")),
+                      }
 
-          status = {}
-          for i, name in enumerate(platforms):
-              if not name:
-                  continue
-              status[name] = (
-                  st(builds[i]) if i < len(builds) else "n/a",
-                  st(tests[i]) if i < len(tests) else "n/a",
-                  st(accuracy[i]) if i < len(accuracy) else "n/a"
-              )
+              except Exception as e:
+                  print(f"Warning: could not read {result_file}: {e}")
 
           rows = []
-          for name in default_platforms:
-              b, t, a = status.get(name, ("n/a", "n/a", "n/a"))
-              rows.append(f"| {name} | {b} | {t} | {a} |")
-              table = "\n".join(rows)
+
+          for platform in default_platforms:
+              result = results.get(
+                  platform,
+                  {
+                      "build": "n/a",
+                      "tests": "n/a",
+                      "accuracy": "n/a",
+                  },
+              )
+
+              rows.append(
+                  f"| {platform} | "
+                  f"{result['build']} | "
+                  f"{result['tests']} | "
+                  f"{result['accuracy']} |"
+              )
+
+          table = "\n".join(rows)
 
           repo = os.environ["REPO"]
           sha = os.environ["SHA"][:7]
 
           block = (
               "## CI results\n\n"
-              "[![CI](https://github.com/{0}/actions/workflows/ci.yml/badge.svg)]"
-              "(https://github.com/{0}/actions/workflows/ci.yml)\n\n"
+              "[![CI](https://github.com/{repo}/actions/workflows/ci.yml/badge.svg)]"
+              "(https://github.com/{repo}/actions/workflows/ci.yml)\n\n"
               "| Platform | Build | Tests (30) | Accuracy |\n"
               "|---|---|---|---|\n"
-              "{1}\n\n"
-              "_Last run: `{2}` on `{2}`._\n".format(repo, table, sha)
+              "{table}\n\n"
+              "_Last run: `{sha}`._\n"
+          ).format(
+              repo=repo,
+              table=table,
+              sha=sha,
           )
-          block = "<!-- CI:RESULTS:START -->\n\n" + block + "\n<!-- CI:RESULTS:END -->"
 
-          path = "README.md"
-          with open(path, encoding="utf-8") as f:
-              content = f.read()
+          block = (
+              "<!-- CI:RESULTS:START -->\n\n"
+              + block
+              + "\n<!-- CI:RESULTS:END -->"
+          )
 
-          m = re.compile(r"<!-- CI:RESULTS:START -->.*?<!-- CI:RESULTS:END -->", re.S)
-          if m.search(content):
-              content = m.sub(block, content)
+          path = Path("README.md")
+          content = path.read_text(encoding="utf-8")
+
+          pattern = re.compile(
+              r"<!-- CI:RESULTS:START -->.*?<!-- CI:RESULTS:END -->",
+              re.S,
+          )
+
+          if pattern.search(content):
+              content = pattern.sub(block, content)
           else:
               content = content.rstrip() + "\n\n" + block + "\n"
 
-          with open(path, "w", encoding="utf-8") as f:
-              f.write(content)
-          EOF
+          path.write_text(content, encoding="utf-8")
+
+          print("\nGenerated CI table:")
+          print(table)
+          PY
 
       - name: Commit README results
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -168,7 +254,9 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add README.md
+
           if git diff --cached --quiet; then
             echo "README unchanged"
           else
