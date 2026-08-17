@@ -12,6 +12,7 @@ jobs:
 
     strategy:
       fail-fast: false
+
       matrix:
         include:
           - os: ubuntu-24.04
@@ -33,14 +34,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure CMake
-        id: configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        id: build
         run: cmake --build build --config Release --parallel
 
       - name: Install ffmpeg
@@ -52,16 +52,23 @@ jobs:
         run: ffmpeg -version
 
       - name: Test (ctest)
-        id: test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: |
+          ctest \
+            --test-dir build \
+            -C Release \
+            --output-on-failure
+
+      - name: Build accuracy verifier
+        if: matrix.deep == true
+        run: |
+          cmake --build build \
+            --config Release \
+            --target bs_verify_c
 
       - name: Accuracy
         if: matrix.deep == true
-        id: accuracy
         shell: bash
         run: |
-          cmake --build build --config Release --target bs_verify_c
-
           BS_VERIFY_C=$(find build -type f \
             \( -name 'bs_verify_c' -o -name 'bs_verify_c.exe' \) \
             -print -quit)
@@ -71,213 +78,21 @@ jobs:
             exit 1
           fi
 
+          echo "Using verifier:"
+          echo "$BS_VERIFY_C"
+
+          echo
+          echo "=== HEVC HDR10 ==="
+
           "$BS_VERIFY_C" \
             tests/fuzz/corpus/hevc_hdr10.hevc \
             tests/fuzz/reference/hevc_hdr10.txt \
             hevc
 
+          echo
+          echo "=== AVC HDR ==="
+
           "$BS_VERIFY_C" \
             tests/fuzz/corpus/avc_hdr.h264 \
             tests/fuzz/reference/avc_hdr.txt \
             avc
-
-      - name: Write CI result
-        if: always()
-        shell: bash
-        env:
-          PLATFORM: ${{ matrix.name }}
-          BUILD_STATUS: ${{ steps.build.outcome }}
-          TEST_STATUS: ${{ steps.test.outcome }}
-          ACCURACY_STATUS: ${{ steps.accuracy.outcome }}
-        run: |
-          mkdir -p ci-result
-
-          python3 - <<'PY'
-          import json
-          import os
-
-          result = {
-              "platform": os.environ["PLATFORM"],
-              "build": os.environ.get("BUILD_STATUS", "unknown"),
-              "tests": os.environ.get("TEST_STATUS", "unknown"),
-              "accuracy": os.environ.get("ACCURACY_STATUS", "unknown"),
-          }
-
-          with open("ci-result/result.json", "w", encoding="utf-8") as f:
-              json.dump(result, f, indent=2)
-
-          print(json.dumps(result, indent=2))
-          PY
-
-      - name: Upload CI result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-result-${{ matrix.name }}
-          path: ci-result/result.json
-          if-no-files-found: error
-          retention-days: 1
-
-
-  report:
-    name: Update README
-    if: always()
-    needs: build
-
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
-
-      - name: Download all CI results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: ci-result-*
-          path: ci-results
-          merge-multiple: true
-
-      - name: Render results into README.md
-        shell: bash
-        env:
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          def status(value):
-              if value == "success":
-                  return "PASS"
-
-              if value == "failure":
-                  return "FAIL"
-
-              if value == "cancelled":
-                  return "CANCELLED"
-
-              if value == "skipped":
-                  return "SKIPPED"
-
-              return "n/a"
-
-
-          platforms = [
-              "linux-x64",
-              "linux-arm64",
-              "windows-x64",
-              "windows-arm64",
-          ]
-
-
-          results = {}
-
-          for result_file in Path("ci-results").rglob("result.json"):
-              try:
-                  with result_file.open(encoding="utf-8") as f:
-                      data = json.load(f)
-
-                  platform = data.get("platform")
-
-                  if platform:
-                      results[platform] = {
-                          "build": status(data.get("build")),
-                          "tests": status(data.get("tests")),
-                          "accuracy": status(data.get("accuracy")),
-                      }
-
-              except Exception as e:
-                  print(f"WARNING: failed to read {result_file}: {e}")
-
-
-          rows = []
-
-          for platform in platforms:
-              result = results.get(
-                  platform,
-                  {
-                      "build": "n/a",
-                      "tests": "n/a",
-                      "accuracy": "n/a",
-                  },
-              )
-
-              rows.append(
-                  f"| {platform} | "
-                  f"{result['build']} | "
-                  f"{result['tests']} | "
-                  f"{result['accuracy']} |"
-              )
-
-
-          table = "\n".join(rows)
-
-          repo = os.environ["REPO"]
-          sha = os.environ["SHA"][:7]
-
-
-          block = (
-              "## CI results\n\n"
-              f"[![CI](https://github.com/{repo}/actions/workflows/ci.yml/badge.svg)]"
-              f"(https://github.com/{repo}/actions/workflows/ci.yml)\n\n"
-              "| Platform | Build | Tests (30) | Accuracy |\n"
-              "|---|---|---|---|\n"
-              f"{table}\n\n"
-              f"_Last run: `{sha}`._\n"
-          )
-
-
-          block = (
-              "<!-- CI:RESULTS:START -->\n\n"
-              + block
-              + "\n<!-- CI:RESULTS:END -->"
-          )
-
-
-          readme = Path("README.md")
-          content = readme.read_text(encoding="utf-8")
-
-
-          pattern = re.compile(
-              r"<!-- CI:RESULTS:START -->.*?<!-- CI:RESULTS:END -->",
-              re.S,
-          )
-
-
-          if pattern.search(content):
-              content = pattern.sub(block, content)
-          else:
-              content = content.rstrip() + "\n\n" + block + "\n"
-
-
-          readme.write_text(content, encoding="utf-8")
-
-
-          print()
-          print("CI results:")
-          print(table)
-          print()
-
-
-      - name: Commit README results
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          git config user.name "github-actions"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add README.md
-
-          if git diff --cached --quiet; then
-            echo "README unchanged"
-          else
-            git commit -m "ci: update README results [skip ci]"
-            git push
-          fi
