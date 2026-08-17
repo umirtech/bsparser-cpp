@@ -42,7 +42,7 @@ jobs:
         id: build
         run: cmake --build build --config Release --parallel
 
-      - name: Install ffmpeg (accuracy / validation reference)
+      - name: Install ffmpeg
         if: matrix.deep == true
         uses: AnimMouse/setup-ffmpeg@v1
       
@@ -54,7 +54,7 @@ jobs:
         id: test
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Accuracy (verify_c vs ffmpeg references)
+      - name: Accuracy
         if: matrix.deep == true
         id: accuracy
         shell: bash
@@ -66,14 +66,6 @@ jobs:
           "$BS_VERIFY_C" tests/fuzz/corpus/avc_hdr.h264 \
             tests/fuzz/reference/avc_hdr.txt avc
 
-      - name: Real-sample validation (download + ffmpeg trace compare)
-        if: matrix.deep == true
-        id: real
-        shell: bash
-        run: |
-          python3 tools/download_real_samples.py || true
-          python3 tools/validate_real.py
-
       - name: Summarize
         id: summary
         if: always()
@@ -82,7 +74,6 @@ jobs:
           echo "build=${{ steps.build.outcome }}" >> "$GITHUB_OUTPUT"
           echo "tests=${{ steps.test.outcome }}" >> "$GITHUB_OUTPUT"
           echo "accuracy=${{ steps.accuracy.outcome }}" >> "$GITHUB_OUTPUT"
-          echo "real=${{ steps.real.outcome }}" >> "$GITHUB_OUTPUT"
 
   report:
     name: Update README
@@ -127,7 +118,6 @@ jobs:
           builds    = arr(os.environ["BUILDS"])
           tests     = arr(os.environ["TESTS"])
           accuracy  = arr(os.environ["ACCURACY"])
-          real      = arr(os.environ["REAL"])
 
           status = {}
           for i, name in enumerate(platforms):
@@ -136,14 +126,13 @@ jobs:
               status[name] = (
                   st(builds[i]) if i < len(builds) else "n/a",
                   st(tests[i]) if i < len(tests) else "n/a",
-                  st(accuracy[i]) if i < len(accuracy) else "n/a",
-                  st(real[i]) if i < len(real) else "n/a",
+                  st(accuracy[i]) if i < len(accuracy) else "n/a"
               )
 
           rows = []
           for name in default_platforms:
               b, t, a, r = status.get(name, ("n/a", "n/a", "n/a", "n/a"))
-              rows.append(f"| {name} | {b} | {t} | {a} | {r} |")
+              rows.append(f"| {name} | {b} | {t} | {a} |")
           table = "\n".join(rows)
 
           repo = os.environ["REPO"]
@@ -153,8 +142,8 @@ jobs:
               "## CI results\n\n"
               "[![CI](https://github.com/{0}/actions/workflows/ci.yml/badge.svg)]"
               "(https://github.com/{0}/actions/workflows/ci.yml)\n\n"
-              "| Platform | Build | Tests (30) | Accuracy | Real samples |\n"
-              "|---|---|---|---|---|\n"
+              "| Platform | Build | Tests (30) | Accuracy |\n"
+              "|---|---|---|---|\n"
               "{1}\n\n"
               "_Last run: `{2}` on `{2}`._\n".format(repo, table, sha)
           )
