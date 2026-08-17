@@ -1,4 +1,4 @@
-# bsparser — Architecture
+# bsparser-cpp — Architecture
 
 A header-only C++20 bitstream syntax parser for **AVC , HEVC , VVC , AV1 , VP9 , VP8** (no decoding, no pixel output). It is organised as strict layers, each
 with one responsibility:
