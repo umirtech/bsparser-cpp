@@ -27,10 +27,10 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 |---|---|---|---|
 | linux-x64 | n/a | n/a | n/a |
 | linux-arm64 | n/a | n/a | n/a |
-| windows-x64 | n/a | n/a | n/a |
-| windows-arm64 | PASS | PASS | PASS |
+| windows-x64 | PASS | PASS | PASS |
+| windows-arm64 | n/a | n/a | n/a |
 
-_Last run: `d967d98` on `d967d98`._
+_Last run: `d0a1967` on `d0a1967`._
 
 <!-- CI:RESULTS:END -->
 
