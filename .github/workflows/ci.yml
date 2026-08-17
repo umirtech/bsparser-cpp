@@ -132,7 +132,7 @@ jobs:
           for name in default_platforms:
               b, t, a = status.get(name, ("n/a", "n/a", "n/a"))
               rows.append(f"| {name} | {b} | {t} | {a} |")
-          table = "\n".join(rows)
+              table = "\n".join(rows)
 
           repo = os.environ["REPO"]
           sha = os.environ["SHA"][:7]
