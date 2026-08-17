@@ -1,6 +1,12 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
   workflow_dispatch:
 
 permissions:
@@ -52,18 +58,11 @@ jobs:
         run: ffmpeg -version
 
       - name: Test (ctest)
-        run: |
-          ctest \
-            --test-dir build \
-            -C Release \
-            --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Build accuracy verifier
         if: matrix.deep == true
-        run: |
-          cmake --build build \
-            --config Release \
-            --target bs_verify_c
+        run: cmake --build build --config Release --target bs_verify_c
 
       - name: Accuracy
         if: matrix.deep == true
