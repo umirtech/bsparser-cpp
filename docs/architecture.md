@@ -1,7 +1,6 @@
 # bsparser — Architecture
 
-A header-only C++20 bitstream syntax parser for **H.265 / HEVC** and **H.264 /
-AVC** (no decoding, no pixel output). It is organised as strict layers, each
+A header-only C++20 bitstream syntax parser for **AVC , HEVC , VVC , AV1 , VP9 , VP8** (no decoding, no pixel output). It is organised as strict layers, each
 with one responsibility:
 
 ```
@@ -261,45 +260,6 @@ the library. There is **no runtime penalty**:
   own compiler/standard. (Both paths still auto-store parameter sets, same as
   the C++ API — a framer-only entry can be added if a consumer wants to skip
   that parse cost entirely.)
-
----
-
-## Performance
-
-The parser is optimised around the two facts that dominate real-world HEVC/AVC
-streams:
-
-1. **Most NALs are slices, and slice *headers* are small** — yet the payload a
-   slice NAL carries is dominated by slice *data* the syntax parser never
-   reads.
-2. **The slice-header parser only reads forward** — it never needs random byte
-   access, a total bit count, or `more_rbsp_data()`.
-
-The `RbspBitstreamReader`'s constructor builds a full `logical_to_ebsp_` map by
-scanning + allocating over the *entire* NAL payload. That map is genuinely
-needed only by the parsers that call `more_rbsp_data()` / `find_last_one_bit()`
-(backward scans): the VPS/SPS/PPS extension loops and AVC SEI.
-
-Slice-header dispatch therefore uses the **zero-allocation `RbspReader`** (an
-inline byte cursor with emulation-prevention skipping) for both passes of the
-`pps_id` + full-header parse. Measured on a 5 MB HEVC stream:
-
-```
-                    before         after
-  typed-slice       25.3 ms        17.3 ms     −32%
-  typed-full        31.9 ms        24.9 ms     −22%
-  c-api-full        39.1 ms        32.5 ms     −17%
-```
-
-The same change was applied to AVC by templating `parse_slice_header` and its
-helpers on the reader type (accuracy is verified against `ffmpeg`-generated
-references for both codecs).
-
-### Design rule
-
-> Use `RbspReader` for any parser that only reads forward and never calls
-> `more_rbsp_data()` / `bits_remaining()`. Use `RbspBitstreamReader` only where
-> a backward scan or random byte access is actually required.
 
 ---
 
