@@ -89,32 +89,6 @@ Useful CMake options:
 | `BS_ENABLE_FUZZING` | `ON` | Build the fuzz harnesses |
 | `BS_ENABLE_SANITIZERS` | `ON` | ASan/UBSan on the standalone fuzz driver |
 
-### Cross-architecture tests (Docker)
-
-The Android NDK cross-builds compile fine but the binaries cannot run on the
-CI host, so the common Android ABIs are exercised by running the real test
-suite inside a lightweight Alpine container built for each target CPU:
-
-| Docker platform | Maps to |
-|---|---|
-| `linux/amd64` | Android x86_64 |
-| `linux/arm64` | Android arm64-v8a |
-| `linux/arm/v7` | Android armeabi-v7a |
-
-The arm/v7 leg also catches 32-bit portability bugs (e.g. `size_t` vs
-`uint64_t` width mismatches) that the native amd64/arm64 matrix cannot.
-
-Run all three locally (requires Docker with multi-arch support):
-
-```sh
-scripts/test-docker.sh linux/amd64
-scripts/test-docker.sh linux/arm64
-scripts/test-docker.sh linux/arm/v7
-```
-
-The same matrix runs in CI via `.github/workflows/docker-test.yml`.
-
----
 
 ## Quick start (C++20)
 
