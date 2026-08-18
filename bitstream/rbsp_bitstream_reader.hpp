@@ -10,7 +10,7 @@
 namespace bs {
 
 /*
- * H.265 RBSP bitstream reader.
+ * RBSP bitstream reader (shared by H.264 / H.265 / H.266).
  *
  * Input:
  *

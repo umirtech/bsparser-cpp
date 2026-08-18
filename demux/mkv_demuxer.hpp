@@ -226,7 +226,7 @@ inline void parse_tracks(std::span<const std::uint8_t> d, VideoTrack& track) {
  * Parse a SimpleBlock / Block payload into one frame (no lacing).
  */
 /*
- * Some muxers (e.g. ffmpeg) write a CodecPrivate length size
+ * Some muxers write a CodecPrivate length size
  * that disagrees with the actual block framing. Sanity-check the
  * configured length size against the first frame and fall back
  * to 4 bytes when it is implausible.

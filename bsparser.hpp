@@ -15,8 +15,10 @@
  * Unified entry points
  * ---------------------
  *
- *   bs::Codec                      select a codec path (Hevc / Avc)
- *   bs::State                      opaque parser state
+ *   bs::Codec                      select a codec path
+ *                                    (Hevc / Avc / Vvc / Av1 / Vp9 / Vp8)
+ *   bs::State                      opaque parser state (parameter-set store
+ *                                    + per-codec POC tracker)
  *   bs::create_state(Codec)        construct an opaque state
  *   bs::parse(state, data, mode,
  *             handlers[, length_size])
@@ -27,17 +29,20 @@
  *
  *   * bs::BsNalHandlers / avc::NalHandlers -- the original raw-NAL callback
  *     (receives each NAL unit as a bs::NalUnit / avc::NalUnit).
- *   * bs::HevcParsedHandlers / bs::AvcParsedHandlers -- typed callbacks that
- *     receive the fully-parsed parameter-set structs (VPS/SPS/PPS) as they
- *     are parsed, with all nested sub-structs intact.
+ *   * bs::*ParsedHandlers -- typed callbacks per codec (Hevc / Avc / Vvc /
+ *     Av1 / Vp9 / Vp8) that receive the fully-parsed structs as they are
+ *     parsed, with all nested sub-structs intact.
  *   * bs::StructReport -- instead of callbacks, a value-copied snapshot of
  *     every parameter set seen during the parse, retrievable afterwards.
  *
  * The user selects the codec path through the bs::Codec enum and supplies an
- * opaque bs::State.  The State auto-manages parameter sets (SPS/PPS, and VPS
- * for HEVC): as parameter-set NALs are encountered they are parsed and stored
- * internally, so slice handlers can resolve their dependencies through the
- * State instead of maintaining their own managers.
+ * opaque bs::State.  The State auto-manages parameter sets (HEVC/AVC: VPS/
+ * SPS/PPS; VVC: DCI/OPI/VPS/SPS/PPS/PH; AV1: the sequence header) and the
+ * per-codec POC trackers: as parameter-set NALs are encountered they are
+ * parsed and stored internally, so slice handlers can resolve their
+ * dependencies through the State instead of maintaining their own managers.
+ * Slice / picture / frame headers carry the presentation-order signal
+ * natively (derived_poc / order_hint / presentation_order).
  *
  * The previous per-codec API (bs::dispatch_nals / bs::avc::dispatch_nals and
  * the explicit syntax parsers) remains fully available and unchanged.

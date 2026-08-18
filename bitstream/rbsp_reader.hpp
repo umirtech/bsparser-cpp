@@ -26,7 +26,7 @@ class RbspReaderError : public std::runtime_error {
  *
  * The input span contains EBSP bytes.
  *
- * HEVC emulation-prevention sequences:
+ * H.264 / H.265 / H.266 emulation-prevention sequences:
  *
  *     00 00 03 xx
  *

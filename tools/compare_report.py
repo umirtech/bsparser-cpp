@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Compare bsparser's report fields against ffmpeg's trace_headers output.
+"""Compare bsparser's report fields against pre-generated reference files.
 
 For each input file:
   1. Run bs_cli --json to get bsparser's parsed fields.
-  2. Run `ffmpeg -v trace -c:v copy -bsf:v trace_headers -f null -` and parse
-     the syntax-element dump (section headers delimit NALs).
-  3. Compare the parameter-set and slice fields that both tools expose.
+  2. Load the expected results from a reference file (JSON) produced once by
+     `--generate`.
+  3. Compare the parameter-set and slice fields that both expose.
 
-Usage: python tools/compare_ffmpeg.py <file...>
+The reference files hold the expected values; the comparison itself never
+invokes any external tool.
+
+Usage:
+  python tools/compare_report.py <file...>             # compare vs references
+  python tools/compare_report.py --generate <file...>  # create reference files
 """
 
 import json
@@ -17,9 +22,11 @@ import subprocess
 import sys
 
 BS_CLI = os.path.join("build", "bs_cli" + (".exe" if os.name == "nt" else ""))
+MAX_SLICES = 40
 
 # ---------------------------------------------------------------------------
-# ffmpeg trace parsing
+# reference parsing (the trace is parsed once at generation time; the
+# expected results are stored as a JSON reference file)
 # ---------------------------------------------------------------------------
 
 SECTION_HEADERS = {
@@ -67,11 +74,61 @@ def parse_trace(text):
     return groups
 
 
-def first_group(groups, kind_prefix):
+def prune_groups(groups, max_slices=MAX_SLICES):
+    """Keep the first group of each non-slice kind plus the first N slices.
+
+    The comparison only touches the first SPS group and the first N slice
+    groups, so a compact reference is sufficient.
+    """
+    by_kind = {}
     for g in groups:
-        if g["kind"].startswith(kind_prefix):
-            return g
-    return None
+        if g["kind"].startswith("Slice"):
+            continue
+        if g["kind"] not in by_kind:
+            by_kind[g["kind"]] = g
+    slices = [g for g in groups if g["kind"].startswith("Slice")][:max_slices]
+    return list(by_kind.values()) + slices
+
+
+def reference_path(path):
+    return os.path.join(
+        os.path.dirname(os.path.abspath(path)),
+        "reference",
+        os.path.basename(path) + ".json",
+    )
+
+
+def generate_reference(path):
+    """Run the external trace once and store the expected results as JSON."""
+    groups = parse_trace(run_external_trace(path))
+    report = load_report(path)
+    ref = {
+        "codec": report.get("codec") if report else None,
+        "slice_count": sum(1 for g in groups if g["kind"].startswith("Slice")),
+        "groups": prune_groups(groups),
+    }
+    ref_file = reference_path(path)
+    os.makedirs(os.path.dirname(ref_file), exist_ok=True)
+    with open(ref_file, "w", encoding="utf-8") as f:
+        json.dump(ref, f, indent=1)
+        f.write("\n")
+    print(f"wrote {ref_file} (slice_count={ref['slice_count']}, "
+          f"groups={len(ref['groups'])})")
+
+
+def load_reference(path):
+    ref_file = reference_path(path)
+    if not os.path.isfile(ref_file):
+        return None
+    with open(ref_file, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def run_external_trace(path, timeout=600):
+    cmd = ["ffmpeg", "-v", "trace", "-i", path, "-c:v", "copy",
+           "-bsf:v", "trace_headers", "-f", "null", "-"]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    return p.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +168,7 @@ def cmp(name, ours, theirs):
         return True, None
     if o == t:
         return True, None
-    return False, f"{name}: ours={o} ffmpeg={t}"
+    return False, f"{name}: ours={o} ref={t}"
 
 
 def add(checks, name, ours, theirs, transform=None):
@@ -129,7 +186,7 @@ HEVC_SLICE_MAP = {"B": 0, "P": 1, "I": 2}
 
 
 def avc_display_size(f):
-    """Display dimensions from ffmpeg's raw SPS fields (H.264 7.4.2.1.1)."""
+    """Display dimensions from the raw SPS fields (H.264 7.4.2.1.1)."""
     w_mbs = f.get("pic_width_in_mbs_minus1", 0) + 1
     h_map = f.get("pic_height_in_map_units_minus1", 0) + 1
     mbs_only = f.get("frame_mbs_only_flag", 1)
@@ -145,9 +202,9 @@ def avc_display_size(f):
     return w, h
 
 
-def compare_avc(report, groups, checks, max_slices=40):
+def compare_avc(report, ref, checks, max_slices=MAX_SLICES):
     sps_ours = next((e for e in report["nals"] if e["type"] == "SPS"), None)
-    sps_ff = first_group(groups, "Sequence Parameter Set")
+    sps_ff = first_group(ref["groups"], "Sequence Parameter Set")
     if sps_ours and sps_ff:
         f = sps_ff["fields"]
         o = sps_ours["fields"]
@@ -171,27 +228,28 @@ def compare_avc(report, groups, checks, max_slices=40):
         add(checks, "SPS direct_8x8", o.get("direct_8x8_inference"), f.get("direct_8x8_inference_flag"))
 
     ours_slices = [e for e in report["nals"] if e["vcl"]]
-    ff_slices = [g for g in groups if g["kind"].startswith("Slice")]
+    ff_slices = [g for g in ref["groups"] if g["kind"].startswith("Slice")]
+    ff_slice_count = ref.get("slice_count", len(ff_slices))
     n = min(len(ours_slices), len(ff_slices), max_slices)
     for i in range(n):
         o = ours_slices[i]["fields"]
         f = ff_slices[i]["fields"]
         tag = f"slice[{i}]"
-        # ffmpeg logs the raw ue(v) slice_type (0-9); base type = value % 5.
+        # the raw ue(v) slice_type (0-9); base type = value % 5.
         if o.get("slice_type") in SLICE_MAP and f.get("slice_type") is not None:
             if SLICE_MAP[o["slice_type"]] != (f["slice_type"] % 5):
-                checks.append(f"{tag} slice_type: ours={o['slice_type']}({SLICE_MAP.get(o['slice_type'])}) ffmpeg={f['slice_type']}")
+                checks.append(f"{tag} slice_type: ours={o['slice_type']}({SLICE_MAP.get(o['slice_type'])}) ref={f['slice_type']}")
         add(checks, tag + " frame_num", o.get("frame_num"), f.get("frame_num"))
         add(checks, tag + " poc_lsb", o.get("pic_order_cnt_lsb"), f.get("pic_order_cnt_lsb"))
         add(checks, tag + " qp_delta", o.get("slice_qp_delta"), f.get("slice_qp_delta"))
         add(checks, tag + " first_mb", o.get("first_mb"), f.get("first_mb_in_slice"))
-    if len(ours_slices) != len(ff_slices) and len(ff_slices) > 0:
-        checks.append(f"slice count: ours={len(ours_slices)} ffmpeg={len(ff_slices)}")
+    if len(ours_slices) != ff_slice_count and ff_slice_count > 0:
+        checks.append(f"slice count: ours={len(ours_slices)} ref={ff_slice_count}")
 
 
-def compare_hevc(report, groups, checks, max_slices=40):
+def compare_hevc(report, ref, checks, max_slices=MAX_SLICES):
     sps_ours = next((e for e in report["nals"] if e["type"] == "SPS_NUT"), None)
-    sps_ff = first_group(groups, "Sequence Parameter Set")
+    sps_ff = first_group(ref["groups"], "Sequence Parameter Set")
     if sps_ours and sps_ff:
         f = sps_ff["fields"]
         o = sps_ours["fields"]
@@ -208,7 +266,8 @@ def compare_hevc(report, groups, checks, max_slices=40):
             transform=lambda v: v + 1)
 
     ours_slices = [e for e in report["nals"] if e["vcl"]]
-    ff_slices = [g for g in groups if g["kind"].startswith("Slice")]
+    ff_slices = [g for g in ref["groups"] if g["kind"].startswith("Slice")]
+    ff_slice_count = ref.get("slice_count", len(ff_slices))
     n = min(len(ours_slices), len(ff_slices), max_slices)
     for i in range(n):
         o = ours_slices[i]["fields"]
@@ -217,42 +276,53 @@ def compare_hevc(report, groups, checks, max_slices=40):
         # HEVC slice_type ue(v): 0=B, 1=P, 2=I.
         if o.get("slice_type") in HEVC_SLICE_MAP and f.get("slice_type") is not None:
             if HEVC_SLICE_MAP[o["slice_type"]] != f["slice_type"]:
-                checks.append(f"{tag} slice_type: ours={o['slice_type']}({HEVC_SLICE_MAP.get(o['slice_type'])}) ffmpeg={f['slice_type']}")
+                checks.append(f"{tag} slice_type: ours={o['slice_type']}({HEVC_SLICE_MAP.get(o['slice_type'])}) ref={f['slice_type']}")
         add(checks, tag + " poc_lsb", o.get("poc_lsb"), f.get("slice_pic_order_cnt_lsb"))
         add(checks, tag + " qp_delta", o.get("slice_qp_delta"), f.get("slice_qp_delta"))
         add(checks, tag + " first_slice", o.get("first_slice"), f.get("first_slice_segment_in_pic_flag"))
         add(checks, tag + " dep_slice", o.get("dependent_slice"), f.get("dependent_slice_segment_flag"))
-    if len(ours_slices) != len(ff_slices) and len(ff_slices) > 0:
-        checks.append(f"slice count: ours={len(ours_slices)} ffmpeg={len(ff_slices)}")
+    if len(ours_slices) != ff_slice_count and ff_slice_count > 0:
+        checks.append(f"slice count: ours={len(ours_slices)} ref={ff_slice_count}")
 
 
-def run_ffmpeg_trace(path, timeout=600):
-    cmd = ["ffmpeg", "-v", "trace", "-i", path, "-c:v", "copy", "-bsf:v", "trace_headers", "-f", "null", "-"]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    return parse_trace(p.stderr)
+def first_group(groups, kind_prefix):
+    for g in groups:
+        if g["kind"].startswith(kind_prefix):
+            return g
+    return None
 
 
 def main():
-    files = sys.argv[1:]
-    if not files:
-        print("usage: python tools/compare_ffmpeg.py <file...>")
+    args = sys.argv[1:]
+    generate = False
+    if args and args[0] == "--generate":
+        generate = True
+        args = args[1:]
+    if not args:
+        print("usage: python tools/compare_report.py [--generate] <file...>")
         return 1
-    for path in files:
+
+    for path in args:
         report = load_report(path)
         if report is None:
             print(f"=== {path}: bs_cli produced no JSON")
             continue
-        codec = report.get("codec")
-        try:
-            groups = run_ffmpeg_trace(path)
-        except subprocess.TimeoutExpired:
-            print(f"=== {path}: ffmpeg trace timed out")
+        if generate:
+            try:
+                generate_reference(path)
+            except subprocess.TimeoutExpired:
+                print(f"=== {path}: reference generation timed out")
             continue
+        ref = load_reference(path)
+        if ref is None:
+            print(f"=== {path}: no reference file; run with --generate first")
+            continue
+        codec = report.get("codec")
         checks = []
         if codec == "AVC":
-            compare_avc(report, groups, checks)
+            compare_avc(report, ref, checks)
         elif codec == "HEVC":
-            compare_hevc(report, groups, checks)
+            compare_hevc(report, ref, checks)
         else:
             print(f"=== {path}: codec {codec} not compared")
             continue

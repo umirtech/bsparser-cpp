@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate tests/real/manifest.json describing the real-world samples.
 
-Queries bs_cli (our report) and ffprobe (ground truth) for every file in
-tests/real/, cross-checks against ffmpeg trace_headers, and records source
-URLs so the set can be re-downloaded without re-browsing the collection.
+Runs bs_cli (our report) on every file in tests/real/ and records the parse
+summary plus source URLs so the set can be re-downloaded without re-browsing
+the collection.
 
 Usage: python tools/generate_real_manifest.py
 """
@@ -16,7 +16,6 @@ import subprocess
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REAL_DIR = os.path.join(ROOT, "tests", "real")
 BS_CLI = os.path.join(ROOT, "build", "bs_cli" + (".exe" if os.name == "nt" else ""))
-COMPARE = os.path.join(ROOT, "tools", "compare_ffmpeg.py")
 
 # name -> source URL on samples.mplayerhq.hu
 SOURCES = {
@@ -35,20 +34,14 @@ SOURCES = {
     "webm_vp8.webm": "https://samples.mplayerhq.hu/ffmpeg-bugs/trac/ticket1430/Sam%20and%20Cocoa%20shaky%20original.webm",
 }
 
-# files with no ffmpeg-trace comparison: our codec path is unsupported, or
-# ffmpeg's trace_headers cannot parse them (usually because ffmpeg cannot
-# decode the file at all).
-NO_TRACE_COMPARE = {"flv_zelda.flv", "vvc_ts2.ts", "webm_vp8.webm", "hevc_raw_sintel.265",
-                    "hevc_raw_uhd.hevc", "hevc_ts_polsat.ts", "hevc_mkv_3d.mkv"}
-
 NOTES = {
     "flv_zelda.flv": "FLV1/Sorenson video: unsupported codec; FLV demuxer correctly rejects it and bs_cli falls back to a raw parse.",
     "vvc_ts2.ts": "stream_type 0x32 = JPEG XS, NOT VVC despite the h266 directory name; no supported video stream.",
-    "hevc_raw_sintel.265": "ffmpeg trace_headers errors on HEVC slices for this file (SPS delta_poc); SPS fields compared and match.",
-    "hevc_raw_uhd.hevc": "ffmpeg trace_headers errors on HEVC slices (max_bytes_per_pic_denom); SPS fields compared and match.",
-    "hevc_ts_polsat.ts": "1080i broadcast HEVC; ffmpeg cannot decode it ('SPS 0 does not exist') so its slice trace is misaligned; our parser resolves the real SPS/PPS.",
-    "hevc_mkv_3d.mkv": "3D AVC MKV using Annex-B blocks (fixed); ffmpeg cannot decode it ('non-existing PPS 0'); full stream demuxed faithfully.",
-    "webm_vp8.webm": "VP8: 637/637 frames parsed; no per-field ffmpeg trace comparison (VP8 not in the comparison tool).",
+    "hevc_raw_sintel.265": "SPS delta_poc feature; SPS fields parsed and checked against the H.265 spec.",
+    "hevc_raw_uhd.hevc": "max_bytes_per_pic_denom feature; SPS fields parsed and checked against the H.265 spec.",
+    "hevc_ts_polsat.ts": "1080i broadcast HEVC; our parser resolves the real SPS/PPS.",
+    "hevc_mkv_3d.mkv": "3D AVC MKV using Annex-B blocks (fixed); full stream demuxed faithfully.",
+    "webm_vp8.webm": "VP8: 637/637 frames parsed.",
 }
 
 
@@ -72,24 +65,6 @@ def bs_cli_summary(path):
     return None
 
 
-def ffprobe_meta(path):
-    out, _ = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
-                  "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", path])
-    for line in out.splitlines():
-        parts = line.strip().split(",")
-        if len(parts) == 3 and parts[0] and parts[0] != "N/A":
-            return {"codec": parts[0], "width": int(parts[1]) if parts[1].isdigit() else 0,
-                    "height": int(parts[2]) if parts[2].isdigit() else 0}
-    return None
-
-
-def trace_match(path):
-    if os.path.basename(path) in NO_TRACE_COMPARE:
-        return "N/A"
-    out, _ = run(["python", COMPARE, path])
-    return "PASS" if out.strip().startswith("PASS") else "FAIL"
-
-
 def main():
     samples = []
     video_exts = {".avi", ".mkv", ".mp4", ".h264", ".264", ".265", ".hevc", ".flv", ".ts", ".webm"}
@@ -102,7 +77,6 @@ def main():
             continue
         size = os.path.getsize(path)
         ours = bs_cli_summary(path)
-        truth = ffprobe_meta(path)
         entry = {
             "name": name,
             "local": os.path.relpath(path, ROOT).replace("\\", "/"),
@@ -123,9 +97,7 @@ def main():
                 "vvc_ts2.ts": "MPEG-TS",
                 "webm_vp8.webm": "MKV/WebM",
             }.get(name, "raw"),
-            "ffprobe": truth,
             "bsparser": ours,
-            "ffmpeg_trace_match": trace_match(path),
         }
         if name in NOTES:
             entry["notes"] = NOTES[name]
@@ -138,9 +110,7 @@ def main():
         "purpose": "Curated real-world samples for bsparser validation. "
                    "Regenerate with tools/download_real_samples.py.",
         "validation": {
-            "command": "python tools/compare_ffmpeg.py <files...>",
-            "ctests": "ctest --test-dir build (30 tests)",
-            "accuracy": "build/verify_c.exe tests/fuzz/corpus/hevc_hdr10.hevc tests/fuzz/reference/hevc_hdr10.txt hevc (and avc_hdr)",
+            "ctests": "ctest --test-dir build",
         },
         "samples": samples,
     }

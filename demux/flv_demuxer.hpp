@@ -186,7 +186,7 @@ inline ElementaryStream demux_flv(std::span<const std::uint8_t> data) {
     std::size_t pos = data_offset;
 
     /*
-     * Some muxers (e.g. ffmpeg) write a leading PreviousTagSize0
+     * Some muxers write a leading PreviousTagSize0
      * (4 zero bytes) before the first tag, so data_offset points
      * four bytes early. Detect and skip it.
      */

@@ -11,7 +11,7 @@
  *
  *   Clang + libFuzzer (primary):
  *       -fsanitize=fuzzer,address,undefined
- *       (libFuzzer provides main(); see the hevc_fuzz CMake target)
+ *       (libFuzzer provides main(); see the bs_fuzz CMake target)
  *
  *   Any compiler + standalone driver (secondary, e.g. GCC):
  *       link with fuzz_driver.cpp, which reads corpus files from
