@@ -22,209 +22,155 @@ inline constexpr std::size_t kScalingListSizeIds = 4;
 extern "C" {
 #endif
 
-struct BsHevcTimingInfo;
-struct BsHevcPpsColourMappingOctant;
-struct BsHevcSpsExtension;
-struct BsAvcScalingList;
-struct BsHevcRecoveryPoint;
-struct BsHevcShortTermPositivePicture;
-struct BsHevcVpsLayerSet;
-struct BsHevcSliceHeaderExtension;
-struct BsHevcPictureStructure;
-struct BsHevcSampleAspectRatio;
-struct BsHevcDerivedShortTermRefPicSet;
-struct BsHevcSliceLongTermReference;
-struct BsHevcSliceDeblockingFilter;
-struct BsHevcSps3dViewExtension;
+struct BsAv1FrameHeader;
+struct BsAv1SequenceHeader;
 struct BsAvcHrdParameters;
-struct BsHevcFramePackingArrangement;
-struct BsHevcPps3dExtensionDepthLayerTransform;
-struct BsHevcRefPicListModification;
-struct BsHevcPredictionWeight;
-struct BsHevcReferencePictureSetInfo;
-struct BsHevcLevel;
-struct BsHevcScalingListMatrix;
-struct BsHevcSeiMessageHeader;
-struct BsHevcSampleAspectRatioTableEntry;
-struct BsHevcColourDescription;
-struct BsAvcSliceGroupMap;
-struct BsHevcBitDepth;
-struct BsHevcInterRpsPredictionEntry;
-struct BsHevcPpsMultilayerExtension;
-struct BsHevcSpsCodingBlockParameters;
-struct BsHevcPpsSccExtension;
-struct BsHevcSpsRangeExtension;
-struct BsHevcSpsLongTermReferencePictures;
-struct BsHevcVpsTimingInfo;
-struct BsHevcSpsReferencePictureSetParameters;
-struct BsHevcChromaLocationInfo;
-struct BsHevcInterRpsPrediction;
-struct BsHevcDerivedShortTermReference;
-struct BsHevcAlternativeTransferCharacteristics;
-struct BsHevcSliceEntryPointOffsets;
-struct BsHevcSubLayerHrdParameters;
-struct BsAvcVuiParameters;
-struct BsHevcPpsTileConfiguration;
-struct BsHevcSpsSccExtension;
-struct BsHevcMasteringDisplayColourVolumeChromaticity;
-struct BsHevcSps3dExtension;
-struct BsHevcVpsExtension;
-struct BsHevcShortTermNegativePicture;
-struct BsHevcSliceSegmentAddress;
-struct BsHevcHrdTimingInfo;
-struct BsAvcSeiMessage;
-struct BsHevcPpsRangeExtension;
-struct BsHevcSubLayerOrderingInfo;
-struct BsAvcPredWeightTable;
-struct BsAvcRefPicReorderingOp;
-struct BsHevcWindow;
-struct BsAvcRefPicListModification;
 struct BsAvcMmcoOperation;
-struct BsHevcAspectRatio;
 struct BsAvcParsedSei;
-struct BsHevcPocConfiguration;
-struct BsHevcPpsDeblockingFilter;
-struct BsHevcCpbEntry;
-struct BsHevcSpsPcmParameters;
-struct BsHevcPpsRefLocationOffset;
-struct BsHevcSpsMultilayerExtension;
-struct BsHevcMasteringDisplayColourVolume;
-struct BsHevcRefPicListModificationData;
-struct BsHevcScalingListData;
-struct BsHevcTemporalLayer;
-struct BsHevcSeiExtendedValue;
-struct BsHevcCodingBlockGeometry;
-struct BsHevcPredictionWeightTable;
-struct BsHevcDisplayDimensions;
-struct BsHevcProfileTierLevelSubLayer;
-struct BsHevcPps3dExtension;
-struct BsHevcSpsGeometry;
-struct BsHevcProfileTierLevel;
-struct BsHevcPpsExtension;
-struct BsHevcContentLightLevelInfo;
+struct BsAvcPredWeightTable;
+struct BsAvcRefPicListModification;
+struct BsAvcRefPicReorderingOp;
+struct BsAvcScalingList;
+struct BsAvcSeiMessage;
+struct BsAvcSliceGroupMap;
 struct BsAvcSliceHeader;
+struct BsAvcVuiParameters;
+struct BsHevcAlternativeTransferCharacteristics;
 struct BsHevcAmbientViewingEnvironment;
-struct BsHevcHrdSubLayer;
+struct BsHevcAspectRatio;
+struct BsHevcBitDepth;
+struct BsHevcChromaLocationInfo;
+struct BsHevcCodingBlockGeometry;
+struct BsHevcColourDescription;
+struct BsHevcContentLightLevelInfo;
+struct BsHevcCpbEntry;
+struct BsHevcDerivedShortTermRefPicSet;
+struct BsHevcDerivedShortTermReference;
+struct BsHevcDisplayDimensions;
+struct BsHevcFramePackingArrangement;
+struct BsHevcHrdTimingInfo;
+struct BsHevcInterRpsPrediction;
+struct BsHevcInterRpsPredictionEntry;
+struct BsHevcLevel;
+struct BsHevcMasteringDisplayColourVolumeChromaticity;
+struct BsHevcPictureStructure;
+struct BsHevcPocConfiguration;
+struct BsHevcPps3dExtension;
+struct BsHevcPps3dExtensionDepthLayerTransform;
+struct BsHevcPpsColourMappingOctant;
+struct BsHevcPpsDeblockingFilter;
+struct BsHevcPpsExtension;
+struct BsHevcPpsMultilayerExtension;
+struct BsHevcPpsRangeExtension;
+struct BsHevcPpsRefLocationOffset;
+struct BsHevcPpsSccExtension;
+struct BsHevcPpsTileConfiguration;
+struct BsHevcPredictionWeight;
+struct BsHevcPredictionWeightTable;
 struct BsHevcProfileTierLevelId;
-struct BsHevcVideoSignalType;
-struct BsHevcHrdCommonInfo;
-struct BsAvcPictureParameterSet;
-struct BsHevcVideoParameterSet;
+struct BsHevcProfileTierLevelSubLayer;
+struct BsHevcRecoveryPoint;
+struct BsHevcRefPicListModification;
+struct BsHevcRefPicListModificationData;
+struct BsHevcReferencePictureSetInfo;
+struct BsHevcSampleAspectRatio;
+struct BsHevcSampleAspectRatioTableEntry;
+struct BsHevcScalingListMatrix;
+struct BsHevcSeiExtendedValue;
+struct BsHevcSeiMessageHeader;
+struct BsHevcShortTermNegativePicture;
+struct BsHevcShortTermPositivePicture;
 struct BsHevcShortTermRefPicSet;
+struct BsHevcSliceDeblockingFilter;
+struct BsHevcSliceEntryPointOffsets;
+struct BsHevcSliceHeaderExtension;
+struct BsHevcSliceLongTermReference;
+struct BsHevcSliceReferencePictureInfo;
+struct BsHevcSliceSegmentAddress;
+struct BsHevcSliceSegmentHeader;
+struct BsHevcSps3dViewExtension;
+struct BsHevcSpsCodingBlockParameters;
+struct BsHevcSpsExtension;
+struct BsHevcSpsGeometry;
+struct BsHevcSpsLongTermReferencePictures;
+struct BsHevcSpsMultilayerExtension;
+struct BsHevcSpsPcmParameters;
+struct BsHevcSpsRangeExtension;
+struct BsHevcSpsReferencePictureSetParameters;
+struct BsHevcSpsSccExtension;
+struct BsHevcSubLayerHrdParameters;
+struct BsHevcSubLayerOrderingInfo;
+struct BsHevcTemporalLayer;
+struct BsHevcTimingInfo;
+struct BsHevcVideoSignalType;
+struct BsHevcVpsExtension;
+struct BsHevcVpsLayerSet;
+struct BsHevcVpsTimingInfo;
+struct BsHevcWindow;
+struct BsVp8FrameHeader;
+struct BsVp9FrameHeader;
+struct BsVvcDci;
+struct BsVvcOpi;
+struct BsVvcPictureHeader;
+struct BsVvcPictureParameterSet;
+struct BsVvcSequenceParameterSet;
+struct BsVvcSliceHeader;
+struct BsVvcVideoParameterSet;
+struct BsAvcPictureParameterSet;
 struct BsAvcSequenceParameterSet;
+struct BsHevcHrdCommonInfo;
+struct BsHevcHrdSubLayer;
+struct BsHevcMasteringDisplayColourVolume;
 struct BsHevcPictureDimensions;
+struct BsHevcProfileTierLevel;
+struct BsHevcScalingListData;
+struct BsHevcSps3dExtension;
+struct BsHevcVideoParameterSet;
 struct BsHevcHrdParameters;
 struct BsHevcPpsScalingListConfiguration;
-struct BsHevcSliceReferencePictureInfo;
-struct BsHevcPictureParameterSet;
 struct BsHevcVpsHrdParameter;
 struct BsHevcVuiParameters;
-struct BsHevcSliceSegmentHeader;
+struct BsHevcPictureParameterSet;
 struct BsHevcSequenceParameterSet;
 
-typedef struct BsHevcTimingInfo {
-    uint32_t num_units_in_tick;
-    uint32_t time_scale;
-    uint8_t poc_proportional_to_timing_flag;
-    uint32_t num_ticks_poc_diff_one_minus1;
-} BsHevcTimingInfo;
+typedef struct BsAv1FrameHeader {
+    int frame_type;
+    uint8_t show_frame;
+    uint8_t show_existing_frame;
+    uint8_t frame_to_show_map_idx;
+    uint8_t showable_frame;
+    uint8_t error_resilient_mode;
+    uint8_t disable_cdf_update;
+    uint8_t allow_screen_content_tools;
+    uint8_t force_integer_mv;
+    uint32_t order_hint;
+    int32_t presentation_order;
+} BsAv1FrameHeader;
 
-typedef struct BsHevcPpsColourMappingOctant {
-    uint8_t split_octant_flag;
-    uint32_t partition_coded_res_flags_count;
-    uint8_t* partition_coded_res_flags;
-} BsHevcPpsColourMappingOctant;
-
-typedef struct BsHevcSpsExtension {
-    uint8_t sps_extension_present_flag;
-    uint8_t range_extension_flag;
-    uint8_t multilayer_extension_flag;
-    uint8_t extension_3d_flag;
-    uint8_t scc_extension_flag;
-    uint8_t reserved_extension_flags[4];
-    uint8_t extension_data_present;
-} BsHevcSpsExtension;
-
-typedef struct BsAvcScalingList {
-    uint8_t present_4x4[6];
-    uint8_t list_4x4[6][16];
-    uint8_t present_8x8[2];
-    uint8_t list_8x8[2][64];
-} BsAvcScalingList;
-
-typedef struct BsHevcRecoveryPoint {
-    int32_t recovery_poc_cnt;
-    uint8_t exact_match_flag;
-    uint8_t broken_link_flag;
-    uint8_t changing_slice_group_idc;
-} BsHevcRecoveryPoint;
-
-typedef struct BsHevcShortTermPositivePicture {
-    uint32_t delta_poc_minus1;
-    uint8_t used_by_curr_pic;
-    int32_t delta_poc;
-} BsHevcShortTermPositivePicture;
-
-typedef struct BsHevcVpsLayerSet {
-    uint32_t layer_id_included_flag_count;
-    uint8_t* layer_id_included_flag;
-    uint32_t layer_ids_count;
-    uint8_t* layer_ids;
-} BsHevcVpsLayerSet;
-
-typedef struct BsHevcSliceHeaderExtension {
-    uint32_t length;
-    uint32_t data_count;
-    uint8_t* data;
-} BsHevcSliceHeaderExtension;
-
-typedef struct BsHevcPictureStructure {
-    uint8_t field_seq;
-    uint8_t bottom_field;
-} BsHevcPictureStructure;
-
-typedef struct BsHevcSampleAspectRatio {
-    uint16_t width;
-    uint16_t height;
-} BsHevcSampleAspectRatio;
-
-typedef struct BsHevcDerivedShortTermRefPicSet {
-    uint32_t references_count;
-    struct BsHevcDerivedShortTermReference* references;
-    uint32_t num_negative_pics;
-    uint32_t num_positive_pics;
-} BsHevcDerivedShortTermRefPicSet;
-
-typedef struct BsHevcSliceLongTermReference {
-    uint32_t lt_idx_sps;
-    uint32_t poc_lsb_lt;
-    uint8_t used_by_curr_pic_lt_flag;
-    uint8_t delta_poc_msb_present_flag;
-    uint32_t delta_poc_msb_cycle_lt;
-} BsHevcSliceLongTermReference;
-
-typedef struct BsHevcSliceDeblockingFilter {
-    uint8_t override_flag;
-    uint8_t disabled_flag;
-    int32_t beta_offset_div2;
-    int32_t tc_offset_div2;
-} BsHevcSliceDeblockingFilter;
-
-typedef struct BsHevcSps3dViewExtension {
-    uint8_t iv_di_mc_enabled_flag;
-    uint8_t iv_mv_scal_enabled_flag;
-    uint8_t iv_res_pred_enabled_flag;
-    uint8_t depth_ref_enabled_flag;
-    uint8_t vsp_mc_enabled_flag;
-    uint8_t dbbp_enabled_flag;
-    uint8_t tex_mc_enabled_flag;
-    uint8_t intra_contour_enabled_flag;
-    uint8_t intra_dc_only_wedge_enabled_flag;
-    uint8_t cqt_cu_part_pred_enabled_flag;
-    uint8_t inter_dc_only_enabled_flag;
-    uint8_t skip_intra_enabled_flag;
-    uint32_t log2_ivmc_sub_pb_size_minus3;
-} BsHevcSps3dViewExtension;
+typedef struct BsAv1SequenceHeader {
+    uint8_t seq_profile;
+    uint8_t still_picture;
+    uint8_t reduced_still_picture_header;
+    uint32_t max_frame_width;
+    uint32_t max_frame_height;
+    uint8_t dimensions_present;
+    uint8_t enable_order_hint;
+    uint8_t order_hint_bits_minus_1;
+    uint8_t seq_force_screen_content_tools;
+    uint8_t seq_force_integer_mv;
+    uint8_t frame_id_numbers_present_flag;
+    uint8_t delta_frame_id_length_minus_2;
+    uint8_t additional_frame_id_length_minus_1;
+    uint8_t timing_info_present_flag;
+    uint8_t equal_picture_interval;
+    uint8_t decoder_model_info_present_flag;
+    uint8_t operating_points_cnt_minus_1;
+    uint8_t buffer_delay_length_minus_1;
+    uint8_t buffer_removal_time_length_minus_1;
+    uint8_t frame_presentation_time_length_minus_1;
+    uint16_t operating_point_idc[32];
+    uint8_t decoder_model_present_for_this_op[32];
+} BsAv1SequenceHeader;
 
 typedef struct BsAvcHrdParameters {
     uint8_t cpb_cnt_minus1;
@@ -239,87 +185,62 @@ typedef struct BsAvcHrdParameters {
     uint8_t time_offset_length;
 } BsAvcHrdParameters;
 
-typedef struct BsHevcFramePackingArrangement {
-    uint32_t fp_arrangement_id;
-    uint8_t fp_arrangement_cancel_flag;
-    uint8_t fp_arrangement_type;
-    uint8_t fp_quincunx_sampling_flag;
-    uint8_t fp_content_interpretation_type;
-    uint8_t fp_spatial_flipping_flag;
-    uint8_t fp_frame0_flipped_flag;
-    uint8_t fp_field_views_flag;
-    uint8_t fp_current_frame_is_frame0_flag;
-    uint8_t fp_frame0_self_contained_flag;
-    uint8_t fp_frame1_self_contained_flag;
-    uint8_t fp_frame0_grid_position_x;
-    uint8_t fp_frame0_grid_position_y;
-    uint8_t fp_frame1_grid_position_x;
-    uint8_t fp_frame1_grid_position_y;
-    uint8_t fp_arrangement_reserved_byte;
-    uint8_t fp_arrangement_persistence_flag;
-    uint8_t fp_upsampled_aspect_ratio_flag;
-} BsHevcFramePackingArrangement;
+typedef struct BsAvcMmcoOperation {
+    uint32_t memory_management_control_operation;
+    uint32_t difference_of_pic_nums_minus1;
+    uint32_t long_term_pic_num;
+    uint32_t long_term_frame_idx;
+    uint32_t max_long_term_frame_idx_plus1;
+} BsAvcMmcoOperation;
 
-typedef struct BsHevcPps3dExtensionDepthLayerTransform {
-    uint8_t dlt_flag;
-    uint8_t dlt_pred_flag;
-    uint8_t dlt_val_flags_present_flag;
-    uint32_t dlt_value_flag_count;
-    uint8_t* dlt_value_flag;
-} BsHevcPps3dExtensionDepthLayerTransform;
+typedef struct BsAvcParsedSei {
+    uint32_t rbsp_storage_count;
+    uint8_t* rbsp_storage;
+    uint32_t messages_count;
+    struct BsAvcSeiMessage* messages;
+} BsAvcParsedSei;
 
-typedef struct BsHevcRefPicListModification {
+typedef struct BsAvcPredWeightTable {
+    uint32_t luma_log2_weight_denom;
+    uint32_t chroma_log2_weight_denom;
+    uint8_t luma_weight_l0_flag[32];
+    int16_t luma_weight_l0[32];
+    int16_t luma_offset_l0[32];
+    uint8_t chroma_weight_l0_flag[32];
+    int16_t chroma_weight_l0[32][2];
+    int16_t chroma_offset_l0[32][2];
+    uint8_t luma_weight_l1_flag[32];
+    int16_t luma_weight_l1[32];
+    int16_t luma_offset_l1[32];
+    uint8_t chroma_weight_l1_flag[32];
+    int16_t chroma_weight_l1[32][2];
+    int16_t chroma_offset_l1[32][2];
+} BsAvcPredWeightTable;
+
+typedef struct BsAvcRefPicListModification {
     uint8_t modification_flag;
-    uint32_t list_entry_count;
-    uint32_t* list_entry;
-} BsHevcRefPicListModification;
+    uint32_t ops_count;
+    struct BsAvcRefPicReorderingOp* ops;
+} BsAvcRefPicListModification;
 
-typedef struct BsHevcPredictionWeight {
-    uint8_t luma_weight_luma_flag;
-    int32_t delta_luma_weight;
-    int32_t luma_offset;
-    uint8_t chroma_weight_flag;
-    int32_t delta_chroma_weight[2];
-    int32_t delta_chroma_offset[2];
-} BsHevcPredictionWeight;
+typedef struct BsAvcRefPicReorderingOp {
+    uint32_t reordering_of_pic_nums_idc;
+    uint32_t abs_diff_pic_num_minus1;
+    uint32_t long_term_pic_num;
+} BsAvcRefPicReorderingOp;
 
-typedef struct BsHevcReferencePictureSetInfo {
-    uint32_t num_negative_pics;
-    uint32_t num_positive_pics;
-    uint32_t num_delta_pocs;
-} BsHevcReferencePictureSetInfo;
+typedef struct BsAvcScalingList {
+    uint8_t present_4x4[6];
+    uint8_t list_4x4[6][16];
+    uint8_t present_8x8[2];
+    uint8_t list_8x8[2][64];
+} BsAvcScalingList;
 
-typedef struct BsHevcLevel {
-    uint8_t level_idc;
-} BsHevcLevel;
-
-typedef struct BsHevcScalingListMatrix {
-    uint8_t pred_mode_flag;
-    uint32_t pred_matrix_id_delta;
-    int32_t dc_coef_minus8;
-    int32_t dc_coef;
-    uint8_t coefficient_count;
-    uint8_t coefficients[kScalingListMaxCoefficients];
-} BsHevcScalingListMatrix;
-
-typedef struct BsHevcSeiMessageHeader {
+typedef struct BsAvcSeiMessage {
     uint32_t payload_type;
     uint32_t payload_size;
-    uint64_t header_size;
-} BsHevcSeiMessageHeader;
-
-typedef struct BsHevcSampleAspectRatioTableEntry {
-    uint8_t idc;
-    uint16_t width;
-    uint16_t height;
-} BsHevcSampleAspectRatioTableEntry;
-
-typedef struct BsHevcColourDescription {
-    uint8_t colour_primaries;
-    uint8_t transfer_characteristics;
-    uint8_t matrix_coefficients;
-    uint8_t present;
-} BsHevcColourDescription;
+    const uint8_t* payload;
+} BsAvcSeiMessage;
 
 typedef struct BsAvcSliceGroupMap {
     uint8_t slice_group_map_type;
@@ -333,146 +254,40 @@ typedef struct BsAvcSliceGroupMap {
     uint8_t* slice_group_id;
 } BsAvcSliceGroupMap;
 
-typedef struct BsHevcBitDepth {
-    uint8_t luma;
-    uint8_t chroma;
-} BsHevcBitDepth;
-
-typedef struct BsHevcInterRpsPredictionEntry {
-    uint8_t used_by_curr_pic_flag;
-    uint8_t use_delta_flag;
-} BsHevcInterRpsPredictionEntry;
-
-typedef struct BsHevcPpsMultilayerExtension {
-    uint8_t poc_reset_info_present_flag;
-    uint8_t pps_infer_scaling_list_flag;
-    uint32_t pps_scaling_list_ref_layer_id;
-    uint32_t ref_location_offsets_count;
-    struct BsHevcPpsRefLocationOffset* ref_location_offsets;
-    uint8_t colour_mapping_enabled_flag;
-    uint32_t num_cm_ref_layers_minus1;
-    uint32_t cm_ref_layer_id_count;
-    uint32_t* cm_ref_layer_id;
-    uint32_t cm_octant_depth;
-    uint32_t cm_y_part_num_log2;
-    uint32_t luma_bit_depth_cm_input_minus8;
-    uint32_t chroma_bit_depth_cm_input_minus8;
-    uint32_t luma_bit_depth_cm_output_minus8;
-    uint32_t chroma_bit_depth_cm_output_minus8;
-    uint32_t cm_res_quant_bits;
-    uint32_t cm_delta_flc_bits_minus1;
-    int32_t cm_adapt_threshold_u_delta;
-    int32_t cm_adapt_threshold_v_delta;
-    uint32_t colour_mapping_octants_count;
-    struct BsHevcPpsColourMappingOctant* colour_mapping_octants;
-} BsHevcPpsMultilayerExtension;
-
-typedef struct BsHevcSpsCodingBlockParameters {
-    uint32_t log2_min_luma_coding_block_size_minus3;
-    uint32_t log2_diff_max_min_luma_coding_block_size;
-    uint32_t log2_min_luma_transform_block_size_minus2;
-    uint32_t log2_diff_max_min_luma_transform_block_size;
-    uint32_t max_transform_hierarchy_depth_inter;
-    uint32_t max_transform_hierarchy_depth_intra;
-} BsHevcSpsCodingBlockParameters;
-
-typedef struct BsHevcPpsSccExtension {
-    uint8_t pps_curr_pic_ref_enabled_flag;
-    uint8_t residual_adaptive_colour_transform_enabled_flag;
-    uint8_t pps_slice_act_qp_offsets_present_flag;
-    int32_t pps_act_y_qp_offset_plus5;
-    int32_t pps_act_cb_qp_offset_plus5;
-    int32_t pps_act_cr_qp_offset_plus3;
-    uint8_t pps_palette_predictor_initializers_present_flag;
-    uint32_t pps_num_palette_predictor_initializers;
-    uint8_t monochrome_palette_flag;
-    uint32_t luma_bit_depth_entry_minus8;
-    uint32_t chroma_bit_depth_entry_minus8;
-    uint32_t pps_palette_predictor_initializer[3][kMaxPalettePredictorSize];
-} BsHevcPpsSccExtension;
-
-typedef struct BsHevcSpsRangeExtension {
-    uint8_t transform_skip_rotation_enabled_flag;
-    uint8_t transform_skip_context_enabled_flag;
-    uint8_t implicit_rdpcm_enabled_flag;
-    uint8_t explicit_rdpcm_enabled_flag;
-    uint8_t extended_precision_processing_flag;
-    uint8_t intra_smoothing_disabled_flag;
-    uint8_t high_precision_offsets_enabled_flag;
-    uint8_t persistent_rice_adaptation_enabled_flag;
-    uint8_t cabac_bypass_alignment_enabled_flag;
-} BsHevcSpsRangeExtension;
-
-typedef struct BsHevcSpsLongTermReferencePictures {
-    uint8_t present;
-    uint32_t count;
-    uint32_t poc_lsb_count;
-    uint32_t* poc_lsb;
-    uint32_t used_by_curr_pic_count;
-    uint8_t* used_by_curr_pic;
-} BsHevcSpsLongTermReferencePictures;
-
-typedef struct BsHevcVpsTimingInfo {
-    uint8_t timing_info_present_flag;
-    uint32_t num_units_in_tick;
-    uint32_t time_scale;
-    uint8_t poc_proportional_to_timing_flag;
-    uint32_t num_ticks_poc_diff_one_minus1;
-    uint32_t num_hrd_parameters;
-    uint32_t hrd_parameters_count;
-    struct BsHevcVpsHrdParameter* hrd_parameters;
-} BsHevcVpsTimingInfo;
-
-typedef struct BsHevcSpsReferencePictureSetParameters {
-    uint32_t num_short_term_ref_pic_sets;
-    uint32_t short_term_ref_pic_sets_count;
-    struct BsHevcShortTermRefPicSet* short_term_ref_pic_sets;
-    uint8_t long_term_ref_pics_present_flag;
-    uint32_t num_long_term_ref_pics_sps;
-    uint32_t lt_ref_pic_poc_lsb_sps_count;
-    uint32_t* lt_ref_pic_poc_lsb_sps;
-    uint32_t used_by_curr_pic_lt_sps_flag_count;
-    uint8_t* used_by_curr_pic_lt_sps_flag;
-} BsHevcSpsReferencePictureSetParameters;
-
-typedef struct BsHevcChromaLocationInfo {
-    uint8_t present;
-    uint32_t chroma_sample_loc_type_top_field;
-    uint32_t chroma_sample_loc_type_bottom_field;
-} BsHevcChromaLocationInfo;
-
-typedef struct BsHevcInterRpsPrediction {
-    uint8_t delta_idx_present;
-    uint32_t delta_idx_minus1;
-    uint32_t reference_rps_idx;
-    uint8_t delta_rps_sign;
-    uint32_t abs_delta_rps_minus1;
-    int32_t delta_rps;
-    uint32_t entries_count;
-    struct BsHevcInterRpsPredictionEntry* entries;
-} BsHevcInterRpsPrediction;
-
-typedef struct BsHevcDerivedShortTermReference {
-    int32_t delta_poc;
-    uint8_t used_by_curr_pic;
-    uint8_t negative;
-} BsHevcDerivedShortTermReference;
-
-typedef struct BsHevcAlternativeTransferCharacteristics {
-    uint8_t preferred_transfer_characteristics;
-} BsHevcAlternativeTransferCharacteristics;
-
-typedef struct BsHevcSliceEntryPointOffsets {
-    uint32_t num_entry_point_offsets;
-    uint32_t offset_len_minus1;
-    uint32_t entry_point_offset_minus1_count;
-    uint32_t* entry_point_offset_minus1;
-} BsHevcSliceEntryPointOffsets;
-
-typedef struct BsHevcSubLayerHrdParameters {
-    uint32_t cpb_entries_count;
-    struct BsHevcCpbEntry* cpb_entries;
-} BsHevcSubLayerHrdParameters;
+typedef struct BsAvcSliceHeader {
+    uint32_t first_mb_in_slice;
+    int slice_type;
+    uint8_t pic_parameter_set_id;
+    uint32_t frame_num;
+    uint8_t field_pic_flag;
+    uint8_t bottom_field_flag;
+    uint32_t idr_pic_id;
+    uint32_t pic_order_cnt_lsb;
+    int32_t delta_pic_order_cnt_bottom;
+    int32_t delta_pic_order_cnt[2];
+    uint32_t redundant_pic_cnt;
+    uint8_t direct_spatial_mv_pred_flag;
+    uint8_t num_ref_idx_active_override_flag;
+    uint8_t num_ref_idx_l0_active_minus1;
+    uint8_t num_ref_idx_l1_active_minus1;
+    struct BsAvcRefPicListModification ref_pic_list_modification_l0;
+    struct BsAvcRefPicListModification ref_pic_list_modification_l1;
+    struct BsAvcPredWeightTable pred_weight_table;
+    uint8_t no_output_of_prior_pics_flag;
+    uint8_t long_term_reference_flag;
+    uint8_t adaptive_ref_pic_marking_mode_flag;
+    uint32_t mmco_operations_count;
+    struct BsAvcMmcoOperation* mmco_operations;
+    uint8_t cabac_init_idc;
+    int32_t slice_qp_delta;
+    uint8_t disable_deblocking_filter_idc;
+    int32_t slice_alpha_c0_offset_div2;
+    int32_t slice_beta_offset_div2;
+    uint32_t slice_group_change_cycle;
+    uint8_t sp_for_switch_flag;
+    int32_t slice_qs_delta;
+    int32_t derived_poc;
+} BsAvcSliceHeader;
 
 typedef struct BsAvcVuiParameters {
     uint8_t aspect_ratio_info_present_flag;
@@ -510,65 +325,204 @@ typedef struct BsAvcVuiParameters {
     uint32_t max_dec_frame_buffering;
 } BsAvcVuiParameters;
 
-typedef struct BsHevcPpsTileConfiguration {
-    uint8_t tiles_enabled_flag;
-    uint32_t num_tile_columns_minus1;
-    uint32_t num_tile_rows_minus1;
-    uint8_t uniform_spacing_flag;
-    uint32_t column_width_minus1_count;
-    uint32_t* column_width_minus1;
-    uint32_t row_height_minus1_count;
-    uint32_t* row_height_minus1;
-    uint8_t loop_filter_across_tiles_enabled_flag;
-} BsHevcPpsTileConfiguration;
+typedef struct BsHevcAlternativeTransferCharacteristics {
+    uint8_t preferred_transfer_characteristics;
+} BsHevcAlternativeTransferCharacteristics;
 
-typedef struct BsHevcSpsSccExtension {
-    uint8_t sps_curr_pic_ref_enabled_flag;
-    uint8_t palette_mode_enabled_flag;
-    uint32_t palette_max_size;
-    uint32_t delta_palette_max_predictor_size;
-    uint8_t sps_palette_predictor_initializers_present_flag;
-    uint32_t sps_num_palette_predictor_initializers_minus1;
-    uint32_t sps_palette_predictor_initializer[3][kMaxPalettePredictorSize];
-    uint32_t motion_vector_resolution_control_idc;
-    uint8_t intra_boundary_filtering_disabled_flag;
-} BsHevcSpsSccExtension;
+typedef struct BsHevcAmbientViewingEnvironment {
+    uint32_t ambient_illuminance;
+    uint16_t ambient_light_x;
+    uint16_t ambient_light_y;
+} BsHevcAmbientViewingEnvironment;
 
-typedef struct BsHevcMasteringDisplayColourVolumeChromaticity {
-    uint16_t x;
-    uint16_t y;
-} BsHevcMasteringDisplayColourVolumeChromaticity;
+typedef struct BsHevcAspectRatio {
+    uint8_t present;
+    uint8_t aspect_ratio_idc;
+    uint16_t sar_width;
+    uint16_t sar_height;
+} BsHevcAspectRatio;
 
-typedef struct BsHevcSps3dExtension {
-    struct BsHevcSps3dViewExtension views[2];
-} BsHevcSps3dExtension;
+typedef struct BsHevcBitDepth {
+    uint8_t luma;
+    uint8_t chroma;
+} BsHevcBitDepth;
 
-typedef struct BsHevcVpsExtension {
-    uint8_t extension_flag;
-    uint8_t extension_data_flag;
-} BsHevcVpsExtension;
+typedef struct BsHevcChromaLocationInfo {
+    uint8_t present;
+    uint32_t chroma_sample_loc_type_top_field;
+    uint32_t chroma_sample_loc_type_bottom_field;
+} BsHevcChromaLocationInfo;
 
-typedef struct BsHevcShortTermNegativePicture {
-    uint32_t delta_poc_minus1;
-    uint8_t used_by_curr_pic;
+typedef struct BsHevcCodingBlockGeometry {
+    uint32_t min_cb_size;
+    uint32_t max_cb_size;
+    uint32_t min_tb_size;
+    uint32_t max_tb_size;
+    uint8_t max_transform_hierarchy_depth_inter;
+    uint8_t max_transform_hierarchy_depth_intra;
+} BsHevcCodingBlockGeometry;
+
+typedef struct BsHevcColourDescription {
+    uint8_t colour_primaries;
+    uint8_t transfer_characteristics;
+    uint8_t matrix_coefficients;
+    uint8_t present;
+} BsHevcColourDescription;
+
+typedef struct BsHevcContentLightLevelInfo {
+    uint16_t max_content_light_level;
+    uint16_t max_pic_average_light_level;
+} BsHevcContentLightLevelInfo;
+
+typedef struct BsHevcCpbEntry {
+    uint32_t bit_rate_value_minus1;
+    uint32_t cpb_size_value_minus1;
+    uint32_t cpb_size_du_value_minus1;
+    uint32_t bit_rate_du_value_minus1;
+    uint8_t cbr_flag;
+} BsHevcCpbEntry;
+
+typedef struct BsHevcDerivedShortTermRefPicSet {
+    uint32_t references_count;
+    struct BsHevcDerivedShortTermReference* references;
+    uint32_t num_negative_pics;
+    uint32_t num_positive_pics;
+} BsHevcDerivedShortTermRefPicSet;
+
+typedef struct BsHevcDerivedShortTermReference {
     int32_t delta_poc;
-} BsHevcShortTermNegativePicture;
+    uint8_t used_by_curr_pic;
+    uint8_t negative;
+} BsHevcDerivedShortTermReference;
 
-typedef struct BsHevcSliceSegmentAddress {
-    uint32_t value;
-    uint32_t bit_width;
-} BsHevcSliceSegmentAddress;
+typedef struct BsHevcDisplayDimensions {
+    uint32_t width;
+    uint32_t height;
+} BsHevcDisplayDimensions;
+
+typedef struct BsHevcFramePackingArrangement {
+    uint32_t fp_arrangement_id;
+    uint8_t fp_arrangement_cancel_flag;
+    uint8_t fp_arrangement_type;
+    uint8_t fp_quincunx_sampling_flag;
+    uint8_t fp_content_interpretation_type;
+    uint8_t fp_spatial_flipping_flag;
+    uint8_t fp_frame0_flipped_flag;
+    uint8_t fp_field_views_flag;
+    uint8_t fp_current_frame_is_frame0_flag;
+    uint8_t fp_frame0_self_contained_flag;
+    uint8_t fp_frame1_self_contained_flag;
+    uint8_t fp_frame0_grid_position_x;
+    uint8_t fp_frame0_grid_position_y;
+    uint8_t fp_frame1_grid_position_x;
+    uint8_t fp_frame1_grid_position_y;
+    uint8_t fp_arrangement_reserved_byte;
+    uint8_t fp_arrangement_persistence_flag;
+    uint8_t fp_upsampled_aspect_ratio_flag;
+} BsHevcFramePackingArrangement;
 
 typedef struct BsHevcHrdTimingInfo {
     uint32_t num_units_in_tick;
     uint32_t time_scale;
 } BsHevcHrdTimingInfo;
 
-typedef struct BsAvcSeiMessage {
-    uint32_t payload_type;
-    uint32_t payload_size;
-    const uint8_t* payload;
-} BsAvcSeiMessage;
+typedef struct BsHevcInterRpsPrediction {
+    uint8_t delta_idx_present;
+    uint32_t delta_idx_minus1;
+    uint32_t reference_rps_idx;
+    uint8_t delta_rps_sign;
+    uint32_t abs_delta_rps_minus1;
+    int32_t delta_rps;
+    uint32_t entries_count;
+    struct BsHevcInterRpsPredictionEntry* entries;
+} BsHevcInterRpsPrediction;
+
+typedef struct BsHevcInterRpsPredictionEntry {
+    uint8_t used_by_curr_pic_flag;
+    uint8_t use_delta_flag;
+} BsHevcInterRpsPredictionEntry;
+
+typedef struct BsHevcLevel {
+    uint8_t level_idc;
+} BsHevcLevel;
+
+typedef struct BsHevcMasteringDisplayColourVolumeChromaticity {
+    uint16_t x;
+    uint16_t y;
+} BsHevcMasteringDisplayColourVolumeChromaticity;
+
+typedef struct BsHevcPictureStructure {
+    uint8_t field_seq;
+    uint8_t bottom_field;
+} BsHevcPictureStructure;
+
+typedef struct BsHevcPocConfiguration {
+    uint8_t log2_max_pic_order_cnt_lsb_minus4;
+} BsHevcPocConfiguration;
+
+typedef struct BsHevcPps3dExtension {
+    uint8_t dlts_present_flag;
+    uint32_t pps_depth_layers_minus1;
+    uint32_t pps_bit_depth_for_depth_layers_minus8;
+    uint32_t depth_layer_transforms_count;
+    struct BsHevcPps3dExtensionDepthLayerTransform* depth_layer_transforms;
+} BsHevcPps3dExtension;
+
+typedef struct BsHevcPps3dExtensionDepthLayerTransform {
+    uint8_t dlt_flag;
+    uint8_t dlt_pred_flag;
+    uint8_t dlt_val_flags_present_flag;
+    uint32_t dlt_value_flag_count;
+    uint8_t* dlt_value_flag;
+} BsHevcPps3dExtensionDepthLayerTransform;
+
+typedef struct BsHevcPpsColourMappingOctant {
+    uint8_t split_octant_flag;
+    uint32_t partition_coded_res_flags_count;
+    uint8_t* partition_coded_res_flags;
+} BsHevcPpsColourMappingOctant;
+
+typedef struct BsHevcPpsDeblockingFilter {
+    uint8_t deblocking_filter_control_present_flag;
+    uint8_t deblocking_filter_override_enabled_flag;
+    uint8_t pps_deblocking_filter_disabled_flag;
+    int32_t pps_beta_offset_div2;
+    int32_t pps_tc_offset_div2;
+} BsHevcPpsDeblockingFilter;
+
+typedef struct BsHevcPpsExtension {
+    uint8_t extension_present_flag;
+    uint8_t range_extension_flag;
+    uint8_t multilayer_extension_flag;
+    uint8_t extension_3d_flag;
+    uint8_t scc_extension_flag;
+    uint8_t reserved_extension_flags[4];
+    uint8_t extension_data_present;
+} BsHevcPpsExtension;
+
+typedef struct BsHevcPpsMultilayerExtension {
+    uint8_t poc_reset_info_present_flag;
+    uint8_t pps_infer_scaling_list_flag;
+    uint32_t pps_scaling_list_ref_layer_id;
+    uint32_t ref_location_offsets_count;
+    struct BsHevcPpsRefLocationOffset* ref_location_offsets;
+    uint8_t colour_mapping_enabled_flag;
+    uint32_t num_cm_ref_layers_minus1;
+    uint32_t cm_ref_layer_id_count;
+    uint32_t* cm_ref_layer_id;
+    uint32_t cm_octant_depth;
+    uint32_t cm_y_part_num_log2;
+    uint32_t luma_bit_depth_cm_input_minus8;
+    uint32_t chroma_bit_depth_cm_input_minus8;
+    uint32_t luma_bit_depth_cm_output_minus8;
+    uint32_t chroma_bit_depth_cm_output_minus8;
+    uint32_t cm_res_quant_bits;
+    uint32_t cm_delta_flc_bits_minus1;
+    int32_t cm_adapt_threshold_u_delta;
+    int32_t cm_adapt_threshold_v_delta;
+    uint32_t colour_mapping_octants_count;
+    struct BsHevcPpsColourMappingOctant* colour_mapping_octants;
+} BsHevcPpsMultilayerExtension;
 
 typedef struct BsHevcPpsRangeExtension {
     uint32_t log2_max_transform_skip_block_size_minus2;
@@ -583,99 +537,6 @@ typedef struct BsHevcPpsRangeExtension {
     uint32_t log2_sao_offset_scale_luma;
     uint32_t log2_sao_offset_scale_chroma;
 } BsHevcPpsRangeExtension;
-
-typedef struct BsHevcSubLayerOrderingInfo {
-    uint32_t max_dec_pic_buffering_minus1;
-    uint32_t max_num_reorder_pics;
-    uint32_t max_latency_increase_plus1;
-} BsHevcSubLayerOrderingInfo;
-
-typedef struct BsAvcPredWeightTable {
-    uint32_t luma_log2_weight_denom;
-    uint32_t chroma_log2_weight_denom;
-    uint8_t luma_weight_l0_flag[32];
-    int16_t luma_weight_l0[32];
-    int16_t luma_offset_l0[32];
-    uint8_t chroma_weight_l0_flag[32];
-    int16_t chroma_weight_l0[32][2];
-    int16_t chroma_offset_l0[32][2];
-    uint8_t luma_weight_l1_flag[32];
-    int16_t luma_weight_l1[32];
-    int16_t luma_offset_l1[32];
-    uint8_t chroma_weight_l1_flag[32];
-    int16_t chroma_weight_l1[32][2];
-    int16_t chroma_offset_l1[32][2];
-} BsAvcPredWeightTable;
-
-typedef struct BsAvcRefPicReorderingOp {
-    uint32_t reordering_of_pic_nums_idc;
-    uint32_t abs_diff_pic_num_minus1;
-    uint32_t long_term_pic_num;
-} BsAvcRefPicReorderingOp;
-
-typedef struct BsHevcWindow {
-    uint32_t left_offset;
-    uint32_t right_offset;
-    uint32_t top_offset;
-    uint32_t bottom_offset;
-} BsHevcWindow;
-
-typedef struct BsAvcRefPicListModification {
-    uint8_t modification_flag;
-    uint32_t ops_count;
-    struct BsAvcRefPicReorderingOp* ops;
-} BsAvcRefPicListModification;
-
-typedef struct BsAvcMmcoOperation {
-    uint32_t memory_management_control_operation;
-    uint32_t difference_of_pic_nums_minus1;
-    uint32_t long_term_pic_num;
-    uint32_t long_term_frame_idx;
-    uint32_t max_long_term_frame_idx_plus1;
-} BsAvcMmcoOperation;
-
-typedef struct BsHevcAspectRatio {
-    uint8_t present;
-    uint8_t aspect_ratio_idc;
-    uint16_t sar_width;
-    uint16_t sar_height;
-} BsHevcAspectRatio;
-
-typedef struct BsAvcParsedSei {
-    uint32_t rbsp_storage_count;
-    uint8_t* rbsp_storage;
-    uint32_t messages_count;
-    struct BsAvcSeiMessage* messages;
-} BsAvcParsedSei;
-
-typedef struct BsHevcPocConfiguration {
-    uint8_t log2_max_pic_order_cnt_lsb_minus4;
-} BsHevcPocConfiguration;
-
-typedef struct BsHevcPpsDeblockingFilter {
-    uint8_t deblocking_filter_control_present_flag;
-    uint8_t deblocking_filter_override_enabled_flag;
-    uint8_t pps_deblocking_filter_disabled_flag;
-    int32_t pps_beta_offset_div2;
-    int32_t pps_tc_offset_div2;
-} BsHevcPpsDeblockingFilter;
-
-typedef struct BsHevcCpbEntry {
-    uint32_t bit_rate_value_minus1;
-    uint32_t cpb_size_value_minus1;
-    uint32_t cpb_size_du_value_minus1;
-    uint32_t bit_rate_du_value_minus1;
-    uint8_t cbr_flag;
-} BsHevcCpbEntry;
-
-typedef struct BsHevcSpsPcmParameters {
-    uint8_t pcm_enabled_flag;
-    uint8_t pcm_sample_bit_depth_luma_minus1;
-    uint8_t pcm_sample_bit_depth_chroma_minus1;
-    uint32_t log2_min_pcm_luma_coding_block_size_minus3;
-    uint32_t log2_diff_max_min_pcm_luma_coding_block_size;
-    uint8_t pcm_loop_filter_disabled_flag;
-} BsHevcSpsPcmParameters;
 
 typedef struct BsHevcPpsRefLocationOffset {
     uint32_t ref_loc_offset_layer_id;
@@ -696,46 +557,41 @@ typedef struct BsHevcPpsRefLocationOffset {
     uint32_t phase_ver_chroma_plus8;
 } BsHevcPpsRefLocationOffset;
 
-typedef struct BsHevcSpsMultilayerExtension {
-    uint8_t inter_view_mv_vert_constraint_flag;
-} BsHevcSpsMultilayerExtension;
+typedef struct BsHevcPpsSccExtension {
+    uint8_t pps_curr_pic_ref_enabled_flag;
+    uint8_t residual_adaptive_colour_transform_enabled_flag;
+    uint8_t pps_slice_act_qp_offsets_present_flag;
+    int32_t pps_act_y_qp_offset_plus5;
+    int32_t pps_act_cb_qp_offset_plus5;
+    int32_t pps_act_cr_qp_offset_plus3;
+    uint8_t pps_palette_predictor_initializers_present_flag;
+    uint32_t pps_num_palette_predictor_initializers;
+    uint8_t monochrome_palette_flag;
+    uint32_t luma_bit_depth_entry_minus8;
+    uint32_t chroma_bit_depth_entry_minus8;
+    uint32_t pps_palette_predictor_initializer[3][kMaxPalettePredictorSize];
+} BsHevcPpsSccExtension;
 
-typedef struct BsHevcMasteringDisplayColourVolume {
-    struct BsHevcMasteringDisplayColourVolumeChromaticity display_primaries[3];
-    struct BsHevcMasteringDisplayColourVolumeChromaticity white_point;
-    uint32_t max_display_mastering_luminance;
-    uint32_t min_display_mastering_luminance;
-} BsHevcMasteringDisplayColourVolume;
+typedef struct BsHevcPpsTileConfiguration {
+    uint8_t tiles_enabled_flag;
+    uint32_t num_tile_columns_minus1;
+    uint32_t num_tile_rows_minus1;
+    uint8_t uniform_spacing_flag;
+    uint32_t column_width_minus1_count;
+    uint32_t* column_width_minus1;
+    uint32_t row_height_minus1_count;
+    uint32_t* row_height_minus1;
+    uint8_t loop_filter_across_tiles_enabled_flag;
+} BsHevcPpsTileConfiguration;
 
-typedef struct BsHevcRefPicListModificationData {
-    struct BsHevcRefPicListModification list0;
-    struct BsHevcRefPicListModification list1;
-} BsHevcRefPicListModificationData;
-
-typedef struct BsHevcScalingListData {
-    struct BsHevcScalingListMatrix matrices[kScalingListSizeIds][kScalingListMatrixIds];
-} BsHevcScalingListData;
-
-typedef struct BsHevcTemporalLayer {
-    uint8_t id;
-    uint8_t profile_present;
-    uint8_t level_present;
-} BsHevcTemporalLayer;
-
-typedef struct BsHevcSeiExtendedValue {
-    uint32_t value;
-    uint64_t bytes_consumed;
-    uint8_t complete;
-} BsHevcSeiExtendedValue;
-
-typedef struct BsHevcCodingBlockGeometry {
-    uint32_t min_cb_size;
-    uint32_t max_cb_size;
-    uint32_t min_tb_size;
-    uint32_t max_tb_size;
-    uint8_t max_transform_hierarchy_depth_inter;
-    uint8_t max_transform_hierarchy_depth_intra;
-} BsHevcCodingBlockGeometry;
+typedef struct BsHevcPredictionWeight {
+    uint8_t luma_weight_luma_flag;
+    int32_t delta_luma_weight;
+    int32_t luma_offset;
+    uint8_t chroma_weight_flag;
+    int32_t delta_chroma_weight[2];
+    int32_t delta_chroma_offset[2];
+} BsHevcPredictionWeight;
 
 typedef struct BsHevcPredictionWeightTable {
     uint32_t luma_log2_weight_denom;
@@ -746,10 +602,13 @@ typedef struct BsHevcPredictionWeightTable {
     struct BsHevcPredictionWeight* l1;
 } BsHevcPredictionWeightTable;
 
-typedef struct BsHevcDisplayDimensions {
-    uint32_t width;
-    uint32_t height;
-} BsHevcDisplayDimensions;
+typedef struct BsHevcProfileTierLevelId {
+    int profile_space;
+    int tier;
+    uint8_t profile_idc;
+    uint8_t compatibility_flags[32];
+    struct BsHevcLevel level;
+} BsHevcProfileTierLevelId;
 
 typedef struct BsHevcProfileTierLevelSubLayer {
     uint8_t profile_space;
@@ -764,182 +623,73 @@ typedef struct BsHevcProfileTierLevelSubLayer {
     uint8_t level_idc;
 } BsHevcProfileTierLevelSubLayer;
 
-typedef struct BsHevcPps3dExtension {
-    uint8_t dlts_present_flag;
-    uint32_t pps_depth_layers_minus1;
-    uint32_t pps_bit_depth_for_depth_layers_minus8;
-    uint32_t depth_layer_transforms_count;
-    struct BsHevcPps3dExtensionDepthLayerTransform* depth_layer_transforms;
-} BsHevcPps3dExtension;
+typedef struct BsHevcRecoveryPoint {
+    int32_t recovery_poc_cnt;
+    uint8_t exact_match_flag;
+    uint8_t broken_link_flag;
+    uint8_t changing_slice_group_idc;
+} BsHevcRecoveryPoint;
 
-typedef struct BsHevcSpsGeometry {
-    uint32_t coded_width;
-    uint32_t coded_height;
-    uint32_t display_width;
-    uint32_t display_height;
-    uint32_t min_cb_size;
-    uint32_t max_cb_size;
-    uint32_t min_tb_size;
-    uint32_t max_tb_size;
-} BsHevcSpsGeometry;
+typedef struct BsHevcRefPicListModification {
+    uint8_t modification_flag;
+    uint32_t list_entry_count;
+    uint32_t* list_entry;
+} BsHevcRefPicListModification;
 
-typedef struct BsHevcProfileTierLevel {
-    uint8_t max_sub_layers_minus1;
-    uint8_t general_profile_space;
-    uint8_t general_tier_flag;
-    uint8_t general_profile_idc;
-    uint8_t general_profile_compatibility_flag[32];
-    uint8_t general_progressive_source_flag;
-    uint8_t general_interlaced_source_flag;
-    uint8_t general_non_packed_constraint_flag;
-    uint8_t general_frame_only_constraint_flag;
-    uint64_t general_reserved_zero_44bits;
-    uint8_t general_level_idc;
-    uint8_t sub_layer_profile_present_flag[8];
-    uint8_t sub_layer_level_present_flag[8];
-    struct BsHevcProfileTierLevelSubLayer sub_layer[8];
-} BsHevcProfileTierLevel;
+typedef struct BsHevcRefPicListModificationData {
+    struct BsHevcRefPicListModification list0;
+    struct BsHevcRefPicListModification list1;
+} BsHevcRefPicListModificationData;
 
-typedef struct BsHevcPpsExtension {
-    uint8_t extension_present_flag;
-    uint8_t range_extension_flag;
-    uint8_t multilayer_extension_flag;
-    uint8_t extension_3d_flag;
-    uint8_t scc_extension_flag;
-    uint8_t reserved_extension_flags[4];
-    uint8_t extension_data_present;
-} BsHevcPpsExtension;
+typedef struct BsHevcReferencePictureSetInfo {
+    uint32_t num_negative_pics;
+    uint32_t num_positive_pics;
+    uint32_t num_delta_pocs;
+} BsHevcReferencePictureSetInfo;
 
-typedef struct BsHevcContentLightLevelInfo {
-    uint16_t max_content_light_level;
-    uint16_t max_pic_average_light_level;
-} BsHevcContentLightLevelInfo;
+typedef struct BsHevcSampleAspectRatio {
+    uint16_t width;
+    uint16_t height;
+} BsHevcSampleAspectRatio;
 
-typedef struct BsAvcSliceHeader {
-    uint32_t first_mb_in_slice;
-    int slice_type;
-    uint8_t pic_parameter_set_id;
-    uint32_t frame_num;
-    uint8_t field_pic_flag;
-    uint8_t bottom_field_flag;
-    uint32_t idr_pic_id;
-    uint32_t pic_order_cnt_lsb;
-    int32_t delta_pic_order_cnt_bottom;
-    int32_t delta_pic_order_cnt[2];
-    uint32_t redundant_pic_cnt;
-    uint8_t direct_spatial_mv_pred_flag;
-    uint8_t num_ref_idx_active_override_flag;
-    uint8_t num_ref_idx_l0_active_minus1;
-    uint8_t num_ref_idx_l1_active_minus1;
-    struct BsAvcRefPicListModification ref_pic_list_modification_l0;
-    struct BsAvcRefPicListModification ref_pic_list_modification_l1;
-    struct BsAvcPredWeightTable pred_weight_table;
-    uint8_t no_output_of_prior_pics_flag;
-    uint8_t long_term_reference_flag;
-    uint8_t adaptive_ref_pic_marking_mode_flag;
-    uint32_t mmco_operations_count;
-    struct BsAvcMmcoOperation* mmco_operations;
-    uint8_t cabac_init_idc;
-    int32_t slice_qp_delta;
-    uint8_t disable_deblocking_filter_idc;
-    int32_t slice_alpha_c0_offset_div2;
-    int32_t slice_beta_offset_div2;
-    uint32_t slice_group_change_cycle;
-    uint8_t sp_for_switch_flag;
-    int32_t slice_qs_delta;
-    int32_t derived_poc;
-} BsAvcSliceHeader;
+typedef struct BsHevcSampleAspectRatioTableEntry {
+    uint8_t idc;
+    uint16_t width;
+    uint16_t height;
+} BsHevcSampleAspectRatioTableEntry;
 
-typedef struct BsHevcAmbientViewingEnvironment {
-    uint32_t ambient_illuminance;
-    uint16_t ambient_light_x;
-    uint16_t ambient_light_y;
-} BsHevcAmbientViewingEnvironment;
+typedef struct BsHevcScalingListMatrix {
+    uint8_t pred_mode_flag;
+    uint32_t pred_matrix_id_delta;
+    int32_t dc_coef_minus8;
+    int32_t dc_coef;
+    uint8_t coefficient_count;
+    uint8_t coefficients[kScalingListMaxCoefficients];
+} BsHevcScalingListMatrix;
 
-typedef struct BsHevcHrdSubLayer {
-    uint8_t fixed_pic_rate_general_flag;
-    uint8_t fixed_pic_rate_within_cvs_flag;
-    uint32_t elemental_duration_in_tc_minus1;
-    uint8_t low_delay_hrd_flag;
-    uint8_t cpb_cnt_minus1;
-    struct BsHevcSubLayerHrdParameters nal;
-    struct BsHevcSubLayerHrdParameters vcl;
-} BsHevcHrdSubLayer;
+typedef struct BsHevcSeiExtendedValue {
+    uint32_t value;
+    uint64_t bytes_consumed;
+    uint8_t complete;
+} BsHevcSeiExtendedValue;
 
-typedef struct BsHevcProfileTierLevelId {
-    int profile_space;
-    int tier;
-    uint8_t profile_idc;
-    uint8_t compatibility_flags[32];
-    struct BsHevcLevel level;
-} BsHevcProfileTierLevelId;
+typedef struct BsHevcSeiMessageHeader {
+    uint32_t payload_type;
+    uint32_t payload_size;
+    uint64_t header_size;
+} BsHevcSeiMessageHeader;
 
-typedef struct BsHevcVideoSignalType {
-    uint8_t present;
-    uint8_t video_format;
-    uint8_t video_full_range_flag;
-    struct BsHevcColourDescription colour;
-} BsHevcVideoSignalType;
+typedef struct BsHevcShortTermNegativePicture {
+    uint32_t delta_poc_minus1;
+    uint8_t used_by_curr_pic;
+    int32_t delta_poc;
+} BsHevcShortTermNegativePicture;
 
-typedef struct BsHevcHrdCommonInfo {
-    uint8_t timing_info_present_flag;
-    struct BsHevcHrdTimingInfo timing;
-    uint8_t nal_hrd_parameters_present_flag;
-    uint8_t vcl_hrd_parameters_present_flag;
-    uint8_t sub_pic_hrd_params_present_flag;
-    uint8_t tick_divisor_minus2;
-    uint8_t du_cpb_removal_delay_increment_length_minus1;
-    uint8_t sub_pic_cpb_params_in_pic_timing_sei_flag;
-    uint8_t dpb_output_delay_du_length_minus1;
-    uint8_t bit_rate_scale;
-    uint8_t cpb_size_scale;
-    uint8_t cpb_size_du_scale;
-    uint8_t initial_cpb_removal_delay_length_minus1;
-    uint8_t au_cpb_removal_delay_length_minus1;
-    uint8_t dpb_output_delay_length_minus1;
-} BsHevcHrdCommonInfo;
-
-typedef struct BsAvcPictureParameterSet {
-    uint8_t pic_parameter_set_id;
-    uint8_t seq_parameter_set_id;
-    uint8_t entropy_coding_mode_flag;
-    uint8_t bottom_field_pic_order_in_frame_present_flag;
-    uint8_t num_slice_groups_minus1;
-    struct BsAvcSliceGroupMap slice_group_map;
-    uint8_t num_ref_idx_l0_default_active_minus1;
-    uint8_t num_ref_idx_l1_default_active_minus1;
-    uint8_t weighted_pred_flag;
-    uint8_t weighted_bipred_idc;
-    int32_t pic_init_qp_minus26;
-    int32_t pic_init_qs_minus26;
-    int32_t chroma_qp_index_offset;
-    uint8_t deblocking_filter_control_present_flag;
-    uint8_t constrained_intra_pred_flag;
-    uint8_t redundant_pic_cnt_present_flag;
-    uint8_t transform_8x8_mode_flag;
-    uint8_t pic_scaling_matrix_present_flag;
-    struct BsAvcScalingList pic_scaling_lists;
-    int32_t second_chroma_qp_index_offset;
-} BsAvcPictureParameterSet;
-
-typedef struct BsHevcVideoParameterSet {
-    uint8_t vps_video_parameter_set_id;
-    uint8_t vps_base_layer_internal_flag;
-    uint8_t vps_base_layer_available_flag;
-    uint8_t vps_max_layers_minus1;
-    uint8_t vps_max_sub_layers_minus1;
-    uint8_t vps_temporal_id_nesting_flag;
-    uint16_t vps_reserved_0xffff_16bits;
-    struct BsHevcProfileTierLevel profile_tier_level;
-    uint8_t vps_sub_layer_ordering_info_present_flag;
-    struct BsHevcSubLayerOrderingInfo sub_layer_ordering_info[8];
-    uint8_t vps_max_layer_id;
-    uint32_t vps_num_layer_sets_minus1;
-    uint32_t layer_sets_count;
-    struct BsHevcVpsLayerSet* layer_sets;
-    struct BsHevcVpsTimingInfo timing;
-    struct BsHevcVpsExtension extension;
-} BsHevcVideoParameterSet;
+typedef struct BsHevcShortTermPositivePicture {
+    uint32_t delta_poc_minus1;
+    uint8_t used_by_curr_pic;
+    int32_t delta_poc;
+} BsHevcShortTermPositivePicture;
 
 typedef struct BsHevcShortTermRefPicSet {
     uint32_t index;
@@ -954,59 +704,33 @@ typedef struct BsHevcShortTermRefPicSet {
     uint32_t num_delta_pocs;
 } BsHevcShortTermRefPicSet;
 
-typedef struct BsAvcSequenceParameterSet {
-    uint8_t profile_idc;
-    uint8_t constraint_set_flag[6];
-    uint8_t level_idc;
-    uint8_t seq_parameter_set_id;
-    uint8_t chroma_format_idc;
-    uint8_t separate_colour_plane_flag;
-    uint8_t bit_depth_luma_minus8;
-    uint8_t bit_depth_chroma_minus8;
-    uint8_t qpprime_y_zero_transform_bypass_flag;
-    struct BsAvcScalingList scaling_lists;
-    uint8_t log2_max_frame_num_minus4;
-    uint8_t pic_order_cnt_type;
-    uint8_t log2_max_pic_order_cnt_lsb_minus4;
-    uint8_t delta_pic_order_always_zero_flag;
-    int32_t offset_for_non_ref_pic;
-    int32_t offset_for_top_to_bottom_field;
-    uint8_t num_ref_frames_in_pic_order_cnt_cycle;
-    int32_t offset_for_ref_frame[255];
-    uint8_t max_num_ref_frames;
-    uint8_t gaps_in_frame_num_value_allowed_flag;
-    uint32_t pic_width_in_mbs_minus1;
-    uint32_t pic_height_in_map_units_minus1;
-    uint8_t frame_mbs_only_flag;
-    uint8_t mb_adaptive_frame_field_flag;
-    uint8_t direct_8x8_inference_flag;
-    uint8_t frame_cropping_flag;
-    uint32_t frame_crop_left_offset;
-    uint32_t frame_crop_right_offset;
-    uint32_t frame_crop_top_offset;
-    uint32_t frame_crop_bottom_offset;
-    uint8_t vui_parameters_present_flag;
-    struct BsAvcVuiParameters vui;
-} BsAvcSequenceParameterSet;
+typedef struct BsHevcSliceDeblockingFilter {
+    uint8_t override_flag;
+    uint8_t disabled_flag;
+    int32_t beta_offset_div2;
+    int32_t tc_offset_div2;
+} BsHevcSliceDeblockingFilter;
 
-typedef struct BsHevcPictureDimensions {
-    uint32_t width_luma_samples;
-    uint32_t height_luma_samples;
-    struct BsHevcWindow conformance_window;
-    uint8_t conformance_window_flag;
-} BsHevcPictureDimensions;
+typedef struct BsHevcSliceEntryPointOffsets {
+    uint32_t num_entry_point_offsets;
+    uint32_t offset_len_minus1;
+    uint32_t entry_point_offset_minus1_count;
+    uint32_t* entry_point_offset_minus1;
+} BsHevcSliceEntryPointOffsets;
 
-typedef struct BsHevcHrdParameters {
-    uint8_t common_info_present;
-    struct BsHevcHrdCommonInfo common;
-    struct BsHevcHrdSubLayer sub_layers[8];
-    uint8_t max_num_sub_layers_minus1;
-} BsHevcHrdParameters;
+typedef struct BsHevcSliceHeaderExtension {
+    uint32_t length;
+    uint32_t data_count;
+    uint8_t* data;
+} BsHevcSliceHeaderExtension;
 
-typedef struct BsHevcPpsScalingListConfiguration {
-    uint8_t scaling_list_data_present_flag;
-    struct BsHevcScalingListData scaling_list;
-} BsHevcPpsScalingListConfiguration;
+typedef struct BsHevcSliceLongTermReference {
+    uint32_t lt_idx_sps;
+    uint32_t poc_lsb_lt;
+    uint8_t used_by_curr_pic_lt_flag;
+    uint8_t delta_poc_msb_present_flag;
+    uint32_t delta_poc_msb_cycle_lt;
+} BsHevcSliceLongTermReference;
 
 typedef struct BsHevcSliceReferencePictureInfo {
     uint8_t num_ref_idx_active_override_flag;
@@ -1016,77 +740,10 @@ typedef struct BsHevcSliceReferencePictureInfo {
     uint32_t num_poc_total_curr;
 } BsHevcSliceReferencePictureInfo;
 
-typedef struct BsHevcPictureParameterSet {
-    uint32_t pps_pic_parameter_set_id;
-    uint32_t pps_seq_parameter_set_id;
-    uint8_t dependent_slice_segments_enabled_flag;
-    uint8_t output_flag_present_flag;
-    uint8_t num_extra_slice_header_bits;
-    uint8_t sign_data_hiding_enabled_flag;
-    uint8_t cabac_init_present_flag;
-    uint32_t num_ref_idx_l0_default_active_minus1;
-    uint32_t num_ref_idx_l1_default_active_minus1;
-    int32_t init_qp_minus26;
-    int32_t pps_cb_qp_offset;
-    int32_t pps_cr_qp_offset;
-    uint8_t constrained_intra_pred_flag;
-    uint8_t transform_skip_enabled_flag;
-    uint8_t cu_qp_delta_enabled_flag;
-    uint32_t diff_cu_qp_delta_depth;
-    uint8_t slice_chroma_qp_offsets_present_flag;
-    uint8_t weighted_pred_flag;
-    uint8_t weighted_bipred_flag;
-    uint8_t transquant_bypass_enabled_flag;
-    struct BsHevcPpsTileConfiguration tiles;
-    uint8_t entropy_coding_sync_enabled_flag;
-    uint8_t pps_loop_filter_across_slices_enabled_flag;
-    struct BsHevcPpsDeblockingFilter deblocking;
-    struct BsHevcPpsScalingListConfiguration scaling_list_configuration;
-    uint8_t lists_modification_present_flag;
-    uint32_t log2_parallel_merge_level_minus2;
-    uint8_t slice_segment_header_extension_present_flag;
-    struct BsHevcPpsExtension extension;
-    struct BsHevcPpsRangeExtension range_extension;
-    struct BsHevcPpsSccExtension scc_extension;
-    struct BsHevcPpsMultilayerExtension multilayer_extension;
-    struct BsHevcPps3dExtension three_d_extension;
-} BsHevcPictureParameterSet;
-
-typedef struct BsHevcVpsHrdParameter {
-    uint32_t layer_set_idx_for_ols_minus1;
-    uint8_t common_inf_present_flag;
-    struct BsHevcHrdParameters hrd;
-} BsHevcVpsHrdParameter;
-
-typedef struct BsHevcVuiParameters {
-    uint8_t progressive_source_flag;
-    uint8_t interlaced_source_flag;
-    uint8_t non_packed_constraint_flag;
-    uint8_t non_projected_constraint_flag;
-    uint8_t aspect_ratio_info_present_flag;
-    struct BsHevcAspectRatio aspect_ratio;
-    uint8_t overscan_info_present_flag;
-    uint8_t overscan_appropriate_flag;
-    struct BsHevcVideoSignalType video_signal;
-    struct BsHevcChromaLocationInfo chroma_location;
-    uint8_t neutral_chroma_indication_flag;
-    uint8_t field_seq_flag;
-    uint8_t frame_field_info_present_flag;
-    uint8_t default_display_window_flag;
-    struct BsHevcWindow default_display_window;
-    uint8_t vui_timing_info_present_flag;
-    struct BsHevcTimingInfo timing;
-    uint8_t hrd_parameters_present_flag;
-    struct BsHevcHrdParameters hrd;
-    uint8_t bitstream_restriction_flag;
-    uint8_t motion_vectors_over_pic_boundaries_flag;
-    uint8_t restricted_ref_pic_lists_flag;
-    uint32_t min_spatial_segmentation_idc;
-    uint32_t max_bytes_per_pic_denom;
-    uint32_t max_bits_per_min_cu_denom;
-    uint32_t log2_max_mv_length_horizontal;
-    uint32_t log2_max_mv_length_vertical;
-} BsHevcVuiParameters;
+typedef struct BsHevcSliceSegmentAddress {
+    uint32_t value;
+    uint32_t bit_width;
+} BsHevcSliceSegmentAddress;
 
 typedef struct BsHevcSliceSegmentHeader {
     uint8_t nal_unit_type;
@@ -1131,6 +788,501 @@ typedef struct BsHevcSliceSegmentHeader {
     uint32_t effective_num_ref_idx_l0;
     uint32_t effective_num_ref_idx_l1;
 } BsHevcSliceSegmentHeader;
+
+typedef struct BsHevcSps3dViewExtension {
+    uint8_t iv_di_mc_enabled_flag;
+    uint8_t iv_mv_scal_enabled_flag;
+    uint8_t iv_res_pred_enabled_flag;
+    uint8_t depth_ref_enabled_flag;
+    uint8_t vsp_mc_enabled_flag;
+    uint8_t dbbp_enabled_flag;
+    uint8_t tex_mc_enabled_flag;
+    uint8_t intra_contour_enabled_flag;
+    uint8_t intra_dc_only_wedge_enabled_flag;
+    uint8_t cqt_cu_part_pred_enabled_flag;
+    uint8_t inter_dc_only_enabled_flag;
+    uint8_t skip_intra_enabled_flag;
+    uint32_t log2_ivmc_sub_pb_size_minus3;
+} BsHevcSps3dViewExtension;
+
+typedef struct BsHevcSpsCodingBlockParameters {
+    uint32_t log2_min_luma_coding_block_size_minus3;
+    uint32_t log2_diff_max_min_luma_coding_block_size;
+    uint32_t log2_min_luma_transform_block_size_minus2;
+    uint32_t log2_diff_max_min_luma_transform_block_size;
+    uint32_t max_transform_hierarchy_depth_inter;
+    uint32_t max_transform_hierarchy_depth_intra;
+} BsHevcSpsCodingBlockParameters;
+
+typedef struct BsHevcSpsExtension {
+    uint8_t sps_extension_present_flag;
+    uint8_t range_extension_flag;
+    uint8_t multilayer_extension_flag;
+    uint8_t extension_3d_flag;
+    uint8_t scc_extension_flag;
+    uint8_t reserved_extension_flags[4];
+    uint8_t extension_data_present;
+} BsHevcSpsExtension;
+
+typedef struct BsHevcSpsGeometry {
+    uint32_t coded_width;
+    uint32_t coded_height;
+    uint32_t display_width;
+    uint32_t display_height;
+    uint32_t min_cb_size;
+    uint32_t max_cb_size;
+    uint32_t min_tb_size;
+    uint32_t max_tb_size;
+} BsHevcSpsGeometry;
+
+typedef struct BsHevcSpsLongTermReferencePictures {
+    uint8_t present;
+    uint32_t count;
+    uint32_t poc_lsb_count;
+    uint32_t* poc_lsb;
+    uint32_t used_by_curr_pic_count;
+    uint8_t* used_by_curr_pic;
+} BsHevcSpsLongTermReferencePictures;
+
+typedef struct BsHevcSpsMultilayerExtension {
+    uint8_t inter_view_mv_vert_constraint_flag;
+} BsHevcSpsMultilayerExtension;
+
+typedef struct BsHevcSpsPcmParameters {
+    uint8_t pcm_enabled_flag;
+    uint8_t pcm_sample_bit_depth_luma_minus1;
+    uint8_t pcm_sample_bit_depth_chroma_minus1;
+    uint32_t log2_min_pcm_luma_coding_block_size_minus3;
+    uint32_t log2_diff_max_min_pcm_luma_coding_block_size;
+    uint8_t pcm_loop_filter_disabled_flag;
+} BsHevcSpsPcmParameters;
+
+typedef struct BsHevcSpsRangeExtension {
+    uint8_t transform_skip_rotation_enabled_flag;
+    uint8_t transform_skip_context_enabled_flag;
+    uint8_t implicit_rdpcm_enabled_flag;
+    uint8_t explicit_rdpcm_enabled_flag;
+    uint8_t extended_precision_processing_flag;
+    uint8_t intra_smoothing_disabled_flag;
+    uint8_t high_precision_offsets_enabled_flag;
+    uint8_t persistent_rice_adaptation_enabled_flag;
+    uint8_t cabac_bypass_alignment_enabled_flag;
+} BsHevcSpsRangeExtension;
+
+typedef struct BsHevcSpsReferencePictureSetParameters {
+    uint32_t num_short_term_ref_pic_sets;
+    uint32_t short_term_ref_pic_sets_count;
+    struct BsHevcShortTermRefPicSet* short_term_ref_pic_sets;
+    uint8_t long_term_ref_pics_present_flag;
+    uint32_t num_long_term_ref_pics_sps;
+    uint32_t lt_ref_pic_poc_lsb_sps_count;
+    uint32_t* lt_ref_pic_poc_lsb_sps;
+    uint32_t used_by_curr_pic_lt_sps_flag_count;
+    uint8_t* used_by_curr_pic_lt_sps_flag;
+} BsHevcSpsReferencePictureSetParameters;
+
+typedef struct BsHevcSpsSccExtension {
+    uint8_t sps_curr_pic_ref_enabled_flag;
+    uint8_t palette_mode_enabled_flag;
+    uint32_t palette_max_size;
+    uint32_t delta_palette_max_predictor_size;
+    uint8_t sps_palette_predictor_initializers_present_flag;
+    uint32_t sps_num_palette_predictor_initializers_minus1;
+    uint32_t sps_palette_predictor_initializer[3][kMaxPalettePredictorSize];
+    uint32_t motion_vector_resolution_control_idc;
+    uint8_t intra_boundary_filtering_disabled_flag;
+} BsHevcSpsSccExtension;
+
+typedef struct BsHevcSubLayerHrdParameters {
+    uint32_t cpb_entries_count;
+    struct BsHevcCpbEntry* cpb_entries;
+} BsHevcSubLayerHrdParameters;
+
+typedef struct BsHevcSubLayerOrderingInfo {
+    uint32_t max_dec_pic_buffering_minus1;
+    uint32_t max_num_reorder_pics;
+    uint32_t max_latency_increase_plus1;
+} BsHevcSubLayerOrderingInfo;
+
+typedef struct BsHevcTemporalLayer {
+    uint8_t id;
+    uint8_t profile_present;
+    uint8_t level_present;
+} BsHevcTemporalLayer;
+
+typedef struct BsHevcTimingInfo {
+    uint32_t num_units_in_tick;
+    uint32_t time_scale;
+    uint8_t poc_proportional_to_timing_flag;
+    uint32_t num_ticks_poc_diff_one_minus1;
+} BsHevcTimingInfo;
+
+typedef struct BsHevcVideoSignalType {
+    uint8_t present;
+    uint8_t video_format;
+    uint8_t video_full_range_flag;
+    struct BsHevcColourDescription colour;
+} BsHevcVideoSignalType;
+
+typedef struct BsHevcVpsExtension {
+    uint8_t extension_flag;
+    uint8_t extension_data_flag;
+} BsHevcVpsExtension;
+
+typedef struct BsHevcVpsLayerSet {
+    uint32_t layer_id_included_flag_count;
+    uint8_t* layer_id_included_flag;
+    uint32_t layer_ids_count;
+    uint8_t* layer_ids;
+} BsHevcVpsLayerSet;
+
+typedef struct BsHevcVpsTimingInfo {
+    uint8_t timing_info_present_flag;
+    uint32_t num_units_in_tick;
+    uint32_t time_scale;
+    uint8_t poc_proportional_to_timing_flag;
+    uint32_t num_ticks_poc_diff_one_minus1;
+    uint32_t num_hrd_parameters;
+    uint32_t hrd_parameters_count;
+    struct BsHevcVpsHrdParameter* hrd_parameters;
+} BsHevcVpsTimingInfo;
+
+typedef struct BsHevcWindow {
+    uint32_t left_offset;
+    uint32_t right_offset;
+    uint32_t top_offset;
+    uint32_t bottom_offset;
+} BsHevcWindow;
+
+typedef struct BsVp8FrameHeader {
+    uint8_t key_frame;
+    uint8_t version;
+    uint8_t show_frame;
+    uint32_t first_part_size;
+    uint8_t start_code_ok;
+    uint16_t width;
+    uint16_t height;
+    int32_t presentation_order;
+} BsVp8FrameHeader;
+
+typedef struct BsVp9FrameHeader {
+    uint8_t frame_marker;
+    uint8_t profile;
+    uint8_t show_existing_frame;
+    uint8_t frame_to_show_map_idx;
+    uint8_t show_frame;
+    uint8_t error_resilient_mode;
+    int frame_type;
+    uint8_t intra_only;
+    uint32_t width;
+    uint32_t height;
+    uint8_t frame_size_present;
+    uint8_t frame_size_from_refs;
+    int32_t presentation_order;
+} BsVp9FrameHeader;
+
+typedef struct BsVvcDci {
+    uint32_t num_ptls_minus1;
+    uint8_t extension_present;
+} BsVvcDci;
+
+typedef struct BsVvcOpi {
+    uint8_t ols_info_present;
+    uint8_t htid_info_present;
+    uint32_t ols_idx;
+    uint8_t htid_plus1;
+    uint8_t extension_present;
+} BsVvcOpi;
+
+typedef struct BsVvcPictureHeader {
+    uint8_t pps_id;
+    uint8_t gdr_or_irap_pic_flag;
+    uint8_t non_ref_pic_flag;
+    uint8_t gdr_pic_flag;
+    uint8_t inter_slice_allowed_flag;
+    uint8_t intra_slice_allowed_flag;
+    uint32_t poc_lsb;
+    uint32_t poc_lsb_bits;
+    uint32_t recovery_poc_cnt;
+    uint8_t poc_msb_cycle_present_flag;
+    uint32_t poc_msb_cycle_val;
+    int32_t derived_poc;
+} BsVvcPictureHeader;
+
+typedef struct BsVvcPictureParameterSet {
+    uint8_t pps_id;
+    uint8_t sps_id;
+    uint8_t mixed_nalu_types_in_pic;
+    uint32_t pic_width_in_luma_samples;
+    uint32_t pic_height_in_luma_samples;
+} BsVvcPictureParameterSet;
+
+typedef struct BsVvcSequenceParameterSet {
+    uint8_t sps_id;
+    uint8_t vps_id;
+    uint8_t max_sublayers_minus1;
+    uint8_t chroma_format_idc;
+    uint8_t log2_ctu_size_minus5;
+    uint8_t ptl_dpb_hrd_params_present;
+    uint8_t gdr_enabled_flag;
+    uint8_t ref_pic_resampling_enabled_flag;
+    uint8_t subpic_info_present_flag;
+    uint8_t subpic_id_len_minus1;
+    uint8_t num_extra_sh_bits;
+    uint8_t log2_max_pic_order_cnt_lsb_minus4;
+    uint8_t poc_msb_cycle_flag;
+    uint8_t poc_msb_cycle_len_minus1;
+    uint8_t num_extra_ph_bits;
+} BsVvcSequenceParameterSet;
+
+typedef struct BsVvcSliceHeader {
+    uint8_t pps_id;
+    uint8_t first_slice_segment_in_pic;
+    uint8_t independent_slice_segment;
+    uint32_t slice_segment_address;
+    int slice_type;
+    uint8_t picture_header_in_slice_header_flag;
+    struct BsVvcPictureHeader ph;
+    int32_t derived_poc;
+} BsVvcSliceHeader;
+
+typedef struct BsVvcVideoParameterSet {
+    uint8_t vps_id;
+    uint8_t max_layers_minus1;
+    uint8_t max_sublayers_minus1;
+    uint8_t default_ptl_dpb_hrd_max_tid_flag;
+    uint8_t all_independent_layers;
+    uint32_t layer_ids_count;
+    uint8_t* layer_ids;
+} BsVvcVideoParameterSet;
+
+typedef struct BsAvcPictureParameterSet {
+    uint8_t pic_parameter_set_id;
+    uint8_t seq_parameter_set_id;
+    uint8_t entropy_coding_mode_flag;
+    uint8_t bottom_field_pic_order_in_frame_present_flag;
+    uint8_t num_slice_groups_minus1;
+    struct BsAvcSliceGroupMap slice_group_map;
+    uint8_t num_ref_idx_l0_default_active_minus1;
+    uint8_t num_ref_idx_l1_default_active_minus1;
+    uint8_t weighted_pred_flag;
+    uint8_t weighted_bipred_idc;
+    int32_t pic_init_qp_minus26;
+    int32_t pic_init_qs_minus26;
+    int32_t chroma_qp_index_offset;
+    uint8_t deblocking_filter_control_present_flag;
+    uint8_t constrained_intra_pred_flag;
+    uint8_t redundant_pic_cnt_present_flag;
+    uint8_t transform_8x8_mode_flag;
+    uint8_t pic_scaling_matrix_present_flag;
+    struct BsAvcScalingList pic_scaling_lists;
+    int32_t second_chroma_qp_index_offset;
+} BsAvcPictureParameterSet;
+
+typedef struct BsAvcSequenceParameterSet {
+    uint8_t profile_idc;
+    uint8_t constraint_set_flag[6];
+    uint8_t level_idc;
+    uint8_t seq_parameter_set_id;
+    uint8_t chroma_format_idc;
+    uint8_t separate_colour_plane_flag;
+    uint8_t bit_depth_luma_minus8;
+    uint8_t bit_depth_chroma_minus8;
+    uint8_t qpprime_y_zero_transform_bypass_flag;
+    struct BsAvcScalingList scaling_lists;
+    uint8_t log2_max_frame_num_minus4;
+    uint8_t pic_order_cnt_type;
+    uint8_t log2_max_pic_order_cnt_lsb_minus4;
+    uint8_t delta_pic_order_always_zero_flag;
+    int32_t offset_for_non_ref_pic;
+    int32_t offset_for_top_to_bottom_field;
+    uint8_t num_ref_frames_in_pic_order_cnt_cycle;
+    int32_t offset_for_ref_frame[255];
+    uint8_t max_num_ref_frames;
+    uint8_t gaps_in_frame_num_value_allowed_flag;
+    uint32_t pic_width_in_mbs_minus1;
+    uint32_t pic_height_in_map_units_minus1;
+    uint8_t frame_mbs_only_flag;
+    uint8_t mb_adaptive_frame_field_flag;
+    uint8_t direct_8x8_inference_flag;
+    uint8_t frame_cropping_flag;
+    uint32_t frame_crop_left_offset;
+    uint32_t frame_crop_right_offset;
+    uint32_t frame_crop_top_offset;
+    uint32_t frame_crop_bottom_offset;
+    uint8_t vui_parameters_present_flag;
+    struct BsAvcVuiParameters vui;
+} BsAvcSequenceParameterSet;
+
+typedef struct BsHevcHrdCommonInfo {
+    uint8_t timing_info_present_flag;
+    struct BsHevcHrdTimingInfo timing;
+    uint8_t nal_hrd_parameters_present_flag;
+    uint8_t vcl_hrd_parameters_present_flag;
+    uint8_t sub_pic_hrd_params_present_flag;
+    uint8_t tick_divisor_minus2;
+    uint8_t du_cpb_removal_delay_increment_length_minus1;
+    uint8_t sub_pic_cpb_params_in_pic_timing_sei_flag;
+    uint8_t dpb_output_delay_du_length_minus1;
+    uint8_t bit_rate_scale;
+    uint8_t cpb_size_scale;
+    uint8_t cpb_size_du_scale;
+    uint8_t initial_cpb_removal_delay_length_minus1;
+    uint8_t au_cpb_removal_delay_length_minus1;
+    uint8_t dpb_output_delay_length_minus1;
+} BsHevcHrdCommonInfo;
+
+typedef struct BsHevcHrdSubLayer {
+    uint8_t fixed_pic_rate_general_flag;
+    uint8_t fixed_pic_rate_within_cvs_flag;
+    uint32_t elemental_duration_in_tc_minus1;
+    uint8_t low_delay_hrd_flag;
+    uint8_t cpb_cnt_minus1;
+    struct BsHevcSubLayerHrdParameters nal;
+    struct BsHevcSubLayerHrdParameters vcl;
+} BsHevcHrdSubLayer;
+
+typedef struct BsHevcMasteringDisplayColourVolume {
+    struct BsHevcMasteringDisplayColourVolumeChromaticity display_primaries[3];
+    struct BsHevcMasteringDisplayColourVolumeChromaticity white_point;
+    uint32_t max_display_mastering_luminance;
+    uint32_t min_display_mastering_luminance;
+} BsHevcMasteringDisplayColourVolume;
+
+typedef struct BsHevcPictureDimensions {
+    uint32_t width_luma_samples;
+    uint32_t height_luma_samples;
+    struct BsHevcWindow conformance_window;
+    uint8_t conformance_window_flag;
+} BsHevcPictureDimensions;
+
+typedef struct BsHevcProfileTierLevel {
+    uint8_t max_sub_layers_minus1;
+    uint8_t general_profile_space;
+    uint8_t general_tier_flag;
+    uint8_t general_profile_idc;
+    uint8_t general_profile_compatibility_flag[32];
+    uint8_t general_progressive_source_flag;
+    uint8_t general_interlaced_source_flag;
+    uint8_t general_non_packed_constraint_flag;
+    uint8_t general_frame_only_constraint_flag;
+    uint64_t general_reserved_zero_44bits;
+    uint8_t general_level_idc;
+    uint8_t sub_layer_profile_present_flag[8];
+    uint8_t sub_layer_level_present_flag[8];
+    struct BsHevcProfileTierLevelSubLayer sub_layer[8];
+} BsHevcProfileTierLevel;
+
+typedef struct BsHevcScalingListData {
+    struct BsHevcScalingListMatrix matrices[kScalingListSizeIds][kScalingListMatrixIds];
+} BsHevcScalingListData;
+
+typedef struct BsHevcSps3dExtension {
+    struct BsHevcSps3dViewExtension views[2];
+} BsHevcSps3dExtension;
+
+typedef struct BsHevcVideoParameterSet {
+    uint8_t vps_video_parameter_set_id;
+    uint8_t vps_base_layer_internal_flag;
+    uint8_t vps_base_layer_available_flag;
+    uint8_t vps_max_layers_minus1;
+    uint8_t vps_max_sub_layers_minus1;
+    uint8_t vps_temporal_id_nesting_flag;
+    uint16_t vps_reserved_0xffff_16bits;
+    struct BsHevcProfileTierLevel profile_tier_level;
+    uint8_t vps_sub_layer_ordering_info_present_flag;
+    struct BsHevcSubLayerOrderingInfo sub_layer_ordering_info[8];
+    uint8_t vps_max_layer_id;
+    uint32_t vps_num_layer_sets_minus1;
+    uint32_t layer_sets_count;
+    struct BsHevcVpsLayerSet* layer_sets;
+    struct BsHevcVpsTimingInfo timing;
+    struct BsHevcVpsExtension extension;
+} BsHevcVideoParameterSet;
+
+typedef struct BsHevcHrdParameters {
+    uint8_t common_info_present;
+    struct BsHevcHrdCommonInfo common;
+    struct BsHevcHrdSubLayer sub_layers[8];
+    uint8_t max_num_sub_layers_minus1;
+} BsHevcHrdParameters;
+
+typedef struct BsHevcPpsScalingListConfiguration {
+    uint8_t scaling_list_data_present_flag;
+    struct BsHevcScalingListData scaling_list;
+} BsHevcPpsScalingListConfiguration;
+
+typedef struct BsHevcVpsHrdParameter {
+    uint32_t layer_set_idx_for_ols_minus1;
+    uint8_t common_inf_present_flag;
+    struct BsHevcHrdParameters hrd;
+} BsHevcVpsHrdParameter;
+
+typedef struct BsHevcVuiParameters {
+    uint8_t progressive_source_flag;
+    uint8_t interlaced_source_flag;
+    uint8_t non_packed_constraint_flag;
+    uint8_t non_projected_constraint_flag;
+    uint8_t aspect_ratio_info_present_flag;
+    struct BsHevcAspectRatio aspect_ratio;
+    uint8_t overscan_info_present_flag;
+    uint8_t overscan_appropriate_flag;
+    struct BsHevcVideoSignalType video_signal;
+    struct BsHevcChromaLocationInfo chroma_location;
+    uint8_t neutral_chroma_indication_flag;
+    uint8_t field_seq_flag;
+    uint8_t frame_field_info_present_flag;
+    uint8_t default_display_window_flag;
+    struct BsHevcWindow default_display_window;
+    uint8_t vui_timing_info_present_flag;
+    struct BsHevcTimingInfo timing;
+    uint8_t hrd_parameters_present_flag;
+    struct BsHevcHrdParameters hrd;
+    uint8_t bitstream_restriction_flag;
+    uint8_t motion_vectors_over_pic_boundaries_flag;
+    uint8_t restricted_ref_pic_lists_flag;
+    uint32_t min_spatial_segmentation_idc;
+    uint32_t max_bytes_per_pic_denom;
+    uint32_t max_bits_per_min_cu_denom;
+    uint32_t log2_max_mv_length_horizontal;
+    uint32_t log2_max_mv_length_vertical;
+} BsHevcVuiParameters;
+
+typedef struct BsHevcPictureParameterSet {
+    uint32_t pps_pic_parameter_set_id;
+    uint32_t pps_seq_parameter_set_id;
+    uint8_t dependent_slice_segments_enabled_flag;
+    uint8_t output_flag_present_flag;
+    uint8_t num_extra_slice_header_bits;
+    uint8_t sign_data_hiding_enabled_flag;
+    uint8_t cabac_init_present_flag;
+    uint32_t num_ref_idx_l0_default_active_minus1;
+    uint32_t num_ref_idx_l1_default_active_minus1;
+    int32_t init_qp_minus26;
+    int32_t pps_cb_qp_offset;
+    int32_t pps_cr_qp_offset;
+    uint8_t constrained_intra_pred_flag;
+    uint8_t transform_skip_enabled_flag;
+    uint8_t cu_qp_delta_enabled_flag;
+    uint32_t diff_cu_qp_delta_depth;
+    uint8_t slice_chroma_qp_offsets_present_flag;
+    uint8_t weighted_pred_flag;
+    uint8_t weighted_bipred_flag;
+    uint8_t transquant_bypass_enabled_flag;
+    struct BsHevcPpsTileConfiguration tiles;
+    uint8_t entropy_coding_sync_enabled_flag;
+    uint8_t pps_loop_filter_across_slices_enabled_flag;
+    struct BsHevcPpsDeblockingFilter deblocking;
+    struct BsHevcPpsScalingListConfiguration scaling_list_configuration;
+    uint8_t lists_modification_present_flag;
+    uint32_t log2_parallel_merge_level_minus2;
+    uint8_t slice_segment_header_extension_present_flag;
+    struct BsHevcPpsExtension extension;
+    struct BsHevcPpsRangeExtension range_extension;
+    struct BsHevcPpsSccExtension scc_extension;
+    struct BsHevcPpsMultilayerExtension multilayer_extension;
+    struct BsHevcPps3dExtension three_d_extension;
+} BsHevcPictureParameterSet;
 
 typedef struct BsHevcSequenceParameterSet {
     uint8_t sps_video_parameter_set_id;

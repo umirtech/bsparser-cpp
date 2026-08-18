@@ -4,7 +4,8 @@ Generate C struct mirrors of the C++ parsed syntax structs.
 
 Reads every struct definition from syntax/*.hpp and emits:
 
-  * capi/bs_structs.h        -- plain C mirror structs (BsHevc*/BsAvc*)
+  * capi/bs_structs.h        -- plain C mirror structs (BsHevc*/BsAvc*/
+                               BsVvc*/BsAv1*/BsVp9*/BsVp8*)
   * capi/bs_structs_conv.hpp -- C++ conversion functions bs_conv(src, dst)
 
 Full field-by-field mirror.  Mapping:
@@ -43,7 +44,7 @@ PRIMITIVE = {
     "std::string": "const char*",
 }
 
-EXCLUDE = re.compile(r"(NalUnit|NalPayloadView|NalUnitHeader|RbspView|View)$")
+EXCLUDE = re.compile(r"(NalUnit|NalPayloadView|NalUnitHeader|RbspView|View|Obu)$")
 
 
 def wanted(name):
@@ -367,7 +368,13 @@ def main():
     structs = {}
     for path in files:
         base = os.path.basename(path)
-        codec = "Hevc" if base.startswith("hevc") else "Avc"
+        codec = next(
+            (name for prefix, name in (
+                ("hevc", "Hevc"), ("avc", "Avc"), ("vvc", "Vvc"),
+                ("av1", "Av1"), ("vp9", "Vp9"), ("vp8", "Vp8"),
+            ) if base.startswith(prefix)),
+            "Avc",
+        )
         with open(path, "r", encoding="utf-8") as f:
             text = strip_comments(f.read())
         for pth, ns_list, body in find_structs(text):
@@ -421,14 +428,14 @@ def main():
     remaining = set(structs.keys())
     while remaining:
         progressed = False
-        for name in list(remaining):
+        for name in sorted(remaining):
             if deps(name) <= emitted:
                 order.append(name)
                 emitted.add(name)
                 remaining.discard(name)
                 progressed = True
         if not progressed:
-            for name in list(remaining):
+            for name in sorted(remaining):
                 order.append(name)
                 emitted.add(name)
                 remaining.discard(name)
@@ -442,11 +449,11 @@ def main():
 def cdecl(m):
     """Return the C declaration for a member (no trailing semicolon)."""
     cb = m["cbase"]
-    is_struct = bool(re.match(r"Bs(Hevc|Avc)(\w+)$", cb))
+    is_struct = bool(re.match(r"Bs(Hevc|Avc|Vvc|Av1|Vp9|Vp8)(\w+)$", cb))
     base = ("struct " + cb) if is_struct else cb
     dimstr = "".join("[%s]" % d for d in m["dims"])
     if m["kind"] == "vector":
-        return "uint32_t %s_count; %s* %s" % (m["name"], base, m["name"])
+        return "uint32_t %s_count;\n    %s* %s" % (m["name"], base, m["name"])
     if m["kind"] == "span":
         if m.get("no_size"):
             return "const uint8_t* %s" % m["name"]
@@ -505,7 +512,7 @@ def emit_c_header(structs, order, constants):
 
 
 def is_struct_cbase(cb):
-    return bool(re.match(r"Bs(Hevc|Avc)(\w+)$", cb.strip().rstrip("*").strip()))
+    return bool(re.match(r"Bs(Hevc|Avc|Vvc|Av1|Vp9|Vp8)(\w+)$", cb.strip().rstrip("*").strip()))
 
 
 def cpp_scalar(src_expr, cbase, orig):
@@ -644,7 +651,8 @@ def emit_c_free(structs, order):
     for name in order:
         codec, pth, qname, members = structs[name]
         L.append("inline void bs_free_%s(%s* s) {" % (name, name))
-        L.append("    if (!s) return;")
+        L.append("    if (!s)")
+        L.append("        return;")
         for m in members:
             if m["kind"] == "vector":
                 L.append("    delete[] s->%s;" % m["name"])

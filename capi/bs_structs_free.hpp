@@ -8,77 +8,12 @@
 namespace bs {
 namespace capi {
 
-inline void bs_free_BsHevcTimingInfo(BsHevcTimingInfo* s) {
+inline void bs_free_BsAv1FrameHeader(BsAv1FrameHeader* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsHevcPpsColourMappingOctant(BsHevcPpsColourMappingOctant* s) {
-    if (!s)
-        return;
-    delete[] s->partition_coded_res_flags;
-}
-
-inline void bs_free_BsHevcSpsExtension(BsHevcSpsExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcScalingList(BsAvcScalingList* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcRecoveryPoint(BsHevcRecoveryPoint* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcShortTermPositivePicture(BsHevcShortTermPositivePicture* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcVpsLayerSet(BsHevcVpsLayerSet* s) {
-    if (!s)
-        return;
-    delete[] s->layer_id_included_flag;
-    delete[] s->layer_ids;
-}
-
-inline void bs_free_BsHevcSliceHeaderExtension(BsHevcSliceHeaderExtension* s) {
-    if (!s)
-        return;
-    delete[] s->data;
-}
-
-inline void bs_free_BsHevcPictureStructure(BsHevcPictureStructure* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSampleAspectRatio(BsHevcSampleAspectRatio* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcDerivedShortTermRefPicSet(BsHevcDerivedShortTermRefPicSet* s) {
-    if (!s)
-        return;
-    delete[] s->references;
-}
-
-inline void bs_free_BsHevcSliceLongTermReference(BsHevcSliceLongTermReference* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSliceDeblockingFilter(BsHevcSliceDeblockingFilter* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSps3dViewExtension(BsHevcSps3dViewExtension* s) {
+inline void bs_free_BsAv1SequenceHeader(BsAv1SequenceHeader* s) {
     if (!s)
         return;
 }
@@ -88,56 +23,40 @@ inline void bs_free_BsAvcHrdParameters(BsAvcHrdParameters* s) {
         return;
 }
 
-inline void bs_free_BsHevcFramePackingArrangement(BsHevcFramePackingArrangement* s) {
+inline void bs_free_BsAvcMmcoOperation(BsAvcMmcoOperation* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(
-    BsHevcPps3dExtensionDepthLayerTransform* s
-) {
+inline void bs_free_BsAvcParsedSei(BsAvcParsedSei* s) {
     if (!s)
         return;
-    delete[] s->dlt_value_flag;
+    delete[] s->rbsp_storage;
+    delete[] s->messages;
 }
 
-inline void bs_free_BsHevcRefPicListModification(BsHevcRefPicListModification* s) {
-    if (!s)
-        return;
-    delete[] s->list_entry;
-}
-
-inline void bs_free_BsHevcPredictionWeight(BsHevcPredictionWeight* s) {
+inline void bs_free_BsAvcPredWeightTable(BsAvcPredWeightTable* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsHevcReferencePictureSetInfo(BsHevcReferencePictureSetInfo* s) {
+inline void bs_free_BsAvcRefPicListModification(BsAvcRefPicListModification* s) {
+    if (!s)
+        return;
+    delete[] s->ops;
+}
+
+inline void bs_free_BsAvcRefPicReorderingOp(BsAvcRefPicReorderingOp* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsHevcLevel(BsHevcLevel* s) {
+inline void bs_free_BsAvcScalingList(BsAvcScalingList* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsHevcScalingListMatrix(BsHevcScalingListMatrix* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSeiMessageHeader(BsHevcSeiMessageHeader* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSampleAspectRatioTableEntry(BsHevcSampleAspectRatioTableEntry* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcColourDescription(BsHevcColourDescription* s) {
+inline void bs_free_BsAvcSeiMessage(BsAvcSeiMessage* s) {
     if (!s)
         return;
 }
@@ -148,12 +67,149 @@ inline void bs_free_BsAvcSliceGroupMap(BsAvcSliceGroupMap* s) {
     delete[] s->slice_group_id;
 }
 
+inline void bs_free_BsAvcSliceHeader(BsAvcSliceHeader* s) {
+    if (!s)
+        return;
+    delete[] s->mmco_operations;
+}
+
+inline void bs_free_BsAvcVuiParameters(BsAvcVuiParameters* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcAlternativeTransferCharacteristics(
+    BsHevcAlternativeTransferCharacteristics* s
+) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcAmbientViewingEnvironment(BsHevcAmbientViewingEnvironment* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcAspectRatio(BsHevcAspectRatio* s) {
+    if (!s)
+        return;
+}
+
 inline void bs_free_BsHevcBitDepth(BsHevcBitDepth* s) {
     if (!s)
         return;
 }
 
+inline void bs_free_BsHevcChromaLocationInfo(BsHevcChromaLocationInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcCodingBlockGeometry(BsHevcCodingBlockGeometry* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcColourDescription(BsHevcColourDescription* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcContentLightLevelInfo(BsHevcContentLightLevelInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcCpbEntry(BsHevcCpbEntry* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcDerivedShortTermRefPicSet(BsHevcDerivedShortTermRefPicSet* s) {
+    if (!s)
+        return;
+    delete[] s->references;
+}
+
+inline void bs_free_BsHevcDerivedShortTermReference(BsHevcDerivedShortTermReference* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcDisplayDimensions(BsHevcDisplayDimensions* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcFramePackingArrangement(BsHevcFramePackingArrangement* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcHrdTimingInfo(BsHevcHrdTimingInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcInterRpsPrediction(BsHevcInterRpsPrediction* s) {
+    if (!s)
+        return;
+    delete[] s->entries;
+}
+
 inline void bs_free_BsHevcInterRpsPredictionEntry(BsHevcInterRpsPredictionEntry* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcLevel(BsHevcLevel* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(
+    BsHevcMasteringDisplayColourVolumeChromaticity* s
+) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPictureStructure(BsHevcPictureStructure* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPocConfiguration(BsHevcPocConfiguration* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPps3dExtension(BsHevcPps3dExtension* s) {
+    if (!s)
+        return;
+    delete[] s->depth_layer_transforms;
+}
+
+inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(
+    BsHevcPps3dExtensionDepthLayerTransform* s
+) {
+    if (!s)
+        return;
+    delete[] s->dlt_value_flag;
+}
+
+inline void bs_free_BsHevcPpsColourMappingOctant(BsHevcPpsColourMappingOctant* s) {
+    if (!s)
+        return;
+    delete[] s->partition_coded_res_flags;
+}
+
+inline void bs_free_BsHevcPpsDeblockingFilter(BsHevcPpsDeblockingFilter* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPpsExtension(BsHevcPpsExtension* s) {
     if (!s)
         return;
 }
@@ -166,7 +222,14 @@ inline void bs_free_BsHevcPpsMultilayerExtension(BsHevcPpsMultilayerExtension* s
     delete[] s->colour_mapping_octants;
 }
 
-inline void bs_free_BsHevcSpsCodingBlockParameters(BsHevcSpsCodingBlockParameters* s) {
+inline void bs_free_BsHevcPpsRangeExtension(BsHevcPpsRangeExtension* s) {
+    if (!s)
+        return;
+    delete[] s->cb_qp_offset_list;
+    delete[] s->cr_qp_offset_list;
+}
+
+inline void bs_free_BsHevcPpsRefLocationOffset(BsHevcPpsRefLocationOffset* s) {
     if (!s)
         return;
 }
@@ -176,7 +239,153 @@ inline void bs_free_BsHevcPpsSccExtension(BsHevcPpsSccExtension* s) {
         return;
 }
 
-inline void bs_free_BsHevcSpsRangeExtension(BsHevcSpsRangeExtension* s) {
+inline void bs_free_BsHevcPpsTileConfiguration(BsHevcPpsTileConfiguration* s) {
+    if (!s)
+        return;
+    delete[] s->column_width_minus1;
+    delete[] s->row_height_minus1;
+}
+
+inline void bs_free_BsHevcPredictionWeight(BsHevcPredictionWeight* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPredictionWeightTable(BsHevcPredictionWeightTable* s) {
+    if (!s)
+        return;
+    delete[] s->l0;
+    delete[] s->l1;
+}
+
+inline void bs_free_BsHevcProfileTierLevelId(BsHevcProfileTierLevelId* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcProfileTierLevelSubLayer(BsHevcProfileTierLevelSubLayer* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcRecoveryPoint(BsHevcRecoveryPoint* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcRefPicListModification(BsHevcRefPicListModification* s) {
+    if (!s)
+        return;
+    delete[] s->list_entry;
+}
+
+inline void bs_free_BsHevcRefPicListModificationData(BsHevcRefPicListModificationData* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcReferencePictureSetInfo(BsHevcReferencePictureSetInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSampleAspectRatio(BsHevcSampleAspectRatio* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSampleAspectRatioTableEntry(BsHevcSampleAspectRatioTableEntry* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcScalingListMatrix(BsHevcScalingListMatrix* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSeiExtendedValue(BsHevcSeiExtendedValue* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSeiMessageHeader(BsHevcSeiMessageHeader* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcShortTermNegativePicture(BsHevcShortTermNegativePicture* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcShortTermPositivePicture(BsHevcShortTermPositivePicture* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcShortTermRefPicSet(BsHevcShortTermRefPicSet* s) {
+    if (!s)
+        return;
+    delete[] s->negative_pics;
+    delete[] s->positive_pics;
+}
+
+inline void bs_free_BsHevcSliceDeblockingFilter(BsHevcSliceDeblockingFilter* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSliceEntryPointOffsets(BsHevcSliceEntryPointOffsets* s) {
+    if (!s)
+        return;
+    delete[] s->entry_point_offset_minus1;
+}
+
+inline void bs_free_BsHevcSliceHeaderExtension(BsHevcSliceHeaderExtension* s) {
+    if (!s)
+        return;
+    delete[] s->data;
+}
+
+inline void bs_free_BsHevcSliceLongTermReference(BsHevcSliceLongTermReference* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSliceReferencePictureInfo(BsHevcSliceReferencePictureInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSliceSegmentAddress(BsHevcSliceSegmentAddress* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSliceSegmentHeader(BsHevcSliceSegmentHeader* s) {
+    if (!s)
+        return;
+    delete[] s->slice_reserved_flag;
+    delete[] s->long_term_references;
+}
+
+inline void bs_free_BsHevcSps3dViewExtension(BsHevcSps3dViewExtension* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSpsCodingBlockParameters(BsHevcSpsCodingBlockParameters* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSpsExtension(BsHevcSpsExtension* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSpsGeometry(BsHevcSpsGeometry* s) {
     if (!s)
         return;
 }
@@ -188,10 +397,19 @@ inline void bs_free_BsHevcSpsLongTermReferencePictures(BsHevcSpsLongTermReferenc
     delete[] s->used_by_curr_pic;
 }
 
-inline void bs_free_BsHevcVpsTimingInfo(BsHevcVpsTimingInfo* s) {
+inline void bs_free_BsHevcSpsMultilayerExtension(BsHevcSpsMultilayerExtension* s) {
     if (!s)
         return;
-    delete[] s->hrd_parameters;
+}
+
+inline void bs_free_BsHevcSpsPcmParameters(BsHevcSpsPcmParameters* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSpsRangeExtension(BsHevcSpsRangeExtension* s) {
+    if (!s)
+        return;
 }
 
 inline void bs_free_BsHevcSpsReferencePictureSetParameters(
@@ -204,33 +422,9 @@ inline void bs_free_BsHevcSpsReferencePictureSetParameters(
     delete[] s->used_by_curr_pic_lt_sps_flag;
 }
 
-inline void bs_free_BsHevcChromaLocationInfo(BsHevcChromaLocationInfo* s) {
+inline void bs_free_BsHevcSpsSccExtension(BsHevcSpsSccExtension* s) {
     if (!s)
         return;
-}
-
-inline void bs_free_BsHevcInterRpsPrediction(BsHevcInterRpsPrediction* s) {
-    if (!s)
-        return;
-    delete[] s->entries;
-}
-
-inline void bs_free_BsHevcDerivedShortTermReference(BsHevcDerivedShortTermReference* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcAlternativeTransferCharacteristics(
-    BsHevcAlternativeTransferCharacteristics* s
-) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSliceEntryPointOffsets(BsHevcSliceEntryPointOffsets* s) {
-    if (!s)
-        return;
-    delete[] s->entry_point_offset_minus1;
 }
 
 inline void bs_free_BsHevcSubLayerHrdParameters(BsHevcSubLayerHrdParameters* s) {
@@ -239,151 +433,7 @@ inline void bs_free_BsHevcSubLayerHrdParameters(BsHevcSubLayerHrdParameters* s) 
     delete[] s->cpb_entries;
 }
 
-inline void bs_free_BsAvcVuiParameters(BsAvcVuiParameters* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPpsTileConfiguration(BsHevcPpsTileConfiguration* s) {
-    if (!s)
-        return;
-    delete[] s->column_width_minus1;
-    delete[] s->row_height_minus1;
-}
-
-inline void bs_free_BsHevcSpsSccExtension(BsHevcSpsSccExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(
-    BsHevcMasteringDisplayColourVolumeChromaticity* s
-) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSps3dExtension(BsHevcSps3dExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcVpsExtension(BsHevcVpsExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcShortTermNegativePicture(BsHevcShortTermNegativePicture* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSliceSegmentAddress(BsHevcSliceSegmentAddress* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcHrdTimingInfo(BsHevcHrdTimingInfo* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcSeiMessage(BsAvcSeiMessage* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPpsRangeExtension(BsHevcPpsRangeExtension* s) {
-    if (!s)
-        return;
-    delete[] s->cb_qp_offset_list;
-    delete[] s->cr_qp_offset_list;
-}
-
 inline void bs_free_BsHevcSubLayerOrderingInfo(BsHevcSubLayerOrderingInfo* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcPredWeightTable(BsAvcPredWeightTable* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcRefPicReorderingOp(BsAvcRefPicReorderingOp* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcWindow(BsHevcWindow* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcRefPicListModification(BsAvcRefPicListModification* s) {
-    if (!s)
-        return;
-    delete[] s->ops;
-}
-
-inline void bs_free_BsAvcMmcoOperation(BsAvcMmcoOperation* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcAspectRatio(BsHevcAspectRatio* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcParsedSei(BsAvcParsedSei* s) {
-    if (!s)
-        return;
-    delete[] s->rbsp_storage;
-    delete[] s->messages;
-}
-
-inline void bs_free_BsHevcPocConfiguration(BsHevcPocConfiguration* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPpsDeblockingFilter(BsHevcPpsDeblockingFilter* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcCpbEntry(BsHevcCpbEntry* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSpsPcmParameters(BsHevcSpsPcmParameters* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPpsRefLocationOffset(BsHevcPpsRefLocationOffset* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSpsMultilayerExtension(BsHevcSpsMultilayerExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcMasteringDisplayColourVolume(BsHevcMasteringDisplayColourVolume* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcRefPicListModificationData(BsHevcRefPicListModificationData* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcScalingListData(BsHevcScalingListData* s) {
     if (!s)
         return;
 }
@@ -393,76 +443,7 @@ inline void bs_free_BsHevcTemporalLayer(BsHevcTemporalLayer* s) {
         return;
 }
 
-inline void bs_free_BsHevcSeiExtendedValue(BsHevcSeiExtendedValue* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcCodingBlockGeometry(BsHevcCodingBlockGeometry* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPredictionWeightTable(BsHevcPredictionWeightTable* s) {
-    if (!s)
-        return;
-    delete[] s->l0;
-    delete[] s->l1;
-}
-
-inline void bs_free_BsHevcDisplayDimensions(BsHevcDisplayDimensions* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcProfileTierLevelSubLayer(BsHevcProfileTierLevelSubLayer* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPps3dExtension(BsHevcPps3dExtension* s) {
-    if (!s)
-        return;
-    delete[] s->depth_layer_transforms;
-}
-
-inline void bs_free_BsHevcSpsGeometry(BsHevcSpsGeometry* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcProfileTierLevel(BsHevcProfileTierLevel* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPpsExtension(BsHevcPpsExtension* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcContentLightLevelInfo(BsHevcContentLightLevelInfo* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsAvcSliceHeader(BsAvcSliceHeader* s) {
-    if (!s)
-        return;
-    delete[] s->mmco_operations;
-}
-
-inline void bs_free_BsHevcAmbientViewingEnvironment(BsHevcAmbientViewingEnvironment* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcHrdSubLayer(BsHevcHrdSubLayer* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcProfileTierLevelId(BsHevcProfileTierLevelId* s) {
+inline void bs_free_BsHevcTimingInfo(BsHevcTimingInfo* s) {
     if (!s)
         return;
 }
@@ -472,12 +453,116 @@ inline void bs_free_BsHevcVideoSignalType(BsHevcVideoSignalType* s) {
         return;
 }
 
+inline void bs_free_BsHevcVpsExtension(BsHevcVpsExtension* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcVpsLayerSet(BsHevcVpsLayerSet* s) {
+    if (!s)
+        return;
+    delete[] s->layer_id_included_flag;
+    delete[] s->layer_ids;
+}
+
+inline void bs_free_BsHevcVpsTimingInfo(BsHevcVpsTimingInfo* s) {
+    if (!s)
+        return;
+    delete[] s->hrd_parameters;
+}
+
+inline void bs_free_BsHevcWindow(BsHevcWindow* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVp8FrameHeader(BsVp8FrameHeader* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVp9FrameHeader(BsVp9FrameHeader* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcDci(BsVvcDci* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcOpi(BsVvcOpi* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcPictureHeader(BsVvcPictureHeader* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcPictureParameterSet(BsVvcPictureParameterSet* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcSequenceParameterSet(BsVvcSequenceParameterSet* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcSliceHeader(BsVvcSliceHeader* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsVvcVideoParameterSet(BsVvcVideoParameterSet* s) {
+    if (!s)
+        return;
+    delete[] s->layer_ids;
+}
+
+inline void bs_free_BsAvcPictureParameterSet(BsAvcPictureParameterSet* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsAvcSequenceParameterSet(BsAvcSequenceParameterSet* s) {
+    if (!s)
+        return;
+}
+
 inline void bs_free_BsHevcHrdCommonInfo(BsHevcHrdCommonInfo* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsAvcPictureParameterSet(BsAvcPictureParameterSet* s) {
+inline void bs_free_BsHevcHrdSubLayer(BsHevcHrdSubLayer* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcMasteringDisplayColourVolume(BsHevcMasteringDisplayColourVolume* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcPictureDimensions(BsHevcPictureDimensions* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcProfileTierLevel(BsHevcProfileTierLevel* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcScalingListData(BsHevcScalingListData* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsHevcSps3dExtension(BsHevcSps3dExtension* s) {
     if (!s)
         return;
 }
@@ -488,39 +573,12 @@ inline void bs_free_BsHevcVideoParameterSet(BsHevcVideoParameterSet* s) {
     delete[] s->layer_sets;
 }
 
-inline void bs_free_BsHevcShortTermRefPicSet(BsHevcShortTermRefPicSet* s) {
-    if (!s)
-        return;
-    delete[] s->negative_pics;
-    delete[] s->positive_pics;
-}
-
-inline void bs_free_BsAvcSequenceParameterSet(BsAvcSequenceParameterSet* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPictureDimensions(BsHevcPictureDimensions* s) {
-    if (!s)
-        return;
-}
-
 inline void bs_free_BsHevcHrdParameters(BsHevcHrdParameters* s) {
     if (!s)
         return;
 }
 
 inline void bs_free_BsHevcPpsScalingListConfiguration(BsHevcPpsScalingListConfiguration* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcSliceReferencePictureInfo(BsHevcSliceReferencePictureInfo* s) {
-    if (!s)
-        return;
-}
-
-inline void bs_free_BsHevcPictureParameterSet(BsHevcPictureParameterSet* s) {
     if (!s)
         return;
 }
@@ -535,11 +593,9 @@ inline void bs_free_BsHevcVuiParameters(BsHevcVuiParameters* s) {
         return;
 }
 
-inline void bs_free_BsHevcSliceSegmentHeader(BsHevcSliceSegmentHeader* s) {
+inline void bs_free_BsHevcPictureParameterSet(BsHevcPictureParameterSet* s) {
     if (!s)
         return;
-    delete[] s->slice_reserved_flag;
-    delete[] s->long_term_references;
 }
 
 inline void bs_free_BsHevcSequenceParameterSet(BsHevcSequenceParameterSet* s) {

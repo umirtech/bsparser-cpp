@@ -79,14 +79,14 @@ inline FrameHeader parse_frame_header(
 
     fh.disable_cdf_update = bd.read_bool(128);
 
-    if (seq.seq_force_screen_content_tools == 0) {
+    if (seq.seq_force_screen_content_tools == 2) {
         fh.allow_screen_content_tools = bd.read_bool(128);
     } else {
         fh.allow_screen_content_tools = seq.seq_force_screen_content_tools == 1;
     }
 
     if (fh.allow_screen_content_tools) {
-        if (seq.seq_force_integer_mv == 0) {
+        if (seq.seq_force_integer_mv == 2) {
             fh.force_integer_mv = bd.read_bool(128);
         } else {
             fh.force_integer_mv = seq.seq_force_integer_mv == 1;
