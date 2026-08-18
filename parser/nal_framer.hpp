@@ -21,8 +21,8 @@ namespace bs {
  * NAL framing
  * -----------------------------------------------------------
  *
- * This layer understands the container/framing around HEVC
- * NAL units, but does NOT parse the NAL header itself.
+ * This layer understands the framing around NAL units
+ * (shared by HEVC / AVC / VVC), but does NOT parse the NAL header itself.
  *
  * Supported formats:
  *

@@ -1,20 +1,17 @@
 /*
  * ---------------------------------------------------------------------------
- * AVC / H.264 parser validation against FFmpeg-derived reference data
+ * AVC / H.264 parser validation against pre-generated reference data
  * ---------------------------------------------------------------------------
  *
  * Usage:
  *
- *     ffmpeg_avc_test <stream.h264> <reference.txt>
+ *     avc_hdr_test <stream.h264> <reference.txt>
  *
  * The stream is parsed with the bsparser AVC library.  A set of decoded
  * SPS / VUI / SEI values is then compared against the reference file,
- * which is produced by the generation script from ffprobe / trace_headers
- * output (FFmpeg being the source of truth).
- *
- * See tests/ffmpeg/generate.ps1 for the field set.  Keys not present in
- * the reference file are skipped.  The HDR flags are always emitted by the
- * generator (0 when absent) so the validator can also assert their
+ * which contains the expected values for the stream.  Keys not present in
+ * the reference file are skipped.  The HDR flags are always emitted in the
+ * reference (0 when absent) so the validator can also assert their
  * *absence* on SDR streams.
  *
  * Exit status:
@@ -266,7 +263,7 @@ int run_stream(
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "usage: ffmpeg_avc_test <stream.h264> <reference.txt>\n";
+        std::cerr << "usage: avc_hdr_test <stream.h264> <reference.txt>\n";
         return 2;
     }
 

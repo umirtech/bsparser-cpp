@@ -1,16 +1,15 @@
 /*
  * ---------------------------------------------------------------------------
- * HEVC parser validation against FFmpeg-derived reference data
+ * HEVC parser validation against pre-generated reference data
  * ---------------------------------------------------------------------------
  *
  * Usage:
  *
- *     ffmpeg_hevc_test <stream.hevc> <reference.txt>
+ *     hevc_hdr_test <stream.hevc> <reference.txt>
  *
  * The stream is parsed with the bsparser library.  A set of decoded
  * SPS / VUI / SEI values is then compared against the reference file,
- * which is produced by the generation script from ffprobe output
- * (FFmpeg being the source of truth).
+ * which contains the expected values for the stream.
  *
  * The reference file is a set of "key=value" lines.  Lines beginning
  * with '#' are ignored.
@@ -308,7 +307,7 @@ int run_stream(
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "usage: ffmpeg_hevc_test <stream.hevc> <reference.txt>\n";
+        std::cerr << "usage: hevc_hdr_test <stream.hevc> <reference.txt>\n";
         return 2;
     }
 

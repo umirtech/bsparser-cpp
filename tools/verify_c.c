@@ -1,10 +1,9 @@
 /*
- * C-API accuracy check against FFmpeg-derived reference files.
+ * C-API accuracy check against pre-generated reference files.
  *
  * Parses a stream with the C API and compares the decoded SPS / VUI / SEI
- * fields against a reference file produced from ffprobe output (FFmpeg being
- * the source of truth). The reference files live under
- * tests/fuzz/reference .txt files.
+ * fields against a reference file containing the expected values. The
+ * reference files live under tests/fuzz/reference as .txt files.
  *
  * Usage:
  *     verify_c <stream> <reference.txt> <hevc|avc>

@@ -9,9 +9,9 @@
  *
  * Usage:
  *
- *     hevc_fuzz_driver <file> [file...]
- *     hevc_fuzz_driver          (reads stdin until EOF)
- *     hevc_fuzz_driver -        (reads stdin until EOF)
+ *     bs_fuzz_driver <file> [file...]
+ *     bs_fuzz_driver          (reads stdin until EOF)
+ *     bs_fuzz_driver -        (reads stdin until EOF)
  *
  * Each input file is parsed once; a non-zero exit status reports that one
  * or more inputs could not be opened.
@@ -44,7 +44,7 @@ int run_file(const char* path) {
     std::ifstream in(path, std::ios::binary);
 
     if (!in) {
-        std::cerr << "hevc_fuzz_driver: cannot open: " << path << "\n";
+        std::cerr << "bs_fuzz_driver: cannot open: " << path << "\n";
         return 1;
     }
 

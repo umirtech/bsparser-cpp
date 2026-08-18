@@ -3,16 +3,19 @@
  * bs_cli - command-line bitstream parser
  * ---------------------------------------------------------------------------
  *
- * Parses an HEVC (.hevc) or AVC (.h264) Annex-B / length-prefixed stream using
- * the unified bs::parse() API and exports a structured report to JSON or to a
- * self-contained HTML viewer (with inline filter controls).
+ * Parses HEVC / AVC / VVC / AV1 / VP9 / VP8 streams (raw, or muxed files via
+ * the demux layer) using the unified bs::parse() API and exports a structured
+ * report to JSON or to a self-contained HTML viewer (with inline filter
+ * controls).
  *
  * Usage:
  *
  *   bs_cli <input> [options]
  *
- *   --codec <hevc|avc|auto>     codec path (default: auto-detect)
- *   --format <annexb|length>    NAL framing (default: annexb)
+ *   --codec <hevc|avc|vvc|av1|vp9|vp8|auto>
+ *                                codec path (default: auto-detect)
+ *   --format <annexb|length>    NAL framing for raw streams (default: annexb;
+ *                               muxed containers select their own framing)
  *   --length-size <1..4>        length-prefix width (default: 4)
  *   --out <file>                output file (.json / .html / .htm)
  *   --json                      force JSON output
@@ -40,8 +43,9 @@ namespace {
 
 void print_help(const char* prog) {
     std::cout << "Usage: " << prog << " <input> [options]\n\n"
-              << "  --codec <hevc|avc|auto>   codec path (default: auto)\n"
-              << "  --format <annexb|length>  NAL framing (default: annexb)\n"
+              << "  --codec <hevc|avc|vvc|av1|vp9|vp8|auto>\n"
+              << "                            codec path (default: auto)\n"
+              << "  --format <annexb|length>  framing for raw streams (default: annexb)\n"
               << "  --length-size <1..4>       length-prefix width (default: 4)\n"
               << "  --out <file>               output (.json / .html / .htm)\n"
               << "  --json                     force JSON output\n"

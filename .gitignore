@@ -119,9 +119,11 @@ Desktop.ini
 # -----------------------------------------------------------------------------
 real_big.mkv
 
-# Downloaded real-world test samples (track the manifest, not the media)
+# Downloaded real-world test samples (track the manifest + reference files,
+# not the media)
 tests/real/*
 !tests/real/manifest.json
+!tests/real/reference/
 
 # -----------------------------------------------------------------------------
 # Docker (cross-arch test containers)
