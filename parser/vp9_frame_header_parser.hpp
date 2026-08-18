@@ -69,7 +69,7 @@ inline FrameHeader parse_frame_header(std::span<const std::uint8_t> data) {
     header.profile = static_cast<std::uint8_t>((profile_high << 1) | profile_low);
 
     if (header.profile == 3) {
-        (void)r.read_bits(2); /* reserved_zero_2bits */
+        (void)r.read_bit(); /* reserved_zero (spec: f(1)) */
     }
 
     header.show_existing_frame = r.read_bit();
@@ -102,16 +102,22 @@ inline FrameHeader parse_frame_header(std::span<const std::uint8_t> data) {
 
     header.intra_only = header.show_frame ? false : r.read_bit();
 
+    if (header.error_resilient_mode == 0) {
+        (void)r.read_bits(2); /* reset_frame_context */
+    }
+
     if (header.intra_only) {
         (void)r.read_bits(24); /* sync code */
 
-        detail::skip_color_config(r, header.profile);
-
-        (void)r.read_bits(8); /* refresh_frame_flags */
+        if (header.profile > 0) {
+            detail::skip_color_config(r, header.profile);
+        }
 
         header.width = r.read_bits(16) + 1u;
         header.height = r.read_bits(16) + 1u;
         header.frame_size_present = true;
+
+        (void)r.read_bits(8); /* refresh_frame_flags */
 
     } else {
         header.frame_size_from_refs = true;

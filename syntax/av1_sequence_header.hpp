@@ -41,9 +41,9 @@ struct SequenceHeader {
     std::uint8_t order_hint_bits_minus_1 = 0;
 
     /*
-     * Screen-content / integer-MV signalling.  A value of 0 means
-     * SELECT_* (the frame header signals it); 1 means force on;
-     * 2 means force off.
+     * Screen-content / integer-MV signalling, using the AV1 spec enum
+     * values (AV1 §5.5.1): 0 = OFF, 1 = ON, 2 = SELECT (the frame
+     * header signals it).
      */
     std::uint8_t seq_force_screen_content_tools = 0;
     std::uint8_t seq_force_integer_mv = 0;

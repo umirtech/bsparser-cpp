@@ -17,6 +17,10 @@ namespace vvc {
  * embedded in the slice header via sh_picture_header_in_slice_header_flag),
  * up to and including sh_slice_type.
  *
+ * When the picture header is carried in a separate PH NAL, the caller passes
+ * the stored picture header via `stored_ph` so that sh_slice_type is read
+ * when the picture allows inter slices.
+ *
  * The embedded PH needs the SPS (POC LSB width / msb-cycle), so the dispatch
  * calls this twice: once with a null SPS to obtain pps_id, then again with
  * the resolved SPS.
@@ -24,7 +28,10 @@ namespace vvc {
 template <typename Reader>
 [[nodiscard]]
 inline SliceHeader parse_slice_header(
-    Reader& r, const SequenceParameterSet* sps, const PictureParameterSet* pps
+    Reader& r,
+    const SequenceParameterSet* sps,
+    const PictureParameterSet* pps,
+    const PictureHeader* stored_ph = nullptr
 ) {
     (void)pps;
 
@@ -43,6 +50,8 @@ inline SliceHeader parse_slice_header(
     }
 
     if (sps != nullptr) {
+        const PictureHeader* ph = sh.picture_header_in_slice_header_flag ? &sh.ph : stored_ph;
+
         if (sps->subpic_info_present_flag) {
             (void)r.read_bits(sps->subpic_id_len_minus1 + 1); /* sh_subpic_id */
         }
@@ -53,7 +62,7 @@ inline SliceHeader parse_slice_header(
             (void)r.read_bit(); /* sh_extra_bit */
         }
 
-        if (sh.ph.inter_slice_allowed_flag) {
+        if (ph != nullptr && ph->inter_slice_allowed_flag) {
             const std::uint32_t raw = r.read_ue();
             sh.slice_type = (raw <= 2u) ? static_cast<SliceType>(raw) : SliceType::I;
         }

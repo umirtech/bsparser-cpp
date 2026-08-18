@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 
 namespace bs {
 namespace vvc {
@@ -10,20 +9,25 @@ namespace vvc {
  * -----------------------------------------------------------
  * VVC Decoding Capability Information (DCI) NAL
  * -----------------------------------------------------------
- * H.266 §7.3.2.1
+ * H.266 §7.3.2.1.  Leading fields only: the reserved field, the
+ * profile-tier-level count and the extension flag.  The
+ * profile_tier_level() blocks themselves are consumed and
+ * discarded.
  */
 struct Dci {
-    std::uint32_t num_sps = 0;
+    /*
+     * dci_num_ptls_minus1 u(4).
+     */
+    std::uint32_t num_ptls_minus1 = 0;
 
-    std::vector<std::uint8_t> sps_ids;
-
-    bool bit_rate_present = false;
-
-    bool pic_rate_present = false;
+    /*
+     * dci_extension_flag u(1).
+     */
+    bool extension_present = false;
 
     [[nodiscard]]
     bool valid() const noexcept {
-        return num_sps <= 15;
+        return num_ptls_minus1 <= 15;
     }
 };
 

@@ -27,6 +27,8 @@
 #include <vector>
 
 using bs::capi::bs_conv;
+using bs::capi::bs_free_BsAv1FrameHeader;
+using bs::capi::bs_free_BsAv1SequenceHeader;
 using bs::capi::bs_free_BsAvcPictureParameterSet;
 using bs::capi::bs_free_BsAvcSequenceParameterSet;
 using bs::capi::bs_free_BsAvcSliceHeader;
@@ -34,6 +36,15 @@ using bs::capi::bs_free_BsHevcPictureParameterSet;
 using bs::capi::bs_free_BsHevcSequenceParameterSet;
 using bs::capi::bs_free_BsHevcSliceSegmentHeader;
 using bs::capi::bs_free_BsHevcVideoParameterSet;
+using bs::capi::bs_free_BsVp8FrameHeader;
+using bs::capi::bs_free_BsVp9FrameHeader;
+using bs::capi::bs_free_BsVvcDci;
+using bs::capi::bs_free_BsVvcOpi;
+using bs::capi::bs_free_BsVvcPictureHeader;
+using bs::capi::bs_free_BsVvcPictureParameterSet;
+using bs::capi::bs_free_BsVvcSequenceParameterSet;
+using bs::capi::bs_free_BsVvcSliceHeader;
+using bs::capi::bs_free_BsVvcVideoParameterSet;
 
 namespace {
 
@@ -53,43 +64,218 @@ thread_local bs::Codec g_collector_codec = bs::Codec::Hevc;
 
 [[nodiscard]]
 inline bs::Codec to_codec(BsCodec c) {
-    return static_cast<bs::Codec>(
-        static_cast<int>(c) & 0x01
-    );  // AUTO collapses to HEVC here; the real
-        // auto-probe is in bs_parse_report.
+    switch (c) {
+        case BS_CODEC_AVC:
+            return bs::Codec::Avc;
+        case BS_CODEC_VVC:
+            return bs::Codec::Vvc;
+        case BS_CODEC_AV1:
+            return bs::Codec::Av1;
+        case BS_CODEC_VP9:
+            return bs::Codec::Vp9;
+        case BS_CODEC_VP8:
+            return bs::Codec::Vp8;
+        case BS_CODEC_HEVC:
+        default:
+            /* AUTO collapses to HEVC here; the real auto-probe is in
+             * bs_parse_report. */
+            return bs::Codec::Hevc;
+    }
+}
+
+[[nodiscard]]
+inline BsCodec to_bs_codec(bs::Codec c) {
+    switch (c) {
+        case bs::Codec::Avc:
+            return BS_CODEC_AVC;
+        case bs::Codec::Vvc:
+            return BS_CODEC_VVC;
+        case bs::Codec::Av1:
+            return BS_CODEC_AV1;
+        case bs::Codec::Vp9:
+            return BS_CODEC_VP9;
+        case bs::Codec::Vp8:
+            return BS_CODEC_VP8;
+        case bs::Codec::Hevc:
+        default:
+            return BS_CODEC_HEVC;
+    }
 }
 
 [[nodiscard]]
 inline bs::NalFramingMode to_mode(BsFramingMode m) {
-    return (m == BS_FRAMING_LENGTH_PREFIXED) ? bs::NalFramingMode::LengthPrefixed
-                                             : bs::NalFramingMode::AnnexB;
+    switch (m) {
+        case BS_FRAMING_LENGTH_PREFIXED:
+            return bs::NalFramingMode::LengthPrefixed;
+        case BS_FRAMING_OBU:
+            return bs::NalFramingMode::Obu;
+        case BS_FRAMING_IVF:
+            return bs::NalFramingMode::Ivf;
+        case BS_FRAMING_ANNEX_B:
+        default:
+            return bs::NalFramingMode::AnnexB;
+    }
 }
 
 /*
- * Probe the first NAL to decide HEVC vs AVC (mirrors cli auto-detect).
+ * Framing that carries a given codec by default.  Used by the auto-detect
+ * path (NULL state): the caller's framing cannot be known before the codec is
+ * detected, so the detected codec selects it.
+ */
+[[nodiscard]]
+inline bs::NalFramingMode default_framing(bs::Codec c) {
+    switch (c) {
+        case bs::Codec::Av1:
+            return bs::NalFramingMode::Obu;
+        case bs::Codec::Vp9:
+        case bs::Codec::Vp8:
+            return bs::NalFramingMode::Ivf;
+        case bs::Codec::Hevc:
+        case bs::Codec::Avc:
+        case bs::Codec::Vvc:
+        default:
+            return bs::NalFramingMode::AnnexB;
+    }
+}
+
+/*
+ * Probe the first unit to decide the codec (mirrors cli auto-detect).
  */
 [[nodiscard]]
 inline bs::Codec detect_codec(const unsigned char* data, std::size_t size) {
+    if (size < 3) {
+        return bs::Codec::Hevc;
+    }
+
+    /*
+     * IVF container: 'DKIF' magic, fourcc at bytes 8..11 (VP80/VP90/AV01).
+     */
+    if (size >= 12 && data[0] == 'D' && data[1] == 'K' && data[2] == 'I' && data[3] == 'F') {
+        if (data[8] == 'V' && data[9] == 'P') {
+            if (data[10] == '8') {
+                return bs::Codec::Vp8;
+            }
+            if (data[10] == '9') {
+                return bs::Codec::Vp9;
+            }
+        }
+        if (data[8] == 'A' && data[9] == 'V' && data[10] == '0' && data[11] == '1') {
+            return bs::Codec::Av1;
+        }
+        return bs::Codec::Vp9;
+    }
+
+    /*
+     * AV1 raw OBU stream.  A stream commonly opens with a sequence-header
+     * OBU (0x0A / 0x0B header byte, type 1 with size field) or a
+     * temporal-delimiter OBU (0x12 0x00).  The first byte never looks like
+     * an Annex-B start code, so this cannot collide with a NAL stream.
+     */
+    if (data[0] == 0x0A || (data[0] == 0x12 && data[1] == 0x00)) {
+        return bs::Codec::Av1;
+    }
+
+    /*
+     * VP8: every key frame starts with the start code 0x9D 0x01 0x2A.
+     */
+    if (size >= 3 && data[0] == 0x9D && data[1] == 0x01 && data[2] == 0x2A) {
+        return bs::Codec::Vp8;
+    }
+
+    /*
+     * VP9: every key frame starts with the marker 0x82 0x49 0x83 0x42.
+     */
+    if (size >= 4 && data[0] == 0x82 && data[1] == 0x49 && data[2] == 0x83 && data[3] == 0x42) {
+        return bs::Codec::Vp9;
+    }
+
+    /*
+     * Annex-B NAL stream (HEVC / AVC / VVC).  The first NAL is not
+     * necessarily a parameter set (an encoder may lead with AUD, SEI or a
+     * VCL slice), so scan up to 64 leading NALs and count codec-specific
+     * types.
+     *
+     * The three codecs put the type in different header bytes:
+     *
+     *   HEVC  type = (b0 >> 1) & 0x3F   VPS=32 SPS=33 PPS=34 SEI=35/36
+     *   VVC   type = (b1 >> 3) & 0x1F   OPI=12 DCI=13 VPS=14 SPS=15 PPS=16
+     *                                   APS=17/18 PH=19 AUD=20 EOS=21
+     *                                   EOB=22 SEI=23/24 FD=25
+     *   AVC   b0 == 0x67/0x27 (SPS), 0x68/0x28 (PPS)
+     *
+     * HEVC parameter sets are unambiguous (VVC reserves types 32..34), so
+     * they win.  VVC-only types are checked against the second byte, which
+     * is tid_plus1 (<= 7) in HEVC base-layer NALs and never aliases a VVC
+     * type; AVC parameter-set bytes are excluded from that count.  With no
+     * decisive type the first NAL byte decides (an AVC type 1..21 is AVC,
+     * otherwise HEVC).
+     */
     std::size_t i = 0;
+    unsigned vvc_seen = 0;
+    unsigned hevc_seen = 0;
+    unsigned avc_seen = 0;
+    unsigned first_avc_type = 0;
+    bool have_first = false;
 
-    if (size >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01) {
-        i = 4;
-    } else if (size >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01) {
-        i = 3;
+    for (unsigned nal = 0; i < size && nal < 64; ++nal) {
+        if (i + 4 <= size && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 &&
+            data[i + 3] == 0x01) {
+            i += 4;
+        } else if (i + 3 <= size && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x01) {
+            i += 3;
+        } else {
+            break;
+        }
+
+        if (i + 2 > size) {
+            break;
+        }
+
+        const unsigned b0 = data[i];
+        const unsigned b1 = data[i + 1];
+        const unsigned hevc_type = (b0 >> 1) & 0x3F;
+        const unsigned vvc_type = (b1 >> 3) & 0x1F;
+
+        if (!have_first) {
+            have_first = true;
+            first_avc_type = b0 & 0x1F;
+        }
+
+        /*
+         * VVC-only types (base layer): byte0 is fz(1)+rz(1)+layer(6) and is
+         * 0x00 for base layer, byte1 holds the type.  The b0 == 0x00 guard
+         * prevents AVC payload bytes (byte0 is never 0x00 in a real AVC
+         * stream) and HEVC base-layer NALs (byte1 <= 7) from aliasing.
+         */
+        if (b0 == 0x00 && vvc_type >= 12 && vvc_type <= 25) {
+            ++vvc_seen;
+        } else if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34 || hevc_type == 35 ||
+                   hevc_type == 36) {
+            if ((b1 >> 3) == 0 && (b1 & 0x07) != 0) {
+                ++hevc_seen;
+            }
+        } else if (b0 == 0x67 || b0 == 0x27 || b0 == 0x68 || b0 == 0x28) {
+            ++avc_seen;
+        }
+
+        /* Advance past this NAL. */
+        i += 2;
+        while (i + 3 <= size && !(data[i] == 0x00 && data[i + 1] == 0x00 &&
+                                  (data[i + 2] == 0x01 || data[i + 2] == 0x00))) {
+            ++i;
+        }
     }
 
-    if (i >= size) {
+    if (hevc_seen > 0) {
         return bs::Codec::Hevc;
     }
-
-    const unsigned hevc_type = (static_cast<unsigned>(data[i]) >> 1) & 0x3F;
-    const unsigned avc_type = static_cast<unsigned>(data[i]) & 0x1F;
-
-    if (hevc_type == 32 || hevc_type == 33 || hevc_type == 34) {
-        return bs::Codec::Hevc;
+    if (vvc_seen > 0) {
+        return bs::Codec::Vvc;
     }
-
-    if (avc_type >= 1 && avc_type <= 21) {
+    if (avc_seen > 0) {
+        return bs::Codec::Avc;
+    }
+    if (have_first && first_avc_type >= 1 && first_avc_type <= 21) {
         return bs::Codec::Avc;
     }
 
@@ -178,6 +364,77 @@ const char* avc_type_name(int t) {
 }
 
 /*
+ * Static VVC NAL type names.
+ */
+[[nodiscard]]
+const char* vvc_type_name(int t) {
+    switch (t) {
+        case 12:
+            return "OPI_NUT";
+        case 13:
+            return "DCI_NUT";
+        case 14:
+            return "VPS_NUT";
+        case 15:
+            return "SPS_NUT";
+        case 16:
+            return "PPS_NUT";
+        case 17:
+            return "PREFIX_APS_NUT";
+        case 18:
+            return "SUFFIX_APS_NUT";
+        case 19:
+            return "PH_NUT";
+        case 20:
+            return "AUD_NUT";
+        case 21:
+            return "EOS_NUT";
+        case 22:
+            return "EOB_NUT";
+        case 23:
+            return "PREFIX_SEI_NUT";
+        case 24:
+            return "SUFFIX_SEI_NUT";
+        case 25:
+            return "FD_NUT";
+        default:
+            if (t >= 0 && t <= 11) {
+                return "VCL";
+            }
+            return "NAL";
+    }
+}
+
+/*
+ * Static AV1 OBU type names.
+ */
+[[nodiscard]]
+const char* av1_type_name(unsigned type) {
+    switch (type) {
+        case 1:
+            return "SEQUENCE_HEADER";
+        case 2:
+            return "TEMPORAL_DELIMITER";
+        case 3:
+            return "FRAME_HEADER";
+        case 4:
+            return "TILE_GROUP";
+        case 5:
+            return "METADATA";
+        case 6:
+            return "FRAME";
+        case 7:
+            return "REDUNDANT_FRAME_HEADER";
+        case 8:
+            return "TILE_LIST";
+        case 15:
+            return "PADDING";
+        default:
+            return "OBU";
+    }
+}
+
+/*
  * Last-error string (per thread).
  */
 thread_local std::string g_last_error;
@@ -194,7 +451,7 @@ inline void fill_hevc(const bs::NalUnit& nal, BsNalUnit& out, const unsigned cha
     auto p = nal.payload_bytes();
     out.nal_unit_type = static_cast<int>(static_cast<unsigned>(nal.type()));
     out.nuh_layer_id = nal.layer_id();
-    out.nuh_temporal_id_plus1 = nal.temporal_id();
+    out.nuh_temporal_id_plus1 = static_cast<int>(nal.temporal_id()) + 1;
     out.forbidden_zero_bit = nal.header.forbidden_zero_bit ? 1 : 0;
     out.is_vcl = nal.is_vcl() ? 1 : 0;
     out.payload = p.data();
@@ -218,59 +475,66 @@ inline void fill_avc(const bs::avc::NalUnit& nal, BsNalUnit& out, const unsigned
 }
 
 /*
- * HEVC adaptors: build a BsNalUnit view and forward to the user callback.
+ * Deliver one HEVC/AVC NAL to a BsNalHandlers slot (the catch-all `nal` fires
+ * for every unit, then the type slot).
  */
-void hevc_vps(const bs::NalUnit& nal) {
+inline void emit_hevc(const bs::NalUnit& nal, BsNalCallback slot) {
     const BsNalHandlers* h = g_handlers;
-    if (h && h->vps) {
+    if (h && slot) {
         BsNalUnit n{};
         fill_hevc(nal, n, g_data_start);
-        h->vps(h->ctx, &n);
+        slot(h->ctx, &n);
+    }
+}
+
+inline void emit_avc(const bs::avc::NalUnit& nal, BsNalCallback slot) {
+    const BsNalHandlers* h = g_handlers;
+    if (h && slot) {
+        BsNalUnit n{};
+        fill_avc(nal, n, g_data_start);
+        slot(h->ctx, &n);
+    }
+}
+
+void hevc_vps(const bs::NalUnit& nal) {
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->vps);
     }
 }
 
 void hevc_sps(const bs::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->sps) {
-        BsNalUnit n{};
-        fill_hevc(nal, n, g_data_start);
-        h->sps(h->ctx, &n);
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->sps);
     }
 }
 
 void hevc_pps(const bs::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->pps) {
-        BsNalUnit n{};
-        fill_hevc(nal, n, g_data_start);
-        h->pps(h->ctx, &n);
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->pps);
     }
 }
 
 void hevc_sei(const bs::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->sei) {
-        BsNalUnit n{};
-        fill_hevc(nal, n, g_data_start);
-        h->sei(h->ctx, &n);
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->sei);
     }
 }
 
 void hevc_slice(const bs::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->slice) {
-        BsNalUnit n{};
-        fill_hevc(nal, n, g_data_start);
-        h->slice(h->ctx, &n);
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->slice);
     }
 }
 
 void hevc_unsupported(const bs::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->unsupported) {
-        BsNalUnit n{};
-        fill_hevc(nal, n, g_data_start);
-        h->unsupported(h->ctx, &n);
+    if (g_handlers) {
+        emit_hevc(nal, g_handlers->nal);
+        emit_hevc(nal, g_handlers->unsupported);
     }
 }
 
@@ -278,53 +542,221 @@ void hevc_unsupported(const bs::NalUnit& nal) {
  * AVC adaptors.  (AVC has no VPS, so there is no avc_vps adaptor.)
  */
 void avc_sps(const bs::avc::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->sps) {
-        BsNalUnit n{};
-        fill_avc(nal, n, g_data_start);
-        h->sps(h->ctx, &n);
+    if (g_handlers) {
+        emit_avc(nal, g_handlers->nal);
+        emit_avc(nal, g_handlers->sps);
     }
 }
 
 void avc_pps(const bs::avc::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->pps) {
-        BsNalUnit n{};
-        fill_avc(nal, n, g_data_start);
-        h->pps(h->ctx, &n);
+    if (g_handlers) {
+        emit_avc(nal, g_handlers->nal);
+        emit_avc(nal, g_handlers->pps);
     }
 }
 
 void avc_sei(const bs::avc::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->sei) {
-        BsNalUnit n{};
-        fill_avc(nal, n, g_data_start);
-        h->sei(h->ctx, &n);
+    if (g_handlers) {
+        emit_avc(nal, g_handlers->nal);
+        emit_avc(nal, g_handlers->sei);
     }
 }
 
 void avc_slice(const bs::avc::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->slice) {
-        BsNalUnit n{};
-        fill_avc(nal, n, g_data_start);
-        h->slice(h->ctx, &n);
+    if (g_handlers) {
+        emit_avc(nal, g_handlers->nal);
+        emit_avc(nal, g_handlers->slice);
     }
 }
 
 void avc_unsupported(const bs::avc::NalUnit& nal) {
-    const BsNalHandlers* h = g_handlers;
-    if (h && h->unsupported) {
-        BsNalUnit n{};
-        fill_avc(nal, n, g_data_start);
-        h->unsupported(h->ctx, &n);
+    if (g_handlers) {
+        emit_avc(nal, g_handlers->nal);
+        emit_avc(nal, g_handlers->unsupported);
     }
+}
+
+/*
+ * VVC raw-NAL walk.  The C++ core only exposes typed VVC dispatch, so the
+ * generic BsNalHandlers path walks the framer directly and maps NAL types to
+ * the vps/sps/pps/sei/slice/unsupported slots (the catch-all `nal` fires for
+ * every unit).
+ */
+template <typename Framer>
+[[nodiscard]]
+inline std::size_t walk_vvc_raw(Framer& framer, const BsNalHandlers* h) {
+    std::size_t count = 0;
+
+    while (framer.valid()) {
+        const auto span = framer.nal();
+
+        try {
+            bs::vvc::NalUnit nal = bs::vvc::parse_nal_unit(span);
+            auto p = nal.payload_bytes();
+
+            BsNalUnit n{};
+            n.nal_unit_type = static_cast<int>(nal.nal_type());
+            n.nuh_layer_id = static_cast<int>(nal.layer_id());
+            n.nuh_temporal_id_plus1 = static_cast<int>(nal.temporal_id()) + 1;
+            n.forbidden_zero_bit = 0;
+            n.is_vcl = nal.is_vcl() ? 1 : 0;
+            n.payload = p.data();
+            n.payload_size = p.size();
+            n.offset = static_cast<size_t>(p.data() - g_data_start);
+
+            if (h && h->nal) {
+                h->nal(h->ctx, &n);
+            }
+
+            if (nal.is_vcl()) {
+                if (h && h->slice) {
+                    h->slice(h->ctx, &n);
+                }
+            } else {
+                switch (nal.nal_type()) {
+                    case static_cast<std::uint8_t>(bs::vvc::NalUnitType::VpsNut):
+                        if (h && h->vps) {
+                            h->vps(h->ctx, &n);
+                        }
+                        break;
+                    case static_cast<std::uint8_t>(bs::vvc::NalUnitType::SpsNut):
+                        if (h && h->sps) {
+                            h->sps(h->ctx, &n);
+                        }
+                        break;
+                    case static_cast<std::uint8_t>(bs::vvc::NalUnitType::PpsNut):
+                        if (h && h->pps) {
+                            h->pps(h->ctx, &n);
+                        }
+                        break;
+                    case static_cast<std::uint8_t>(bs::vvc::NalUnitType::SeiPrefixNut):
+                    case static_cast<std::uint8_t>(bs::vvc::NalUnitType::SeiSuffixNut):
+                        if (h && h->sei) {
+                            h->sei(h->ctx, &n);
+                        }
+                        break;
+                    default:
+                        if (h && h->unsupported) {
+                            h->unsupported(h->ctx, &n);
+                        }
+                        break;
+                }
+            }
+
+            ++count;
+
+        } catch (...) {
+            /* skip a NAL that cannot be framed/parsed */
+        }
+
+        framer.next();
+    }
+
+    return count;
+}
+
+/*
+ * AV1 OBU walk for the generic BsNalHandlers path.  Every OBU is delivered
+ * through the catch-all `nal` callback (AV1 has no NAL slot mapping).
+ */
+[[nodiscard]]
+inline std::size_t walk_av1_raw(std::span<const std::uint8_t> data, const BsNalHandlers* h) {
+    std::size_t count = 0;
+    bs::av1::ObuFramer f{data};
+
+    while (f.valid()) {
+        const auto span = f.obu();
+
+        try {
+            bs::av1::Obu obu = bs::av1::parse_obu(span);
+            auto p = obu.payload_bytes();
+
+            BsNalUnit n{};
+            n.nal_unit_type = static_cast<int>(obu.type());
+            n.nuh_layer_id = 0;
+            n.nuh_temporal_id_plus1 = 0;
+            n.forbidden_zero_bit = 0;
+            n.is_vcl = 0;
+            n.payload = p.data();
+            n.payload_size = p.size();
+            n.offset = static_cast<size_t>(p.data() - g_data_start);
+
+            if (h && h->nal) {
+                h->nal(h->ctx, &n);
+            }
+            if (h && h->unsupported) {
+                h->unsupported(h->ctx, &n);
+            }
+
+            ++count;
+
+        } catch (...) {
+            /* skip a malformed OBU */
+        }
+
+        f.next();
+    }
+
+    return count;
+}
+
+/*
+ * VP9 / VP8 IVF frame walk for the generic BsNalHandlers path.  Every frame is
+ * delivered through the catch-all `nal` callback.
+ */
+template <typename Framer>
+[[nodiscard]]
+inline std::size_t walk_vp_frame_raw(Framer& framer, const BsNalHandlers* h) {
+    std::size_t count = 0;
+
+    while (framer.valid()) {
+        const auto frame = framer.frame();
+
+        BsNalUnit n{};
+        n.nal_unit_type = 0;
+        n.nuh_layer_id = 0;
+        n.nuh_temporal_id_plus1 = 0;
+        n.forbidden_zero_bit = 0;
+        n.is_vcl = 0;
+        n.payload = frame.data();
+        n.payload_size = frame.size();
+        n.offset = static_cast<size_t>(frame.data() - g_data_start);
+
+        if (h && h->nal) {
+            h->nal(h->ctx, &n);
+        }
+        if (h && h->unsupported) {
+            h->unsupported(h->ctx, &n);
+        }
+
+        ++count;
+        framer.next();
+    }
+
+    return count;
 }
 
 /*
  * Single collector callback used by bs_parse_report() for every NAL type.
  */
+[[nodiscard]]
+inline const char* type_name_for(bs::Codec codec, int type) {
+    switch (codec) {
+        case bs::Codec::Avc:
+            return avc_type_name(type);
+        case bs::Codec::Vvc:
+            return vvc_type_name(type);
+        case bs::Codec::Av1:
+            return av1_type_name(static_cast<unsigned>(type));
+        case bs::Codec::Vp9:
+        case bs::Codec::Vp8:
+            return "frame";
+        case bs::Codec::Hevc:
+        default:
+            return hevc_type_name(type);
+    }
+}
+
 void collect(void*, const BsNalUnit* n) {
     BsNalEntry e{};
     e.index = g_entries.size();
@@ -332,8 +764,7 @@ void collect(void*, const BsNalUnit* n) {
     e.nal_unit_type = n->nal_unit_type;
     e.is_vcl = n->is_vcl;
     e.size = n->payload_size;
-    e.nal_type_name = (g_collector_codec == bs::Codec::Hevc) ? hevc_type_name(n->nal_unit_type)
-                                                             : avc_type_name(n->nal_unit_type);
+    e.nal_type_name = type_name_for(g_collector_codec, n->nal_unit_type);
     g_entries.push_back(e);
 }
 
@@ -465,6 +896,136 @@ void avc_typed_slice(const bs::avc::SliceHeader& src) {
 }
 
 /*
+ * VVC / AV1 / VP9 / VP8 typed callback adaptors (same ownership contract as
+ * the HEVC/AVC ones: the C struct is valid for the callback only).
+ */
+thread_local const BsVvcHandlers* g_vvc_h = nullptr;
+thread_local const BsAv1Handlers* g_av1_h = nullptr;
+thread_local const BsVp9Handlers* g_vp9_h = nullptr;
+thread_local const BsVp8Handlers* g_vp8_h = nullptr;
+
+void vvc_typed_dci(const bs::vvc::Dci& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->dci) {
+        auto* dst = new BsVvcDci{};
+        bs_conv(src, *dst);
+        h->dci(h->ctx, dst);
+        bs_free_BsVvcDci(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_opi(const bs::vvc::Opi& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->opi) {
+        auto* dst = new BsVvcOpi{};
+        bs_conv(src, *dst);
+        h->opi(h->ctx, dst);
+        bs_free_BsVvcOpi(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_vps(const bs::vvc::VideoParameterSet& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->vps) {
+        auto* dst = new BsVvcVideoParameterSet{};
+        bs_conv(src, *dst);
+        h->vps(h->ctx, dst);
+        bs_free_BsVvcVideoParameterSet(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_sps(const bs::vvc::SequenceParameterSet& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->sps) {
+        auto* dst = new BsVvcSequenceParameterSet{};
+        bs_conv(src, *dst);
+        h->sps(h->ctx, dst);
+        bs_free_BsVvcSequenceParameterSet(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_pps(const bs::vvc::PictureParameterSet& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->pps) {
+        auto* dst = new BsVvcPictureParameterSet{};
+        bs_conv(src, *dst);
+        h->pps(h->ctx, dst);
+        bs_free_BsVvcPictureParameterSet(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_ph(const bs::vvc::PictureHeader& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->ph) {
+        auto* dst = new BsVvcPictureHeader{};
+        bs_conv(src, *dst);
+        h->ph(h->ctx, dst);
+        bs_free_BsVvcPictureHeader(dst);
+        delete dst;
+    }
+}
+
+void vvc_typed_slice(const bs::vvc::SliceHeader& src) {
+    const BsVvcHandlers* h = g_vvc_h;
+    if (h && h->slice) {
+        auto* dst = new BsVvcSliceHeader{};
+        bs_conv(src, *dst);
+        h->slice(h->ctx, dst);
+        bs_free_BsVvcSliceHeader(dst);
+        delete dst;
+    }
+}
+
+void av1_typed_sequence_header(const bs::av1::SequenceHeader& src) {
+    const BsAv1Handlers* h = g_av1_h;
+    if (h && h->sequence_header) {
+        auto* dst = new BsAv1SequenceHeader{};
+        bs_conv(src, *dst);
+        h->sequence_header(h->ctx, dst);
+        bs_free_BsAv1SequenceHeader(dst);
+        delete dst;
+    }
+}
+
+void av1_typed_frame_header(const bs::av1::FrameHeader& src) {
+    const BsAv1Handlers* h = g_av1_h;
+    if (h && h->frame_header) {
+        auto* dst = new BsAv1FrameHeader{};
+        bs_conv(src, *dst);
+        h->frame_header(h->ctx, dst);
+        bs_free_BsAv1FrameHeader(dst);
+        delete dst;
+    }
+}
+
+void vp9_typed_frame_header(const bs::vp9::FrameHeader& src) {
+    const BsVp9Handlers* h = g_vp9_h;
+    if (h && h->frame_header) {
+        auto* dst = new BsVp9FrameHeader{};
+        bs_conv(src, *dst);
+        h->frame_header(h->ctx, dst);
+        bs_free_BsVp9FrameHeader(dst);
+        delete dst;
+    }
+}
+
+void vp8_typed_frame_header(const bs::vp8::FrameHeader& src) {
+    const BsVp8Handlers* h = g_vp8_h;
+    if (h && h->frame_header) {
+        auto* dst = new BsVp8FrameHeader{};
+        bs_conv(src, *dst);
+        h->frame_header(h->ctx, dst);
+        bs_free_BsVp8FrameHeader(dst);
+        delete dst;
+    }
+}
+
+/*
  * Report-collection adaptors: convert and keep ownership in g_struct_entries
  * (freed later by bs_struct_report_destroy).
  */
@@ -496,6 +1057,76 @@ void avc_report_pps(const bs::avc::PictureParameterSet& src) {
     auto* dst = new BsAvcPictureParameterSet{};
     bs_conv(src, *dst);
     g_struct_entries.push_back(BsStructEntry{BS_STRUCT_AVC_PPS, dst});
+}
+
+/*
+ * VVC / AV1 / VP9 / VP8 report-collection adaptors: convert and keep
+ * ownership in g_struct_entries (freed later by bs_struct_report_destroy).
+ */
+void vvc_report_dci(const bs::vvc::Dci& src) {
+    auto* dst = new BsVvcDci{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_DCI, dst});
+}
+
+void vvc_report_opi(const bs::vvc::Opi& src) {
+    auto* dst = new BsVvcOpi{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_OPI, dst});
+}
+
+void vvc_report_vps(const bs::vvc::VideoParameterSet& src) {
+    auto* dst = new BsVvcVideoParameterSet{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_VPS, dst});
+}
+
+void vvc_report_sps(const bs::vvc::SequenceParameterSet& src) {
+    auto* dst = new BsVvcSequenceParameterSet{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_SPS, dst});
+}
+
+void vvc_report_pps(const bs::vvc::PictureParameterSet& src) {
+    auto* dst = new BsVvcPictureParameterSet{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_PPS, dst});
+}
+
+void vvc_report_ph(const bs::vvc::PictureHeader& src) {
+    auto* dst = new BsVvcPictureHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_PH, dst});
+}
+
+void vvc_report_slice(const bs::vvc::SliceHeader& src) {
+    auto* dst = new BsVvcSliceHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VVC_SLICE, dst});
+}
+
+void av1_report_sequence_header(const bs::av1::SequenceHeader& src) {
+    auto* dst = new BsAv1SequenceHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_AV1_SEQUENCE_HEADER, dst});
+}
+
+void av1_report_frame_header(const bs::av1::FrameHeader& src) {
+    auto* dst = new BsAv1FrameHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_AV1_FRAME_HEADER, dst});
+}
+
+void vp9_report_frame_header(const bs::vp9::FrameHeader& src) {
+    auto* dst = new BsVp9FrameHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VP9_FRAME_HEADER, dst});
+}
+
+void vp8_report_frame_header(const bs::vp8::FrameHeader& src) {
+    auto* dst = new BsVp8FrameHeader{};
+    bs_conv(src, *dst);
+    g_struct_entries.push_back(BsStructEntry{BS_STRUCT_VP8_FRAME_HEADER, dst});
 }
 
 inline void free_struct_entry(const BsStructEntry& e) {
@@ -554,6 +1185,93 @@ inline void free_struct_entry(const BsStructEntry& e) {
                 static_cast<const BsAvcPictureParameterSet*>(e.data)
             );
             break;
+
+        case BS_STRUCT_VVC_DCI:
+            bs_free_BsVvcDci(const_cast<BsVvcDci*>(static_cast<const BsVvcDci*>(e.data)));
+            delete const_cast<BsVvcDci*>(static_cast<const BsVvcDci*>(e.data));
+            break;
+
+        case BS_STRUCT_VVC_OPI:
+            bs_free_BsVvcOpi(const_cast<BsVvcOpi*>(static_cast<const BsVvcOpi*>(e.data)));
+            delete const_cast<BsVvcOpi*>(static_cast<const BsVvcOpi*>(e.data));
+            break;
+
+        case BS_STRUCT_VVC_VPS:
+            bs_free_BsVvcVideoParameterSet(
+                const_cast<BsVvcVideoParameterSet*>(
+                    static_cast<const BsVvcVideoParameterSet*>(e.data)
+                )
+            );
+            delete const_cast<BsVvcVideoParameterSet*>(
+                static_cast<const BsVvcVideoParameterSet*>(e.data)
+            );
+            break;
+
+        case BS_STRUCT_VVC_SPS:
+            bs_free_BsVvcSequenceParameterSet(
+                const_cast<BsVvcSequenceParameterSet*>(
+                    static_cast<const BsVvcSequenceParameterSet*>(e.data)
+                )
+            );
+            delete const_cast<BsVvcSequenceParameterSet*>(
+                static_cast<const BsVvcSequenceParameterSet*>(e.data)
+            );
+            break;
+
+        case BS_STRUCT_VVC_PPS:
+            bs_free_BsVvcPictureParameterSet(
+                const_cast<BsVvcPictureParameterSet*>(
+                    static_cast<const BsVvcPictureParameterSet*>(e.data)
+                )
+            );
+            delete const_cast<BsVvcPictureParameterSet*>(
+                static_cast<const BsVvcPictureParameterSet*>(e.data)
+            );
+            break;
+
+        case BS_STRUCT_VVC_PH:
+            bs_free_BsVvcPictureHeader(
+                const_cast<BsVvcPictureHeader*>(static_cast<const BsVvcPictureHeader*>(e.data))
+            );
+            delete const_cast<BsVvcPictureHeader*>(static_cast<const BsVvcPictureHeader*>(e.data));
+            break;
+
+        case BS_STRUCT_VVC_SLICE:
+            bs_free_BsVvcSliceHeader(
+                const_cast<BsVvcSliceHeader*>(static_cast<const BsVvcSliceHeader*>(e.data))
+            );
+            delete const_cast<BsVvcSliceHeader*>(static_cast<const BsVvcSliceHeader*>(e.data));
+            break;
+
+        case BS_STRUCT_AV1_SEQUENCE_HEADER:
+            bs_free_BsAv1SequenceHeader(
+                const_cast<BsAv1SequenceHeader*>(static_cast<const BsAv1SequenceHeader*>(e.data))
+            );
+            delete const_cast<BsAv1SequenceHeader*>(
+                static_cast<const BsAv1SequenceHeader*>(e.data)
+            );
+            break;
+
+        case BS_STRUCT_AV1_FRAME_HEADER:
+            bs_free_BsAv1FrameHeader(
+                const_cast<BsAv1FrameHeader*>(static_cast<const BsAv1FrameHeader*>(e.data))
+            );
+            delete const_cast<BsAv1FrameHeader*>(static_cast<const BsAv1FrameHeader*>(e.data));
+            break;
+
+        case BS_STRUCT_VP9_FRAME_HEADER:
+            bs_free_BsVp9FrameHeader(
+                const_cast<BsVp9FrameHeader*>(static_cast<const BsVp9FrameHeader*>(e.data))
+            );
+            delete const_cast<BsVp9FrameHeader*>(static_cast<const BsVp9FrameHeader*>(e.data));
+            break;
+
+        case BS_STRUCT_VP8_FRAME_HEADER:
+            bs_free_BsVp8FrameHeader(
+                const_cast<BsVp8FrameHeader*>(static_cast<const BsVp8FrameHeader*>(e.data))
+            );
+            delete const_cast<BsVp8FrameHeader*>(static_cast<const BsVp8FrameHeader*>(e.data));
+            break;
     }
 }
 
@@ -570,8 +1288,8 @@ BsState* bs_state_create(BsCodec codec) {
          */
         set_error(
             "bs_state_create: explicit codec required "
-            "(HEVC/AVC); use bs_parse_report with a NULL "
-            "state for auto-detect"
+            "(HEVC/AVC/VVC/AV1/VP9/VP8); use bs_parse_report "
+            "with a NULL state for auto-detect"
         );
         return nullptr;
     }
@@ -620,29 +1338,72 @@ long bs_parse(
         const auto cpp_mode = to_mode(mode);
         long result = -1;
 
-        if (s->codec() == bs::Codec::Hevc) {
-            bs::BsNalHandlers h{};
-            h.vps = hevc_vps;
-            h.sps = hevc_sps;
-            h.pps = hevc_pps;
-            h.prefix_sei = hevc_sei;
-            h.suffix_sei = hevc_sei;
-            h.slice = hevc_slice;
-            h.unsupported = hevc_unsupported;
+        switch (s->codec()) {
+            case bs::Codec::Hevc: {
+                bs::BsNalHandlers h{};
+                h.vps = hevc_vps;
+                h.sps = hevc_sps;
+                h.pps = hevc_pps;
+                h.prefix_sei = hevc_sei;
+                h.suffix_sei = hevc_sei;
+                h.slice = hevc_slice;
+                h.unsupported = hevc_unsupported;
 
-            const std::size_t n = bs::parse(*s, span, cpp_mode, h, length_size);
-            result = static_cast<long>(n);
+                const std::size_t n = bs::parse(*s, span, cpp_mode, h, length_size);
+                result = static_cast<long>(n);
+                break;
+            }
 
-        } else {
-            bs::avc::NalHandlers h{};
-            h.sps = avc_sps;
-            h.pps = avc_pps;
-            h.sei = avc_sei;
-            h.slice = avc_slice;
-            h.unsupported = avc_unsupported;
+            case bs::Codec::Avc: {
+                bs::avc::NalHandlers h{};
+                h.sps = avc_sps;
+                h.pps = avc_pps;
+                h.sei = avc_sei;
+                h.slice = avc_slice;
+                h.unsupported = avc_unsupported;
 
-            const std::size_t n = bs::parse(*s, span, cpp_mode, h, length_size);
-            result = static_cast<long>(n);
+                const std::size_t n = bs::parse(*s, span, cpp_mode, h, length_size);
+                result = static_cast<long>(n);
+                break;
+            }
+
+            case bs::Codec::Vvc: {
+                if (cpp_mode == bs::NalFramingMode::AnnexB) {
+                    bs::AnnexBNalIterator framer{span};
+                    result = static_cast<long>(walk_vvc_raw(framer, g_handlers));
+                } else if (cpp_mode == bs::NalFramingMode::LengthPrefixed) {
+                    bs::LengthPrefixedNalIterator framer{span, length_size};
+                    result = static_cast<long>(walk_vvc_raw(framer, g_handlers));
+                } else {
+                    set_error(
+                        "bs_parse: unsupported framing mode for VVC (Annex-B or length-prefixed)"
+                    );
+                    result = -1;
+                }
+                break;
+            }
+
+            case bs::Codec::Av1: {
+                if (cpp_mode == bs::NalFramingMode::Obu) {
+                    result = static_cast<long>(walk_av1_raw(span, g_handlers));
+                } else {
+                    set_error("bs_parse: unsupported framing mode for AV1 (OBU)");
+                    result = -1;
+                }
+                break;
+            }
+
+            case bs::Codec::Vp9:
+            case bs::Codec::Vp8: {
+                if (cpp_mode == bs::NalFramingMode::Ivf) {
+                    bs::IvfFramer framer{span};
+                    result = static_cast<long>(walk_vp_frame_raw(framer, g_handlers));
+                } else {
+                    set_error("bs_parse: unsupported framing mode for VP9/VP8 (IVF)");
+                    result = -1;
+                }
+                break;
+            }
         }
 
         g_handlers = nullptr;
@@ -691,41 +1452,78 @@ BsReport* bs_parse_report(
         g_data_start = data;
 
         /*
-         * The C++ adaptors (hevc_ and avc_ functions) forward each NAL to
-         * g_handlers.  Point g_handlers at a BsNalHandlers whose every slot
-         * is the collector, so every NAL is captured into g_entries.
+         * The codec adaptors fire the catch-all `nal` callback for every unit,
+         * so point only `nal` at the collector — one entry per NAL/OBU/frame.
          */
         BsNalHandlers h{};
         h.ctx = nullptr;
-        h.vps = &collect;
-        h.sps = &collect;
-        h.pps = &collect;
-        h.sei = &collect;
-        h.slice = &collect;
-        h.unsupported = &collect;
+        h.nal = &collect;
 
         g_handlers = &h;
 
-        const auto cpp_mode = to_mode(mode);
+        /*
+         * The auto-detect path (NULL state) selects the framing from the
+         * detected codec; an explicit state uses the caller's mode.
+         */
+        const auto cpp_mode = (state == nullptr) ? default_framing(codec) : to_mode(mode);
 
-        if (codec == bs::Codec::Hevc) {
-            bs::BsNalHandlers ch{};
-            ch.vps = hevc_vps;
-            ch.sps = hevc_sps;
-            ch.pps = hevc_pps;
-            ch.prefix_sei = hevc_sei;
-            ch.suffix_sei = hevc_sei;
-            ch.slice = hevc_slice;
-            ch.unsupported = hevc_unsupported;
-            (void)bs::parse(*s, span, cpp_mode, ch, length_size);
-        } else {
-            bs::avc::NalHandlers ch{};
-            ch.sps = avc_sps;
-            ch.pps = avc_pps;
-            ch.sei = avc_sei;
-            ch.slice = avc_slice;
-            ch.unsupported = avc_unsupported;
-            (void)bs::parse(*s, span, cpp_mode, ch, length_size);
+        switch (codec) {
+            case bs::Codec::Hevc: {
+                bs::BsNalHandlers ch{};
+                ch.vps = hevc_vps;
+                ch.sps = hevc_sps;
+                ch.pps = hevc_pps;
+                ch.prefix_sei = hevc_sei;
+                ch.suffix_sei = hevc_sei;
+                ch.slice = hevc_slice;
+                ch.unsupported = hevc_unsupported;
+                (void)bs::parse(*s, span, cpp_mode, ch, length_size);
+                break;
+            }
+
+            case bs::Codec::Avc: {
+                bs::avc::NalHandlers ch{};
+                ch.sps = avc_sps;
+                ch.pps = avc_pps;
+                ch.sei = avc_sei;
+                ch.slice = avc_slice;
+                ch.unsupported = avc_unsupported;
+                (void)bs::parse(*s, span, cpp_mode, ch, length_size);
+                break;
+            }
+
+            case bs::Codec::Vvc: {
+                if (cpp_mode == bs::NalFramingMode::AnnexB) {
+                    bs::AnnexBNalIterator framer{span};
+                    (void)walk_vvc_raw(framer, g_handlers);
+                } else if (cpp_mode == bs::NalFramingMode::LengthPrefixed) {
+                    bs::LengthPrefixedNalIterator framer{span, length_size};
+                    (void)walk_vvc_raw(framer, g_handlers);
+                } else {
+                    set_error("bs_parse_report: unsupported framing mode for VVC");
+                }
+                break;
+            }
+
+            case bs::Codec::Av1: {
+                if (cpp_mode == bs::NalFramingMode::Obu) {
+                    (void)walk_av1_raw(span, g_handlers);
+                } else {
+                    set_error("bs_parse_report: unsupported framing mode for AV1 (OBU)");
+                }
+                break;
+            }
+
+            case bs::Codec::Vp9:
+            case bs::Codec::Vp8: {
+                if (cpp_mode == bs::NalFramingMode::Ivf) {
+                    bs::IvfFramer framer{span};
+                    (void)walk_vp_frame_raw(framer, g_handlers);
+                } else {
+                    set_error("bs_parse_report: unsupported framing mode for VP9/VP8 (IVF)");
+                }
+                break;
+            }
         }
 
         g_handlers = nullptr;
@@ -743,7 +1541,7 @@ BsReport* bs_parse_report(
         }
 
         BsReport* report = new BsReport{};
-        report->codec = (codec == bs::Codec::Hevc) ? BS_CODEC_HEVC : BS_CODEC_AVC;
+        report->codec = to_bs_codec(codec);
         report->nal_count = count;
         report->vcl_count = vcl;
         report->nals = nals;
@@ -854,6 +1652,174 @@ long bs_parse_avc(
     }
 }
 
+long bs_parse_vvc(
+    BsState* state,
+    const unsigned char* data,
+    size_t size,
+    BsFramingMode mode,
+    unsigned length_size,
+    const BsVvcHandlers* handlers
+) {
+    if (state == nullptr || data == nullptr || handlers == nullptr) {
+        set_error("bs_parse_vvc: null argument");
+        return -1;
+    }
+
+    try {
+        bs::State* s = reinterpret_cast<bs::State*>(state);
+
+        if (s->codec() != bs::Codec::Vvc) {
+            set_error("bs_parse_vvc: state is not a VVC state");
+            return -1;
+        }
+
+        std::span<const std::uint8_t> span(data, size);
+
+        g_vvc_h = handlers;
+
+        bs::VvcParsedHandlers h{};
+        h.dci = vvc_typed_dci;
+        h.opi = vvc_typed_opi;
+        h.vps = vvc_typed_vps;
+        h.sps = vvc_typed_sps;
+        h.pps = vvc_typed_pps;
+        h.ph = vvc_typed_ph;
+        h.slice = vvc_typed_slice;
+
+        const std::size_t n = bs::parse(*s, span, to_mode(mode), h, length_size);
+
+        g_vvc_h = nullptr;
+
+        return static_cast<long>(n);
+
+    } catch (const std::exception& e) {
+        g_vvc_h = nullptr;
+        set_error(e.what());
+        return -1;
+    }
+}
+
+long bs_parse_av1(
+    BsState* state,
+    const unsigned char* data,
+    size_t size,
+    BsFramingMode mode,
+    const BsAv1Handlers* handlers
+) {
+    if (state == nullptr || data == nullptr || handlers == nullptr) {
+        set_error("bs_parse_av1: null argument");
+        return -1;
+    }
+
+    try {
+        bs::State* s = reinterpret_cast<bs::State*>(state);
+
+        if (s->codec() != bs::Codec::Av1) {
+            set_error("bs_parse_av1: state is not an AV1 state");
+            return -1;
+        }
+
+        std::span<const std::uint8_t> span(data, size);
+
+        g_av1_h = handlers;
+
+        bs::Av1ParsedHandlers h{};
+        h.sequence_header = av1_typed_sequence_header;
+        h.frame_header = av1_typed_frame_header;
+
+        const std::size_t n = bs::parse(*s, span, to_mode(mode), h, 4);
+
+        g_av1_h = nullptr;
+
+        return static_cast<long>(n);
+
+    } catch (const std::exception& e) {
+        g_av1_h = nullptr;
+        set_error(e.what());
+        return -1;
+    }
+}
+
+long bs_parse_vp9(
+    BsState* state,
+    const unsigned char* data,
+    size_t size,
+    BsFramingMode mode,
+    const BsVp9Handlers* handlers
+) {
+    if (state == nullptr || data == nullptr || handlers == nullptr) {
+        set_error("bs_parse_vp9: null argument");
+        return -1;
+    }
+
+    try {
+        bs::State* s = reinterpret_cast<bs::State*>(state);
+
+        if (s->codec() != bs::Codec::Vp9) {
+            set_error("bs_parse_vp9: state is not a VP9 state");
+            return -1;
+        }
+
+        std::span<const std::uint8_t> span(data, size);
+
+        g_vp9_h = handlers;
+
+        bs::Vp9ParsedHandlers h{};
+        h.frame_header = vp9_typed_frame_header;
+
+        const std::size_t n = bs::parse(*s, span, to_mode(mode), h, 4);
+
+        g_vp9_h = nullptr;
+
+        return static_cast<long>(n);
+
+    } catch (const std::exception& e) {
+        g_vp9_h = nullptr;
+        set_error(e.what());
+        return -1;
+    }
+}
+
+long bs_parse_vp8(
+    BsState* state,
+    const unsigned char* data,
+    size_t size,
+    BsFramingMode mode,
+    const BsVp8Handlers* handlers
+) {
+    if (state == nullptr || data == nullptr || handlers == nullptr) {
+        set_error("bs_parse_vp8: null argument");
+        return -1;
+    }
+
+    try {
+        bs::State* s = reinterpret_cast<bs::State*>(state);
+
+        if (s->codec() != bs::Codec::Vp8) {
+            set_error("bs_parse_vp8: state is not a VP8 state");
+            return -1;
+        }
+
+        std::span<const std::uint8_t> span(data, size);
+
+        g_vp8_h = handlers;
+
+        bs::Vp8ParsedHandlers h{};
+        h.frame_header = vp8_typed_frame_header;
+
+        const std::size_t n = bs::parse(*s, span, to_mode(mode), h, 4);
+
+        g_vp8_h = nullptr;
+
+        return static_cast<long>(n);
+
+    } catch (const std::exception& e) {
+        g_vp8_h = nullptr;
+        set_error(e.what());
+        return -1;
+    }
+}
+
 BsStructReport* bs_parse_struct_report(
     BsState* state, const unsigned char* data, size_t size, BsFramingMode mode, unsigned length_size
 ) {
@@ -880,22 +1846,64 @@ BsStructReport* bs_parse_struct_report(
 
         g_struct_entries.clear();
 
-        bs::HevcParsedHandlers hh{};
-        bs::AvcParsedHandlers ah{};
+        /*
+         * The auto-detect path (NULL state) selects the framing from the
+         * detected codec; an explicit state uses the caller's mode.
+         */
+        const auto cpp_mode = (state == nullptr) ? default_framing(codec) : to_mode(mode);
 
-        if (codec == bs::Codec::Hevc) {
-            hh.vps = hevc_report_vps;
-            hh.sps = hevc_report_sps;
-            hh.pps = hevc_report_pps;
-        } else {
-            ah.sps = avc_report_sps;
-            ah.pps = avc_report_pps;
-        }
+        switch (codec) {
+            case bs::Codec::Hevc: {
+                bs::HevcParsedHandlers hh{};
+                hh.vps = hevc_report_vps;
+                hh.sps = hevc_report_sps;
+                hh.pps = hevc_report_pps;
+                (void)bs::parse(*s, span, cpp_mode, hh, length_size);
+                break;
+            }
 
-        if (codec == bs::Codec::Hevc) {
-            (void)bs::parse(*s, span, to_mode(mode), hh, length_size);
-        } else {
-            (void)bs::parse(*s, span, to_mode(mode), ah, length_size);
+            case bs::Codec::Avc: {
+                bs::AvcParsedHandlers ah{};
+                ah.sps = avc_report_sps;
+                ah.pps = avc_report_pps;
+                (void)bs::parse(*s, span, cpp_mode, ah, length_size);
+                break;
+            }
+
+            case bs::Codec::Vvc: {
+                bs::VvcParsedHandlers vh{};
+                vh.dci = vvc_report_dci;
+                vh.opi = vvc_report_opi;
+                vh.vps = vvc_report_vps;
+                vh.sps = vvc_report_sps;
+                vh.pps = vvc_report_pps;
+                vh.ph = vvc_report_ph;
+                vh.slice = vvc_report_slice;
+                (void)bs::parse(*s, span, cpp_mode, vh, length_size);
+                break;
+            }
+
+            case bs::Codec::Av1: {
+                bs::Av1ParsedHandlers ah{};
+                ah.sequence_header = av1_report_sequence_header;
+                ah.frame_header = av1_report_frame_header;
+                (void)bs::parse(*s, span, cpp_mode, ah, length_size);
+                break;
+            }
+
+            case bs::Codec::Vp9: {
+                bs::Vp9ParsedHandlers vh{};
+                vh.frame_header = vp9_report_frame_header;
+                (void)bs::parse(*s, span, cpp_mode, vh, length_size);
+                break;
+            }
+
+            case bs::Codec::Vp8: {
+                bs::Vp8ParsedHandlers vh{};
+                vh.frame_header = vp8_report_frame_header;
+                (void)bs::parse(*s, span, cpp_mode, vh, length_size);
+                break;
+            }
         }
 
         const std::size_t count = g_struct_entries.size();
@@ -906,7 +1914,7 @@ BsStructReport* bs_parse_struct_report(
         g_struct_entries.clear();
 
         BsStructReport* report = new BsStructReport{};
-        report->codec = (codec == bs::Codec::Hevc) ? BS_CODEC_HEVC : BS_CODEC_AVC;
+        report->codec = to_bs_codec(codec);
         report->count = count;
         report->entries = entries;
 

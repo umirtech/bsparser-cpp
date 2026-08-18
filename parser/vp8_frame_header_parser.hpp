@@ -17,6 +17,15 @@ namespace vp8 {
  *
  * The header is a byte-aligned fixed-width structure, so no bit
  * reader is required — it reads directly from the frame bytes.
+ *
+ * The three-byte frame tag is little-endian (RFC 6386 §9.1 and the
+ * normative reference decoder in §19.1 / §20.4):
+ *
+ *     tag = c[0] | (c[1] << 8) | (c[2] << 16)
+ *     key_frame       = !(tag & 1)      (0 = key, 1 = inter)
+ *     version         = (tag >> 1) & 7
+ *     show_frame      = (tag >> 4) & 1
+ *     first_part_size = (tag >> 5) & 0x7FFFF
  */
 inline FrameHeader parse_frame_header(std::span<const std::uint8_t> data) {
     if (data.size() < 3) {
@@ -25,17 +34,17 @@ inline FrameHeader parse_frame_header(std::span<const std::uint8_t> data) {
 
     FrameHeader header;
 
-    const std::uint32_t tag = (static_cast<std::uint32_t>(data[0]) << 16) |
+    const std::uint32_t tag = static_cast<std::uint32_t>(data[0]) |
                               (static_cast<std::uint32_t>(data[1]) << 8) |
-                              static_cast<std::uint32_t>(data[2]);
+                              (static_cast<std::uint32_t>(data[2]) << 16);
 
-    header.key_frame = (tag >> 23) & 1u;
+    header.key_frame = (tag & 1u) == 0u;
 
-    header.version = static_cast<std::uint8_t>((tag >> 20) & 7u);
+    header.version = static_cast<std::uint8_t>((tag >> 1) & 7u);
 
-    header.show_frame = (tag >> 19) & 1u;
+    header.show_frame = (tag >> 4) & 1u;
 
-    header.first_part_size = tag & 0x1FFFFFu;
+    header.first_part_size = (tag >> 5) & 0x7FFFFu;
 
     if (!header.key_frame) {
         return header;

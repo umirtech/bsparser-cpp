@@ -155,20 +155,24 @@ inline SequenceHeader parse_sequence_header(std::span<const std::uint8_t> payloa
         (void)bd.read_bool(128); /* enable_ref_frame_mvs */
     }
 
+    /*
+     * seq_force_screen_content_tools / seq_force_integer_mv use the
+     * spec enum values: 0 = OFF, 1 = ON, 2 = SELECT (AV1 §5.5.1).
+     */
     if (bd.read_bool(128)) {
-        sh.seq_force_screen_content_tools = 0; /* SELECT_SCREEN_CONTENT_TOOLS */
+        sh.seq_force_screen_content_tools = 2; /* SELECT_SCREEN_CONTENT_TOOLS */
     } else {
-        sh.seq_force_screen_content_tools = static_cast<std::uint8_t>(bd.read_bool(128) ? 1u : 2u);
+        sh.seq_force_screen_content_tools = static_cast<std::uint8_t>(bd.read_bool(128) ? 1u : 0u);
     }
 
     if (sh.seq_force_screen_content_tools > 0) {
         if (bd.read_bool(128)) {
-            sh.seq_force_integer_mv = 0; /* SELECT_INTEGER_MV */
+            sh.seq_force_integer_mv = 2; /* SELECT_INTEGER_MV */
         } else {
-            sh.seq_force_integer_mv = static_cast<std::uint8_t>(bd.read_bool(128) ? 1u : 2u);
+            sh.seq_force_integer_mv = static_cast<std::uint8_t>(bd.read_bool(128) ? 1u : 0u);
         }
     } else {
-        sh.seq_force_integer_mv = 0; /* SELECT_INTEGER_MV */
+        sh.seq_force_integer_mv = 0; /* OFF_INTEGER_MV */
     }
 
     if (sh.enable_order_hint) {

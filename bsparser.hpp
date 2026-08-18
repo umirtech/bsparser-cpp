@@ -723,7 +723,7 @@ inline std::size_t dispatch_state_vvc(
                     if (resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
                         vvc::SliceHeader hdr =
-                            vvc::parse_slice_header(r2, resolved.sps, resolved.pps);
+                            vvc::parse_slice_header(r2, resolved.sps, resolved.pps, stored_ph);
 
                         if (!hdr.picture_header_in_slice_header_flag && stored_ph != nullptr) {
                             hdr.ph = *stored_ph;

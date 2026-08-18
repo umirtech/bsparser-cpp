@@ -797,7 +797,9 @@ inline Report build_report(
                                             mgr->resolve(static_cast<std::uint8_t>(pps_id));
                                         if (sets.sps != nullptr) {
                                             RbspReader r2(nal.payload_bytes());
-                                            sh = vvc::parse_slice_header(r2, sets.sps, sets.pps);
+                                            sh = vvc::parse_slice_header(
+                                                r2, sets.sps, sets.pps, stored_ph
+                                            );
                                             if (!sh.picture_header_in_slice_header_flag &&
                                                 stored_ph != nullptr) {
                                                 sh.ph = *stored_ph;
@@ -844,7 +846,8 @@ inline Report build_report(
                                              std::to_string(vps.max_layers_minus1 + 1)},
                                             {"max_sublayers",
                                              std::to_string(vps.max_sublayers_minus1 + 1)},
-                                            {"num_ptls", std::to_string(vps.num_ptls_minus1 + 1)},
+                                            {"all_independent",
+                                             vps.all_independent_layers ? "1" : "0"},
                                         };
                                         break;
                                     }
@@ -923,8 +926,12 @@ inline Report build_report(
                                     }
                                     case vvc::NalUnitType::DciNut: {
                                         auto dci = vvc::parse_dci(r);
-                                        summary = "DCI sps=" + std::to_string(dci.num_sps + 1);
-                                        fields = {{"num_sps", std::to_string(dci.num_sps + 1)}};
+                                        summary =
+                                            "DCI ptls=" + std::to_string(dci.num_ptls_minus1 + 1);
+                                        fields = {
+                                            {"num_ptls", std::to_string(dci.num_ptls_minus1 + 1)},
+                                            {"extension", dci.extension_present ? "1" : "0"},
+                                        };
                                         break;
                                     }
                                     case vvc::NalUnitType::OpiNut: {
@@ -932,8 +939,19 @@ inline Report build_report(
                                         summary = "OPI";
                                         fields = {
                                             {"ols_info_present", opi.ols_info_present ? "1" : "0"},
-                                            {"ptl_present", opi.ptl_present ? "1" : "0"},
+                                            {"htid_info_present",
+                                             opi.htid_info_present ? "1" : "0"},
                                         };
+                                        if (opi.ols_info_present) {
+                                            fields.emplace_back(
+                                                "ols_idx", std::to_string(opi.ols_idx)
+                                            );
+                                        }
+                                        if (opi.htid_info_present) {
+                                            fields.emplace_back(
+                                                "htid_plus1", std::to_string(opi.htid_plus1)
+                                            );
+                                        }
                                         break;
                                     }
                                     default:

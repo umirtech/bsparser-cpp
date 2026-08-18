@@ -219,21 +219,42 @@ inline SequenceParameterSet parse_sps(Reader& r) {
         }
 
         const std::uint32_t ctb_size = sps.ctb_size();
-        const unsigned subpic_pos_bits = sps.log2_ctu_size_minus5 + 5;
+
+        /*
+         * Sub-picture coordinates are signalled with wlen / hlen bits where
+         * wlen = Ceil(Log2(tmp_width_val)), hlen = Ceil(Log2(tmp_height_val))
+         * and tmp_width_val / tmp_height_val are the number of CTU columns /
+         * rows (H.266 §7.4.3.4).
+         */
+        const std::uint32_t tmp_width_val = (pic_width + ctb_size - 1u) / ctb_size;
+        const std::uint32_t tmp_height_val = (pic_height + ctb_size - 1u) / ctb_size;
+
+        auto ceil_log2 = [](std::uint32_t v) noexcept -> unsigned {
+            unsigned bits = 0;
+            std::uint32_t power = 1;
+            while (power < v) {
+                power <<= 1u;
+                ++bits;
+            }
+            return bits;
+        };
+
+        const unsigned wlen = ceil_log2(tmp_width_val);
+        const unsigned hlen = ceil_log2(tmp_height_val);
 
         for (std::uint32_t i = 0; num_subpics_minus1 > 0 && i <= num_subpics_minus1; ++i) {
             if (!same_size || i == 0) {
                 if (i > 0 && pic_width > ctb_size) {
-                    (void)r.read_bits(subpic_pos_bits);
+                    (void)r.read_bits(wlen); /* sps_subpic_ctu_top_left_x */
                 }
                 if (i > 0 && pic_height > ctb_size) {
-                    (void)r.read_bits(subpic_pos_bits);
+                    (void)r.read_bits(hlen); /* sps_subpic_ctu_top_left_y */
                 }
                 if (i < num_subpics_minus1 && pic_width > ctb_size) {
-                    (void)r.read_bits(subpic_pos_bits);
+                    (void)r.read_bits(wlen); /* sps_subpic_width_minus1 */
                 }
                 if (i < num_subpics_minus1 && pic_height > ctb_size) {
-                    (void)r.read_bits(subpic_pos_bits);
+                    (void)r.read_bits(hlen); /* sps_subpic_height_minus1 */
                 }
             }
             if (!independent_subpics) {
