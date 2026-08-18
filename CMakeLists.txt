@@ -281,6 +281,29 @@ add_test(
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
 )
 
+#The same C API smoke test runs against the other codecs; the explicit codec
+#avoids ambiguity in VCL-only / OBU samples.
+foreach(pair IN ITEMS
+    "avc_main.h264 avc"
+    "vvc_sample.266 vvc"
+    "av1_sample.obu av1"
+    "vp9_sample.ivf vp9"
+    "vp8_sample.ivf vp8"
+)
+
+    string(REPLACE " " ";" parts "${pair}")
+    list(GET parts 0 sample)
+    list(GET parts 1 codec)
+
+    add_test(
+        NAME bs_capi_${codec}
+        COMMAND bs_capi_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${sample}
+            ${codec}
+    )
+
+endforeach()
+
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #C API accuracy verifier (verify_c vs pre-generated reference files)

@@ -103,11 +103,12 @@ class PocState {
     std::uint32_t prev_lsb_ = 0;
 
     /*
-     * A CLVSS picture: IRAP (7..11) or GDR (10) with ph_recovery_poc_cnt 0.
+     * A CLVSS picture: an IRAP (7, 8, 9, 11) or a GDR picture (10) with
+     * ph_recovery_poc_cnt == 0.
      */
     [[nodiscard]]
     static bool is_clvss_pic(std::uint8_t nal_unit_type, const PictureHeader& ph) noexcept {
-        if (nal_unit_type >= 7 && nal_unit_type <= 11) {
+        if ((nal_unit_type >= 7 && nal_unit_type <= 9) || nal_unit_type == 11) {
             return true;
         }
         return nal_unit_type == 10 && ph.recovery_poc_cnt == 0;

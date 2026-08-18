@@ -5,7 +5,8 @@
  *
  * Demonstrates consuming the library from plain C: create a state, run a
  * callback dispatch over BsNalUnit structs, and request a structured report
- * (auto-detecting the codec).
+ * (auto-detecting the codec).  Works for every codec (HEVC/AVC/VVC/AV1/
+ * VP9/VP8); the framing mode is chosen from the probed codec.
  */
 
 #include <bsparser.h>
@@ -98,6 +99,96 @@ static void on_avc_slice(void* ctx, const BsAvcSliceHeader* hdr) {
     ++g_avc_slices;
 }
 
+/* VVC typed callbacks. */
+static int g_vvc_dci = 0, g_vvc_opi = 0, g_vvc_vps = 0, g_vvc_sps = 0;
+static int g_vvc_pps = 0, g_vvc_ph = 0, g_vvc_slices = 0;
+
+static void on_vvc_dci(void* ctx, const BsVvcDci* dci) {
+    (void)ctx;
+    (void)dci;
+    ++g_vvc_dci;
+}
+
+static void on_vvc_opi(void* ctx, const BsVvcOpi* opi) {
+    (void)ctx;
+    (void)opi;
+    ++g_vvc_opi;
+}
+
+static void on_vvc_vps(void* ctx, const BsVvcVideoParameterSet* vps) {
+    (void)ctx;
+    (void)vps;
+    ++g_vvc_vps;
+}
+
+static void on_vvc_sps(void* ctx, const BsVvcSequenceParameterSet* sps) {
+    (void)ctx;
+    (void)sps;
+    ++g_vvc_sps;
+}
+
+static void on_vvc_pps(void* ctx, const BsVvcPictureParameterSet* pps) {
+    (void)ctx;
+    (void)pps;
+    ++g_vvc_pps;
+}
+
+static void on_vvc_ph(void* ctx, const BsVvcPictureHeader* ph) {
+    (void)ctx;
+    (void)ph;
+    ++g_vvc_ph;
+}
+
+static void on_vvc_slice(void* ctx, const BsVvcSliceHeader* hdr) {
+    (void)ctx;
+    (void)hdr;
+    ++g_vvc_slices;
+}
+
+/* AV1 / VP9 / VP8 typed callbacks. */
+static int g_av1_sh = 0, g_av1_fh = 0;
+static int g_vp9_fh = 0, g_vp8_fh = 0;
+
+static void on_av1_sequence_header(void* ctx, const BsAv1SequenceHeader* sh) {
+    (void)ctx;
+    (void)sh;
+    ++g_av1_sh;
+}
+
+static void on_av1_frame_header(void* ctx, const BsAv1FrameHeader* fh) {
+    (void)ctx;
+    (void)fh;
+    ++g_av1_fh;
+}
+
+static void on_vp9_frame_header(void* ctx, const BsVp9FrameHeader* fh) {
+    (void)ctx;
+    (void)fh;
+    ++g_vp9_fh;
+}
+
+static void on_vp8_frame_header(void* ctx, const BsVp8FrameHeader* fh) {
+    (void)ctx;
+    (void)fh;
+    ++g_vp8_fh;
+}
+
+/* Pick the framing the given codec is carried in. */
+static BsFramingMode framing_for(BsCodec codec) {
+    switch (codec) {
+        case BS_CODEC_AV1:
+            return BS_FRAMING_OBU;
+        case BS_CODEC_VP9:
+        case BS_CODEC_VP8:
+            return BS_FRAMING_IVF;
+        case BS_CODEC_VVC:
+        case BS_CODEC_HEVC:
+        case BS_CODEC_AVC:
+        default:
+            return BS_FRAMING_ANNEX_B;
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "usage: %s <stream>\n", argv[0]);
@@ -131,6 +222,8 @@ int main(int argc, char** argv) {
     /*
      * Determine the codec up front via the auto-detect report, then build a
      * matching state so the callback dispatch runs against the right codec.
+     * (Detection sniffs the stream bytes, so the Annex-B probe finds the
+     * codec even for OBU/IVF inputs.)
      */
     BsReport* probe = bs_parse_report(NULL, buf, got, BS_FRAMING_ANNEX_B, 4);
     if (probe == NULL) {
@@ -138,8 +231,28 @@ int main(int argc, char** argv) {
         free(buf);
         return 1;
     }
-    const BsCodec codec = probe->codec;
+    BsCodec codec = probe->codec;
     bs_report_destroy(probe);
+
+    /* An explicit codec (argv[2]) overrides auto-detection; VCL-only streams
+     * are genuinely ambiguous, so deterministic tests pass the codec. */
+    if (argc > 2) {
+        if (strcmp(argv[2], "hevc") == 0) {
+            codec = BS_CODEC_HEVC;
+        } else if (strcmp(argv[2], "avc") == 0) {
+            codec = BS_CODEC_AVC;
+        } else if (strcmp(argv[2], "vvc") == 0) {
+            codec = BS_CODEC_VVC;
+        } else if (strcmp(argv[2], "av1") == 0) {
+            codec = BS_CODEC_AV1;
+        } else if (strcmp(argv[2], "vp9") == 0) {
+            codec = BS_CODEC_VP9;
+        } else if (strcmp(argv[2], "vp8") == 0) {
+            codec = BS_CODEC_VP8;
+        }
+    }
+
+    const BsFramingMode fm = framing_for(codec);
 
     /*
      * Callback dispatch path: callbacks receive a BsNalUnit view (mirrors the
@@ -158,7 +271,7 @@ int main(int argc, char** argv) {
     handlers.sps = on_sps;
     handlers.slice = on_nal;
 
-    long parsed = bs_parse(state, buf, got, BS_FRAMING_ANNEX_B, 4, &handlers);
+    long parsed = bs_parse(state, buf, got, fm, 4, &handlers);
 
     if (parsed < 0) {
         fprintf(stderr, "parse failed: %s\n", bs_get_last_error());
@@ -178,28 +291,77 @@ int main(int argc, char** argv) {
      * nested sub-structs intact.  A state matching the codec is required.
      */
     BsState* tstate = bs_state_create(codec);
-    if (codec == BS_CODEC_HEVC) {
-        BsHevcHandlers th;
-        memset(&th, 0, sizeof(th));
-        th.vps = on_hevc_vps;
-        th.sps = on_hevc_sps;
-        th.pps = on_hevc_pps;
-        th.sei = on_hevc_sei;
-        th.slice = on_hevc_slice;
-        bs_parse_hevc(tstate, buf, got, BS_FRAMING_ANNEX_B, 4, &th);
-    } else {
-        BsAvcHandlers th;
-        memset(&th, 0, sizeof(th));
-        th.sps = on_avc_sps;
-        th.pps = on_avc_pps;
-        th.slice = on_avc_slice;
-        bs_parse_avc(tstate, buf, got, BS_FRAMING_ANNEX_B, 4, &th);
+    switch (codec) {
+        case BS_CODEC_HEVC: {
+            BsHevcHandlers th;
+            memset(&th, 0, sizeof(th));
+            th.vps = on_hevc_vps;
+            th.sps = on_hevc_sps;
+            th.pps = on_hevc_pps;
+            th.sei = on_hevc_sei;
+            th.slice = on_hevc_slice;
+            bs_parse_hevc(tstate, buf, got, fm, 4, &th);
+            break;
+        }
+
+        case BS_CODEC_AVC: {
+            BsAvcHandlers th;
+            memset(&th, 0, sizeof(th));
+            th.sps = on_avc_sps;
+            th.pps = on_avc_pps;
+            th.slice = on_avc_slice;
+            bs_parse_avc(tstate, buf, got, fm, 4, &th);
+            break;
+        }
+
+        case BS_CODEC_VVC: {
+            BsVvcHandlers th;
+            memset(&th, 0, sizeof(th));
+            th.dci = on_vvc_dci;
+            th.opi = on_vvc_opi;
+            th.vps = on_vvc_vps;
+            th.sps = on_vvc_sps;
+            th.pps = on_vvc_pps;
+            th.ph = on_vvc_ph;
+            th.slice = on_vvc_slice;
+            bs_parse_vvc(tstate, buf, got, fm, 4, &th);
+            break;
+        }
+
+        case BS_CODEC_AV1: {
+            BsAv1Handlers th;
+            memset(&th, 0, sizeof(th));
+            th.sequence_header = on_av1_sequence_header;
+            th.frame_header = on_av1_frame_header;
+            bs_parse_av1(tstate, buf, got, fm, &th);
+            break;
+        }
+
+        case BS_CODEC_VP9: {
+            BsVp9Handlers th;
+            memset(&th, 0, sizeof(th));
+            th.frame_header = on_vp9_frame_header;
+            bs_parse_vp9(tstate, buf, got, fm, &th);
+            break;
+        }
+
+        case BS_CODEC_VP8: {
+            BsVp8Handlers th;
+            memset(&th, 0, sizeof(th));
+            th.frame_header = on_vp8_frame_header;
+            bs_parse_vp8(tstate, buf, got, fm, &th);
+            break;
+        }
+
+        default:
+            break;
     }
     bs_state_destroy(tstate);
 
     printf(
         "[c-test] typed callbacks: hevc vps=%d sps=%d pps=%d sei_msgs=%d (first type=%u) slices=%d "
-        "| avc sps=%d pps=%d slices=%d\n",
+        "| avc sps=%d pps=%d slices=%d | vvc dci=%d opi=%d vps=%d sps=%d pps=%d ph=%d slices=%d "
+        "| av1 sh=%d fh=%d | vp9 fh=%d | vp8 fh=%d\n",
         g_hevc_vps,
         g_hevc_sps,
         g_hevc_pps,
@@ -208,13 +370,33 @@ int main(int argc, char** argv) {
         g_hevc_slices,
         g_avc_sps,
         g_avc_pps,
-        g_avc_slices
+        g_avc_slices,
+        g_vvc_dci,
+        g_vvc_opi,
+        g_vvc_vps,
+        g_vvc_sps,
+        g_vvc_pps,
+        g_vvc_ph,
+        g_vvc_slices,
+        g_av1_sh,
+        g_av1_fh,
+        g_vp9_fh,
+        g_vp8_fh
     );
 
     /*
-     * Collected struct report (C-side equivalent of bs::StructReport).
+     * Collected struct report (C-side equivalent of bs::StructReport).  The
+     * state pins the codec (auto-detect cannot disambiguate VCL-only / raw
+     * OBU streams).
      */
-    BsStructReport* sr = bs_parse_struct_report(NULL, buf, got, BS_FRAMING_ANNEX_B, 4);
+    BsState* rstate = bs_state_create(codec);
+    if (rstate == NULL) {
+        fprintf(stderr, "create failed: %s\n", bs_get_last_error());
+        free(buf);
+        return 1;
+    }
+
+    BsStructReport* sr = bs_parse_struct_report(rstate, buf, got, fm, 4);
     if (sr == NULL) {
         fprintf(stderr, "struct report failed: %s\n", bs_get_last_error());
         free(buf);
@@ -260,15 +442,59 @@ int main(int argc, char** argv) {
                     ((const BsAvcPictureParameterSet*)e->data)->pic_parameter_set_id
                 );
                 break;
+
+            case BS_STRUCT_VVC_SPS:
+                printf(
+                    "  VVC SPS id=%u ctu=%u\n",
+                    ((const BsVvcSequenceParameterSet*)e->data)->sps_id,
+                    ((const BsVvcSequenceParameterSet*)e->data)->log2_ctu_size_minus5 + 5
+                );
+                break;
+
+            case BS_STRUCT_VVC_PPS:
+                printf("  VVC PPS id=%u\n", ((const BsVvcPictureParameterSet*)e->data)->pps_id);
+                break;
+
+            case BS_STRUCT_AV1_SEQUENCE_HEADER:
+                printf(
+                    "  AV1 SPS profile=%u w=%u h=%u\n",
+                    ((const BsAv1SequenceHeader*)e->data)->seq_profile,
+                    ((const BsAv1SequenceHeader*)e->data)->max_frame_width,
+                    ((const BsAv1SequenceHeader*)e->data)->max_frame_height
+                );
+                break;
+
+            case BS_STRUCT_VP9_FRAME_HEADER:
+                printf(
+                    "  VP9 FH profile=%u w=%u h=%u\n",
+                    ((const BsVp9FrameHeader*)e->data)->profile,
+                    ((const BsVp9FrameHeader*)e->data)->width,
+                    ((const BsVp9FrameHeader*)e->data)->height
+                );
+                break;
+
+            case BS_STRUCT_VP8_FRAME_HEADER:
+                printf(
+                    "  VP8 FH key=%u w=%u h=%u\n",
+                    ((const BsVp8FrameHeader*)e->data)->key_frame,
+                    ((const BsVp8FrameHeader*)e->data)->width,
+                    ((const BsVp8FrameHeader*)e->data)->height
+                );
+                break;
+
+            default:
+                printf("  kind=%d\n", (int)e->kind);
+                break;
         }
     }
     bs_struct_report_destroy(sr);
 
     /*
-     * Structured report path: auto-detect codec via NULL state.  The
-     * report is a BsReport of BsNalEntry structs (no JSON).
+     * Structured report path: the codec-pinned state selects the NAL-type
+     * names; passing a NULL state instead would auto-detect.  The report is a
+     * BsReport of BsNalEntry structs (no JSON).
      */
-    BsReport* report = bs_parse_report(NULL, buf, got, BS_FRAMING_ANNEX_B, 4);
+    BsReport* report = bs_parse_report(rstate, buf, got, fm, 4);
 
     if (report == NULL) {
         fprintf(stderr, "report failed: %s\n", bs_get_last_error());
@@ -297,6 +523,8 @@ int main(int argc, char** argv) {
     }
 
     bs_report_destroy(report);
+
+    bs_state_destroy(rstate);
 
     free(buf);
     return 0;

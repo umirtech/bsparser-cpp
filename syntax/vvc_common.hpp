@@ -48,7 +48,9 @@ inline bool is_vcl_nal_unit(std::uint8_t type) noexcept {
 
 [[nodiscard]]
 inline bool is_irap_nal_unit(std::uint8_t type) noexcept {
-    return type >= 7 && type <= 11;
+    /* IRAP = IDR_W_RADL(7), IDR_N_LP(8), CRA(9), RSV_IRAP(11).
+     * GDR_NUT(10) is not an IRAP. */
+    return (type >= 7 && type <= 9) || type == 11;
 }
 
 [[nodiscard]]
