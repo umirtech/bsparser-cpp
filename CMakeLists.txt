@@ -283,7 +283,7 @@ add_test(
 
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-#C API accuracy verifier (verify_c vs FFmpeg-derived reference files)
+#C API accuracy verifier (verify_c vs pre-generated reference files)
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
 #Built through CMake (not a hand-rolled link line) so the library name and

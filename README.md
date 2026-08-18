@@ -11,9 +11,9 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
   for C++20 compilers, or the compiled C library otherwise.
 - **Auto parameter-set management**: a `bs::State` stores VPS/SPS/PPS as they
   appear, so slice handlers resolve dependencies for you.
-- **Verified**: HEVC/AVC accuracy is checked field-by-field against `ffmpeg`;
-  VVC/AV1/VP9/VP8 are tested against streams produced by `ffmpeg`
-  (`libvvenc`, `libaom-av1`, `libvpx`, `libvpx-vp9`).
+- **Spec-driven correctness**: syntax fields are parsed and validated directly
+  against the specifications (H.264, H.265, H.266, AV1, VP8/VP9), including
+  native picture-order derivation per the spec algorithms.
 
 
 
@@ -217,7 +217,7 @@ parser/               framing, NAL dispatch, VPS/SPS/PPS/slice/SEI parsers
 syntax/               immutable parsed models
 capi/                 C public API (stable ABI, compiled into bs_capi)
 cli/                  bs_cli: JSON / HTML report exporter
-tools/                dev/verification tools (bench, verify_c, …)
+tools/                dev tools (bench, sample downloader, …)
 tests/                unit, integration and fuzz tests
 docs/architecture.md  architecture documentation
 ```

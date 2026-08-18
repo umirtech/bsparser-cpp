@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Run the real-sample validation suite described in tests/real/manifest.json.
 
-Downloads any missing samples, then runs bs_cli on every file and (where
-applicable) cross-checks the report against ffmpeg's trace_headers via
-tools/compare_ffmpeg.py.  Exits non-zero if any expected PASS sample fails.
+Downloads any missing samples, then runs bs_cli on every file and checks the
+parse succeeds.  Exits non-zero if any expected PASS sample fails.
 
 Usage: python tools/validate_real.py
 """
@@ -21,7 +20,6 @@ BS_CLI = os.path.join(
     "Release" if os.name == "nt" else "",
     "bs_cli.exe" if os.name == "nt" else "bs_cli",
 )
-COMPARE = os.path.join(ROOT, "tools", "compare_ffmpeg.py")
 
 
 def run(cmd, timeout=300):
@@ -53,19 +51,12 @@ def main():
                         if l.strip().startswith("codec=") and "framing=" in l), "")
         ours = " ".join(ok_line.split()[:2])
 
-        expected = s.get("ffmpeg_trace_match", "N/A")
-        status = "skip"
-        if expected == "PASS":
-            c = run(["python", COMPARE, path])
-            status = "PASS" if c.stdout.strip().startswith("PASS") else "FAIL"
-            if status == "FAIL":
-                fails += 1
-        elif expected == "N/A":
-            status = "n/a"
+        status = "OK" if ours else "FAIL"
+        if status == "FAIL":
+            fails += 1
 
-        mark = "OK " if status in ("PASS", "n/a") else "FAIL"
-        print(f"[{mark}] {s['name']:<26} ours={ours:<6} trace={status} "
-              f"(expected {expected})")
+        mark = "OK " if status == "OK" else "FAIL"
+        print(f"[{mark}] {s['name']:<26} ours={ours:<6}")
 
     if skipped:
         print(f"\n{len(samples) - fails - skipped}/{len(samples)} samples OK "

@@ -20,8 +20,8 @@ namespace vp9 {
  * Parses the fixed-width start of the uncompressed header using
  * the plain (no emulation-prevention) bit reader.
  *
- * Field order follows the VP9 bitstream specification (and
- * FFmpeg's vp9.c): after the common prefix a KEY frame carries a
+ * Field order follows the VP9 bitstream specification: after the
+ * common prefix a KEY frame carries a
  * 24-bit sync code (0x498342) + color config before the frame
  * size.
  */
