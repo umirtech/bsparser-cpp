@@ -56,18 +56,22 @@ inline Container sniff(std::span<const std::uint8_t> data) {
         }
     }
 
-    if (data.size() >= 4 && data[0]==0x4F && data[1]==0x67 && data[2]==0x67 && data[3]==0x53) {
+    if (data.size() >= 4 && data[0] == 0x4F && data[1] == 0x67 && data[2] == 0x67 &&
+        data[3] == 0x53) {
         return Container::Ogg;
     }
 
-    if (data.size() >= 4 && data[0]==0x00 && data[1]==0x00 && data[2]==0x01 && data[3]==0xBA) {
+    if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01 &&
+        data[3] == 0xBA) {
         return Container::Ps;
     }
 
     // fMP4 (fragmented) also has ftyp/moov — already caught above; also detect moof
-    for (size_t i=0;i+8<=scan;++i) {
-        if (std::memcmp(data.data()+i+4, "moof",4)==0) return Container::Mp4;
-        if (std::memcmp(data.data()+i+4, "sidx",4)==0) return Container::Mp4;
+    for (size_t i = 0; i + 8 <= scan; ++i) {
+        if (std::memcmp(data.data() + i + 4, "moof", 4) == 0)
+            return Container::Mp4;
+        if (std::memcmp(data.data() + i + 4, "sidx", 4) == 0)
+            return Container::Mp4;
     }
 
     /*
