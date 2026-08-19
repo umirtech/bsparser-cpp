@@ -93,7 +93,9 @@ inline void bs_free_BsAvcVuiParameters(BsAvcVuiParameters* s) {
         return;
 }
 
-inline void bs_free_BsHevcAlternativeTransferCharacteristics(BsHevcAlternativeTransferCharacteristics* s) {
+inline void bs_free_BsHevcAlternativeTransferCharacteristics(
+    BsHevcAlternativeTransferCharacteristics* s
+) {
     if (!s)
         return;
 }
@@ -180,7 +182,9 @@ inline void bs_free_BsHevcLevel(BsHevcLevel* s) {
         return;
 }
 
-inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(BsHevcMasteringDisplayColourVolumeChromaticity* s) {
+inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(
+    BsHevcMasteringDisplayColourVolumeChromaticity* s
+) {
     if (!s)
         return;
 }
@@ -201,7 +205,9 @@ inline void bs_free_BsHevcPps3dExtension(BsHevcPps3dExtension* s) {
     delete[] s->depth_layer_transforms;
 }
 
-inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(BsHevcPps3dExtensionDepthLayerTransform* s) {
+inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(
+    BsHevcPps3dExtensionDepthLayerTransform* s
+) {
     if (!s)
         return;
     delete[] s->dlt_value_flag;
@@ -421,7 +427,9 @@ inline void bs_free_BsHevcSpsRangeExtension(BsHevcSpsRangeExtension* s) {
         return;
 }
 
-inline void bs_free_BsHevcSpsReferencePictureSetParameters(BsHevcSpsReferencePictureSetParameters* s) {
+inline void bs_free_BsHevcSpsReferencePictureSetParameters(
+    BsHevcSpsReferencePictureSetParameters* s
+) {
     if (!s)
         return;
     delete[] s->short_term_ref_pic_sets;
@@ -544,12 +552,16 @@ inline void bs_free_BsVvcSequenceParameterSet(BsVvcSequenceParameterSet* s) {
     delete[] s->virtual_boundary_pos_y_minus1;
 }
 
-inline void bs_free_BsVvcSequenceParameterSetRefPicListEntry(BsVvcSequenceParameterSetRefPicListEntry* s) {
+inline void bs_free_BsVvcSequenceParameterSetRefPicListEntry(
+    BsVvcSequenceParameterSetRefPicListEntry* s
+) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsVvcSequenceParameterSetRefPicListStruct(BsVvcSequenceParameterSetRefPicListStruct* s) {
+inline void bs_free_BsVvcSequenceParameterSetRefPicListStruct(
+    BsVvcSequenceParameterSetRefPicListStruct* s
+) {
     if (!s)
         return;
     delete[] s->entries;
@@ -675,7 +687,7 @@ inline void bs_free_BsHevcSequenceParameterSet(BsHevcSequenceParameterSet* s) {
         return;
 }
 
-} /* namespace bs::capi */
+}  // namespace capi
 } /* namespace bs */
 
 #endif /* BS_STRUCTS_FREE_H */

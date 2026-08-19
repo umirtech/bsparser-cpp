@@ -76,12 +76,17 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
         while (f.valid() && seq + other < 8) {
             try {
                 bs::av1::Obu obu = bs::av1::parse_obu(f.obu());
-                if (obu.type() == 1) ++seq;
-                else ++other;
-            } catch (...) { ++other; }
+                if (obu.type() == 1)
+                    ++seq;
+                else
+                    ++other;
+            } catch (...) {
+                ++other;
+            }
             f.next();
         }
-        if (seq > 0) return bs::Codec::Av1;
+        if (seq > 0)
+            return bs::Codec::Av1;
     }
     // VVC Annex-B — validate by actually parsing VPS/SPS (avoids AVC SEI alias)
     {
@@ -93,47 +98,83 @@ bs::Codec detect_codec(std::span<const std::uint8_t> data) {
                 try {
                     auto vnal = bs::vvc::parse_nal_unit(nal);
                     unsigned vtype = vnal.nal_type();
-                    if (vtype==14) { // VPS
-                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_vps(r); ++vvc_ps; } catch (...) {}
-                    } else if (vtype==15) { // SPS
-                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_sps(r); ++vvc_ps; } catch (...) {}
-                    } else if (vtype==16) { // PPS
-                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_pps(r); ++vvc_ps; } catch (...) {}
+                    if (vtype == 14) {  // VPS
+                        try {
+                            bs::RbspReader r(vnal.payload_bytes());
+                            (void)bs::vvc::parse_vps(r);
+                            ++vvc_ps;
+                        } catch (...) {
+                        }
+                    } else if (vtype == 15) {  // SPS
+                        try {
+                            bs::RbspReader r(vnal.payload_bytes());
+                            (void)bs::vvc::parse_sps(r);
+                            ++vvc_ps;
+                        } catch (...) {
+                        }
+                    } else if (vtype == 16) {  // PPS
+                        try {
+                            bs::RbspReader r(vnal.payload_bytes());
+                            (void)bs::vvc::parse_pps(r);
+                            ++vvc_ps;
+                        } catch (...) {
+                        }
                     }
-                } catch (...) {}
+                } catch (...) {
+                }
                 ++vvc_nal;
             }
             it.next();
         }
-        if (vvc_ps > 0) return bs::Codec::Vvc;
+        if (vvc_ps > 0)
+            return bs::Codec::Vvc;
     }
     // HEVC vs AVC
     unsigned hevc_ps = 0, avc_ps = 0;
     std::size_t i = 0;
     unsigned nal_count = 0;
     while (i < data.size() && nal_count < 64) {
-        if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 && data[i + 3] == 0x01) i += 4;
-        else if (i + 3 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x01) i += 3;
-        else break;
-        if (i >= data.size()) break;
+        if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 &&
+            data[i + 3] == 0x01)
+            i += 4;
+        else if (i + 3 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 &&
+                 data[i + 2] == 0x01)
+            i += 3;
+        else
+            break;
+        if (i >= data.size())
+            break;
         const uint8_t b0 = data[i], b1 = (i + 1 < data.size()) ? data[i + 1] : 0;
         const unsigned hevc_type = (b0 >> 1) & 0x3F;
-        if ((hevc_type == 32 || hevc_type == 33 || hevc_type == 34) && (b1 >> 3) == 0 && (b1 & 0x07) != 0) ++hevc_ps;
-        if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28) ++avc_ps;
+        if ((hevc_type == 32 || hevc_type == 33 || hevc_type == 34) && (b1 >> 3) == 0 &&
+            (b1 & 0x07) != 0)
+            ++hevc_ps;
+        if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28)
+            ++avc_ps;
         ++nal_count;
         size_t j = i;
-        while (j + 3 < data.size() && !(data[j]==0x00 && data[j+1]==0x00 && data[j+2]==0x01)) ++j;
-        if (j + 3 >= data.size()) break;
+        while (j + 3 < data.size() &&
+               !(data[j] == 0x00 && data[j + 1] == 0x00 && data[j + 2] == 0x01))
+            ++j;
+        if (j + 3 >= data.size())
+            break;
         i = j;
     }
-    if (hevc_ps > avc_ps) return bs::Codec::Hevc;
-    if (avc_ps > 0) return bs::Codec::Avc;
-    if (data.size() >= 3 && data[0]==0x00 && data[1]==0x00 && data[2]==0x01) i = 3;
-    else if (data.size() >= 4 && data[0]==0x00 && data[1]==0x00 && data[2]==0x00 && data[3]==0x01) i = 4;
-    if (i >= data.size()) return bs::Codec::Hevc;
+    if (hevc_ps > avc_ps)
+        return bs::Codec::Hevc;
+    if (avc_ps > 0)
+        return bs::Codec::Avc;
+    if (data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01)
+        i = 3;
+    else if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
+             data[3] == 0x01)
+        i = 4;
+    if (i >= data.size())
+        return bs::Codec::Hevc;
     const uint8_t b0 = data[i];
     const unsigned avc_type = b0 & 0x1F;
-    if (avc_type >= 1 && avc_type <= 21) return bs::Codec::Avc;
+    if (avc_type >= 1 && avc_type <= 21)
+        return bs::Codec::Avc;
     return bs::Codec::Hevc;
 }
 
@@ -348,9 +389,8 @@ int main(int argc, char** argv) {
             };
             const unsigned ci = static_cast<unsigned>(container);
             const char* cname = ci < 9 ? container_names[ci] : "?";
-            std::cout << "container=" << cname
-                      << " codec=" << es.codec_name << " " << es.width << "x" << es.height
-                      << " (demuxed " << es.bytes.size() << " bytes)\n";
+            std::cout << "container=" << cname << " codec=" << es.codec_name << " " << es.width
+                      << "x" << es.height << " (demuxed " << es.bytes.size() << " bytes)\n";
         } else {
             std::cerr << "warning: detected container " << static_cast<unsigned>(container)
                       << " but demux failed; parsing as raw stream\n";
@@ -358,8 +398,10 @@ int main(int argc, char** argv) {
     }
     // Raw streams: pick framing from codec when auto (AV1→OBU, VP9/8→IVF)
     if (container == demux::Container::Unknown && codec_arg == "auto" && format_arg == "annexb") {
-        if (codec == Codec::Av1) mode = NalFramingMode::Obu;
-        else if (codec == Codec::Vp9 || codec == Codec::Vp8) mode = NalFramingMode::Ivf;
+        if (codec == Codec::Av1)
+            mode = NalFramingMode::Obu;
+        else if (codec == Codec::Vp9 || codec == Codec::Vp8)
+            mode = NalFramingMode::Ivf;
     }
 
     /*
@@ -372,7 +414,8 @@ int main(int argc, char** argv) {
         report = cli::build_report(codec, data, mode, length_size);
     } catch (const std::exception& e) {
         std::cerr << "error: unsupported or malformed input (" << e.what() << ")\n";
-        std::cerr << "hint: try --codec <hevc|avc|vvc|av1|vp9|vp8> and --format <annexb|length|obu|ivf>\n";
+        std::cerr << "hint: try --codec <hevc|avc|vvc|av1|vp9|vp8> and --format "
+                     "<annexb|length|obu|ivf>\n";
         return 2;
     } catch (...) {
         std::cerr << "error: unsupported or malformed input (unknown)\n";
@@ -383,28 +426,38 @@ int main(int argc, char** argv) {
     if (report.entries.empty() && report.parsed == 0) {
         // Distinguish "supported container but no valid video" vs pure garbage
         if (container != demux::Container::Unknown) {
-            std::cerr << "error: container detected (" << static_cast<unsigned>(container)
-                      << ") but no decodable video stream found — unsupported codec or empty track\n";
+            std::cerr
+                << "error: container detected (" << static_cast<unsigned>(container)
+                << ") but no decodable video stream found — unsupported codec or empty track\n";
         } else {
             // Quick magic check for obviously non-video files
             bool looks_like_text = true;
             for (size_t k = 0; k < std::min<size_t>(data.size(), 256); ++k) {
                 unsigned char c = data[k];
-                if (c < 0x09 || (c > 0x0D && c < 0x20) || c > 0x7E) { looks_like_text = false; break; }
+                if (c < 0x09 || (c > 0x0D && c < 0x20) || c > 0x7E) {
+                    looks_like_text = false;
+                    break;
+                }
             }
             if (looks_like_text && data.size() > 0) {
-                std::cerr << "error: input does not look like a video bitstream (no start codes, no OBU, no IVF)\n";
+                std::cerr << "error: input does not look like a video bitstream (no start codes, "
+                             "no OBU, no IVF)\n";
             } else {
-                std::cerr << "error: no NALs/OBUs parsed — unsupported, truncated, or empty stream\n";
+                std::cerr
+                    << "error: no NALs/OBUs parsed — unsupported, truncated, or empty stream\n";
             }
-            std::cerr << "hint: file type not recognized; supported: Annex-B HEVC/AVC/VVC, AV1 OBU, VP8/9 IVF, "
+            std::cerr << "hint: file type not recognized; supported: Annex-B HEVC/AVC/VVC, AV1 "
+                         "OBU, VP8/9 IVF, "
                          "and containers MP4/MOV/fMP4, MKV/WebM, FLV, AVI, TS, OGG, PS\n";
         }
         // Still emit the empty JSON report for tooling, but signal failure
-        const std::string empty_payload = (infer_kind(out_path) == OutputKind::Html) ? cli::to_html(report) : cli::to_json(report);
+        const std::string empty_payload = (infer_kind(out_path) == OutputKind::Html)
+                                              ? cli::to_html(report)
+                                              : cli::to_json(report);
         if (have_out) {
             std::ofstream out(out_path, std::ios::binary);
-            if (out) out.write(empty_payload.data(), (std::streamsize)empty_payload.size());
+            if (out)
+                out.write(empty_payload.data(), (std::streamsize)empty_payload.size());
         } else {
             std::cout << empty_payload;
         }
