@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vvc_ph.hpp"
+#include "vvc_pps.hpp"
 #include "vvc_slice.hpp"
 #include "vvc_sps.hpp"
 
@@ -79,7 +80,6 @@ inline void parse_ref_pic_list_struct_s(
     out.poc_lsb_lt.clear();
     out.delta_poc_msb_cycle_present_flag.clear();
     out.delta_poc_msb_cycle_lt.clear();
-    int poc_cnt = 0;
     for (uint32_t i = 0; i < out.num_ref_entries; ++i) {
         PictureHeaderRefPicLists::Entry e{};
         if (sps.inter_layer_prediction_enabled_flag)
@@ -101,7 +101,6 @@ inline void parse_ref_pic_list_struct_s(
                 if (!ltrp) {
                     uint32_t bits = sps.log2_max_pic_order_cnt_lsb_minus4 + 4;
                     e.rpls_poc_lsb_lt = r.read_bits(bits);
-                    ++poc_cnt;
                 }
             }
         } else {

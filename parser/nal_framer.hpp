@@ -3,16 +3,13 @@
 #include "ivf_framer.hpp"
 #include "obu_framer.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <span>
 #include <stdexcept>
 #include <vector>
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#endif
 
 namespace bs {
 
@@ -150,28 +147,12 @@ inline std::uint64_t sw_allzero(std::uint64_t v) noexcept {
 /*
  * Count trailing zeros of a non-zero 64-bit value.
  *
- * GCC/Clang provide __builtin_ctzll; MSVC uses _BitScanForward64
- * (x86-64/ARM64) or _BitScanForward on 32-bit halves.
+ * Portable C++20 <bit> — std::countr_zero is available on GCC, Clang and MSVC
+ * with /std:c++20 and replaces __builtin_ctzll / _BitScanForward64.
  */
 [[nodiscard]]
 inline int ctz64(std::uint64_t v) noexcept {
-#if defined(_MSC_VER)
-    unsigned long index = 0;
-
-#if defined(_M_X64) || defined(_M_ARM64)
-    _BitScanForward64(&index, v);
-#else
-    if (_BitScanForward(&index, static_cast<unsigned long>(v & 0xFFFFFFFFu)) != 0) {
-        return static_cast<int>(index);
-    }
-    _BitScanForward(&index, static_cast<unsigned long>(v >> 32));
-    return static_cast<int>(index) + 32;
-#endif
-
-    return static_cast<int>(index);
-#else
-    return __builtin_ctzll(v);
-#endif
+    return std::countr_zero(v);
 }
 
 }  // namespace

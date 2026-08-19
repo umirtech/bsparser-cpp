@@ -6,6 +6,7 @@
 #include <bitstream/boolean_decoder.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -51,14 +52,8 @@ inline std::uint32_t read_ns(BooleanDecoder& bd, std::uint32_t n) {
     // tile case, n = max_width. For n=1, value 0 only.
     if (n == 1)
         return 0;
-    int w = 0;
-    std::uint32_t tmp = n;
-    while (tmp) {
-        ++w;
-        tmp >>= 1;
-    }
-    // Actually w = av_log2(n)+1
-    w = 32 - __builtin_clz(n);
+    // Portable C++20: bit_width(n) == 32 - __builtin_clz(n) for n>0, handles MSVC without builtins
+    int w = static_cast<int>(std::bit_width(n));
     std::uint32_t m = (static_cast<std::uint32_t>(1) << w) - n;
     std::uint32_t v = 0;
     if (w - 1 > 0)
@@ -88,7 +83,7 @@ inline std::uint32_t read_subexp(BooleanDecoder& bd, std::uint32_t range_max) {
     // max_len = floor_log2(range_max-1)-3
     int max_len = 0;
     if (range_max > 1) {
-        int l = 32 - __builtin_clz(range_max - 1);
+        int l = static_cast<int>(std::bit_width(range_max - 1));
         max_len = l - 4;  // because av_log2 is floor, so l-1 is log2, then -3 => l-4
         if (max_len < 0)
             max_len = 0;

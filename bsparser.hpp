@@ -89,7 +89,6 @@
 #include <cstdint>
 #include <memory>
 #include <span>
-#include <utility>
 #include <vector>
 
 namespace bs {
