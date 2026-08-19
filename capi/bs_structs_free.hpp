@@ -78,9 +78,7 @@ inline void bs_free_BsAvcVuiParameters(BsAvcVuiParameters* s) {
         return;
 }
 
-inline void bs_free_BsHevcAlternativeTransferCharacteristics(
-    BsHevcAlternativeTransferCharacteristics* s
-) {
+inline void bs_free_BsHevcAlternativeTransferCharacteristics(BsHevcAlternativeTransferCharacteristics* s) {
     if (!s)
         return;
 }
@@ -167,9 +165,7 @@ inline void bs_free_BsHevcLevel(BsHevcLevel* s) {
         return;
 }
 
-inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(
-    BsHevcMasteringDisplayColourVolumeChromaticity* s
-) {
+inline void bs_free_BsHevcMasteringDisplayColourVolumeChromaticity(BsHevcMasteringDisplayColourVolumeChromaticity* s) {
     if (!s)
         return;
 }
@@ -190,9 +186,7 @@ inline void bs_free_BsHevcPps3dExtension(BsHevcPps3dExtension* s) {
     delete[] s->depth_layer_transforms;
 }
 
-inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(
-    BsHevcPps3dExtensionDepthLayerTransform* s
-) {
+inline void bs_free_BsHevcPps3dExtensionDepthLayerTransform(BsHevcPps3dExtensionDepthLayerTransform* s) {
     if (!s)
         return;
     delete[] s->dlt_value_flag;
@@ -412,9 +406,7 @@ inline void bs_free_BsHevcSpsRangeExtension(BsHevcSpsRangeExtension* s) {
         return;
 }
 
-inline void bs_free_BsHevcSpsReferencePictureSetParameters(
-    BsHevcSpsReferencePictureSetParameters* s
-) {
+inline void bs_free_BsHevcSpsReferencePictureSetParameters(BsHevcSpsReferencePictureSetParameters* s) {
     if (!s)
         return;
     delete[] s->short_term_ref_pic_sets;
@@ -496,30 +488,66 @@ inline void bs_free_BsVvcOpi(BsVvcOpi* s) {
         return;
 }
 
-inline void bs_free_BsVvcPictureHeader(BsVvcPictureHeader* s) {
+inline void bs_free_BsVvcPictureHeaderRefPicListsEntry(BsVvcPictureHeaderRefPicListsEntry* s) {
     if (!s)
         return;
+}
+
+inline void bs_free_BsVvcPictureHeaderRefPicListsList(BsVvcPictureHeaderRefPicListsList* s) {
+    if (!s)
+        return;
+    delete[] s->entries;
+    delete[] s->poc_lsb_lt;
+    delete[] s->delta_poc_msb_cycle_present_flag;
+    delete[] s->delta_poc_msb_cycle_lt;
 }
 
 inline void bs_free_BsVvcPictureParameterSet(BsVvcPictureParameterSet* s) {
     if (!s)
         return;
+    delete[] s->subpic_id;
+    delete[] s->tile_column_width_minus1;
+    delete[] s->tile_row_height_minus1;
+    delete[] s->col_width_val;
+    delete[] s->row_height_val;
+    delete[] s->slice_width_in_tiles_minus1;
+    delete[] s->slice_height_in_tiles_minus1;
+    delete[] s->num_exp_slices_in_tile;
+    delete[] s->tile_idx_delta_val;
+    delete[] s->slice_top_left_tile_idx;
+    delete[] s->num_slices_in_tile;
+    delete[] s->slice_height_in_ctus;
+    delete[] s->cb_qp_offset_list;
+    delete[] s->cr_qp_offset_list;
+    delete[] s->joint_cbcr_qp_offset_list;
 }
 
 inline void bs_free_BsVvcSequenceParameterSet(BsVvcSequenceParameterSet* s) {
     if (!s)
         return;
+    delete[] s->virtual_boundary_pos_x_minus1;
+    delete[] s->virtual_boundary_pos_y_minus1;
 }
 
-inline void bs_free_BsVvcSliceHeader(BsVvcSliceHeader* s) {
+inline void bs_free_BsVvcSequenceParameterSetRefPicListEntry(BsVvcSequenceParameterSetRefPicListEntry* s) {
     if (!s)
         return;
+}
+
+inline void bs_free_BsVvcSequenceParameterSetRefPicListStruct(BsVvcSequenceParameterSetRefPicListStruct* s) {
+    if (!s)
+        return;
+    delete[] s->entries;
 }
 
 inline void bs_free_BsVvcVideoParameterSet(BsVvcVideoParameterSet* s) {
     if (!s)
         return;
     delete[] s->layer_ids;
+    delete[] s->independent_layer_flag;
+    delete[] s->pt_present_flag;
+    delete[] s->ptl_max_tid;
+    delete[] s->ols_ptl_idx;
 }
 
 inline void bs_free_BsAvcPictureParameterSet(BsAvcPictureParameterSet* s) {
@@ -573,6 +601,11 @@ inline void bs_free_BsHevcVideoParameterSet(BsHevcVideoParameterSet* s) {
     delete[] s->layer_sets;
 }
 
+inline void bs_free_BsVvcPictureHeaderRefPicLists(BsVvcPictureHeaderRefPicLists* s) {
+    if (!s)
+        return;
+}
+
 inline void bs_free_BsHevcHrdParameters(BsHevcHrdParameters* s) {
     if (!s)
         return;
@@ -593,6 +626,25 @@ inline void bs_free_BsHevcVuiParameters(BsHevcVuiParameters* s) {
         return;
 }
 
+inline void bs_free_BsVvcPictureHeader(BsVvcPictureHeader* s) {
+    if (!s)
+        return;
+    delete[] s->extra_bits;
+    delete[] s->alf_aps_id_luma;
+    delete[] s->virtual_boundary_pos_x_minus1;
+    delete[] s->virtual_boundary_pos_y_minus1;
+    delete[] s->extension_data;
+}
+
+inline void bs_free_BsVvcSliceHeader(BsVvcSliceHeader* s) {
+    if (!s)
+        return;
+    delete[] s->extra_bits;
+    delete[] s->alf_aps_id_luma;
+    delete[] s->slice_header_extension_data;
+    delete[] s->entry_point_offset_minus1;
+}
+
 inline void bs_free_BsHevcPictureParameterSet(BsHevcPictureParameterSet* s) {
     if (!s)
         return;
@@ -603,7 +655,7 @@ inline void bs_free_BsHevcSequenceParameterSet(BsHevcSequenceParameterSet* s) {
         return;
 }
 
-}  // namespace capi
+} /* namespace bs::capi */
 } /* namespace bs */
 
 #endif /* BS_STRUCTS_FREE_H */

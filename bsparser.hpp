@@ -683,7 +683,7 @@ inline std::size_t dispatch_state_vvc(
 
                     if (resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
-                        vvc::PictureHeader phdr = vvc::parse_ph(r2, resolved.sps);
+                        vvc::PictureHeader phdr = vvc::parse_ph(r2, resolved.sps, resolved.pps);
                         manager.store_ph(phdr);
                         if (ph.ph)
                             ph.ph(phdr);
@@ -709,7 +709,7 @@ inline std::size_t dispatch_state_vvc(
                      * slices: read pps_id, resolve the SPS, re-parse.
                      */
                     RbspReader r1(nal.payload_bytes());
-                    vvc::SliceHeader lead = vvc::parse_slice_header(r1, nullptr, nullptr);
+                    vvc::SliceHeader lead = vvc::parse_slice_header(r1, nullptr, nullptr, nullptr, static_cast<int>(nal.nal_type()));
 
                     const vvc::PictureHeader* stored_ph = manager.ph();
 
@@ -723,7 +723,7 @@ inline std::size_t dispatch_state_vvc(
                     if (resolved.sps != nullptr) {
                         RbspReader r2(nal.payload_bytes());
                         vvc::SliceHeader hdr =
-                            vvc::parse_slice_header(r2, resolved.sps, resolved.pps, stored_ph);
+                            vvc::parse_slice_header(r2, resolved.sps, resolved.pps, stored_ph, static_cast<int>(nal.nal_type()));
 
                         if (!hdr.picture_header_in_slice_header_flag && stored_ph != nullptr) {
                             hdr.ph = *stored_ph;
