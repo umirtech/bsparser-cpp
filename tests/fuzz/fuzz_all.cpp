@@ -13,8 +13,9 @@
 
 namespace {
 
-void parse_with_codec(bs::Codec codec, bs::NalFramingMode framing,
-                      std::span<const std::uint8_t> data) {
+void parse_with_codec(
+    bs::Codec codec, bs::NalFramingMode framing, std::span<const std::uint8_t> data
+) {
     if (data.empty()) {
         return;
     }
@@ -23,73 +24,71 @@ void parse_with_codec(bs::Codec codec, bs::NalFramingMode framing,
         auto state = bs::create_state(codec);
 
         switch (codec) {
+            case bs::Codec::Hevc: {
+                bs::HevcParsedHandlers h{};
+                h.vps = [](const bs::VideoParameterSet&) {};
+                h.sps = [](const bs::SequenceParameterSet&) {};
+                h.pps = [](const bs::PictureParameterSet&) {};
+                h.sei = [](const bs::ParsedSei&) {};
+                h.slice = [](const bs::SliceSegmentHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Hevc: {
-            bs::HevcParsedHandlers h{};
-            h.vps = [](const bs::VideoParameterSet&) {};
-            h.sps = [](const bs::SequenceParameterSet&) {};
-            h.pps = [](const bs::PictureParameterSet&) {};
-            h.sei = [](const bs::ParsedSei&) {};
-            h.slice = [](const bs::SliceSegmentHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
+            case bs::Codec::Avc: {
+                bs::AvcParsedHandlers h{};
+                h.sps = [](const bs::avc::SequenceParameterSet&) {};
+                h.pps = [](const bs::avc::PictureParameterSet&) {};
+                h.sei = [](const bs::avc::ParsedSei&) {};
+                h.slice = [](const bs::avc::SliceHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Avc: {
-            bs::AvcParsedHandlers h{};
-            h.sps = [](const bs::avc::SequenceParameterSet&) {};
-            h.pps = [](const bs::avc::PictureParameterSet&) {};
-            h.sei = [](const bs::avc::ParsedSei&) {};
-            h.slice = [](const bs::avc::SliceHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
+            case bs::Codec::Vvc: {
+                bs::VvcParsedHandlers h{};
+                h.dci = [](const bs::vvc::Dci&) {};
+                h.opi = [](const bs::vvc::Opi&) {};
+                h.vps = [](const bs::vvc::VideoParameterSet&) {};
+                h.sps = [](const bs::vvc::SequenceParameterSet&) {};
+                h.pps = [](const bs::vvc::PictureParameterSet&) {};
+                h.ph = [](const bs::vvc::PictureHeader&) {};
+                h.slice = [](const bs::vvc::SliceHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Vvc: {
-            bs::VvcParsedHandlers h{};
-            h.dci = [](const bs::vvc::Dci&) {};
-            h.opi = [](const bs::vvc::Opi&) {};
-            h.vps = [](const bs::vvc::VideoParameterSet&) {};
-            h.sps = [](const bs::vvc::SequenceParameterSet&) {};
-            h.pps = [](const bs::vvc::PictureParameterSet&) {};
-            h.ph = [](const bs::vvc::PictureHeader&) {};
-            h.slice = [](const bs::vvc::SliceHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
+            case bs::Codec::Av1: {
+                bs::Av1ParsedHandlers h{};
+                h.sequence_header = [](const bs::av1::SequenceHeader&) {};
+                h.frame_header = [](const bs::av1::FrameHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Av1: {
-            bs::Av1ParsedHandlers h{};
-            h.sequence_header = [](const bs::av1::SequenceHeader&) {};
-            h.frame_header = [](const bs::av1::FrameHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
+            case bs::Codec::Vp9: {
+                bs::Vp9ParsedHandlers h{};
+                h.frame_header = [](const bs::vp9::FrameHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Vp9: {
-            bs::Vp9ParsedHandlers h{};
-            h.frame_header = [](const bs::vp9::FrameHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
+            case bs::Codec::Vp8: {
+                bs::Vp8ParsedHandlers h{};
+                h.frame_header = [](const bs::vp8::FrameHeader&) {};
+                (void)bs::parse(*state, data, framing, h);
+                break;
+            }
 
-        case bs::Codec::Vp8: {
-            bs::Vp8ParsedHandlers h{};
-            h.frame_header = [](const bs::vp8::FrameHeader&) {};
-            (void)bs::parse(*state, data, framing, h);
-            break;
-        }
-
-        default:
-            break;
+            default:
+                break;
         }
     } catch (...) {
         /* fuzz targets must never leak exceptions */
     }
 }
 
-} // namespace
-
+}  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     std::span<const std::uint8_t> sp(data, size);

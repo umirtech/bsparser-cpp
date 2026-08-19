@@ -452,7 +452,8 @@ inline ElementaryStream demux_mkv(std::span<const std::uint8_t> data) {
 
                 if (cid == detail::kSimpleBlock) {
                     block_data = element.subspan(q, static_cast<std::size_t>(csize));
-                } else if (cid == detail::kBlockGroup) {                    std::size_t b = 0;
+                } else if (cid == detail::kBlockGroup) {
+                    std::size_t b = 0;
                     std::uint64_t bid, bsize, blen;
 
                     if (detail::read_vint(

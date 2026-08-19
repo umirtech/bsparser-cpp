@@ -100,8 +100,7 @@ struct SpsCodingBlockParameters {
     [[nodiscard]]
     constexpr std::uint32_t max_luma_coding_block_size() const noexcept {
         return pow2_clamped(
-            log2_min_luma_coding_block_size_minus3 +
-            log2_diff_max_min_luma_coding_block_size + 3
+            log2_min_luma_coding_block_size_minus3 + log2_diff_max_min_luma_coding_block_size + 3
         );
     }
 

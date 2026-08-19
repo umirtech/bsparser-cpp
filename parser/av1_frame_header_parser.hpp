@@ -360,7 +360,7 @@ inline void parse_lr(
     BooleanDecoder& bd,
     FrameHeader& fh,
     const SequenceHeader& seq,
-    bool coded_lossless,
+    [[maybe_unused]] bool coded_lossless,
     bool all_lossless
 ) {
     if (all_lossless || fh.allow_intrabc || !seq.enable_restoration) {

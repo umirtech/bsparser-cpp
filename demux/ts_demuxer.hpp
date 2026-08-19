@@ -277,10 +277,14 @@ inline ElementaryStream demux_ts(std::span<const std::uint8_t> data) {
 
         case 0x06: {
             // Private data — probe payload for AV1 OBU or VP9 IVF
-            if (stream.size() >= 4 && stream[0]==0x0A) out.codec = Codec::Av1;
-            else out.codec = Codec::Av1;
-            if (stream.size()>=2 && stream[0]==0x0A) out.framing = NalFramingMode::Obu;
-            else out.framing = NalFramingMode::AnnexB;
+            if (stream.size() >= 4 && stream[0] == 0x0A)
+                out.codec = Codec::Av1;
+            else
+                out.codec = Codec::Av1;
+            if (stream.size() >= 2 && stream[0] == 0x0A)
+                out.framing = NalFramingMode::Obu;
+            else
+                out.framing = NalFramingMode::AnnexB;
             out.bytes = std::move(stream);
             out.ok = true;
             return out;

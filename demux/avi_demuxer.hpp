@@ -190,47 +190,43 @@ inline ElementaryStream demux_avi(std::span<const std::uint8_t> data) {
                         break;
                     }
 
-                            if (item.is_list && item.data + 4 <= item.end &&
-                                detail::is_fourcc(data, item.data, "strl")) {
-                                std::size_t q = item.data + 4;
+                    if (item.is_list && item.data + 4 <= item.end &&
+                        detail::is_fourcc(data, item.data, "strl")) {
+                        std::size_t q = item.data + 4;
 
-                                bool in_video_strl = false;
+                        bool in_video_strl = false;
 
-                                while (q + 8 <= item.end) {
-                                    detail::Chunk sub = detail::chunk_at(data, q);
+                        while (q + 8 <= item.end) {
+                            detail::Chunk sub = detail::chunk_at(data, q);
 
-                                    if (sub.end <= q) {
-                                        break;
-                                    }
+                            if (sub.end <= q) {
+                                break;
+                            }
 
-                                    if (detail::is_fourcc(data, q, "strh") &&
-                                        sub.data + 12 <= sub.end) {
-                                        if (detail::is_fourcc(data, sub.data, "vids")) {
-                                            have_video_stream = true;
-                                            in_video_strl = true;
-                                            codec_fourcc = std::string(
-                                                reinterpret_cast<const char*>(
-                                                    data.data() + sub.data + 4
-                                                ),
-                                                4
-                                            );
-                                        }
-                                    }
-
-                                    /*
-                                     * Only take width/height from the video
-                                     * strl: an audio strf is a WAVEFORMATEX
-                                     * and its bytes are not dimensions.
-                                     */
-                                    if (in_video_strl && detail::is_fourcc(data, q, "strf") &&
-                                        sub.data + 20 <= sub.end) {
-                                        width = detail::read_u32(data, sub.data + 4);
-                                        height = detail::read_u32(data, sub.data + 8);
-                                    }
-
-                                    q = sub.end;
+                            if (detail::is_fourcc(data, q, "strh") && sub.data + 12 <= sub.end) {
+                                if (detail::is_fourcc(data, sub.data, "vids")) {
+                                    have_video_stream = true;
+                                    in_video_strl = true;
+                                    codec_fourcc = std::string(
+                                        reinterpret_cast<const char*>(data.data() + sub.data + 4), 4
+                                    );
                                 }
                             }
+
+                            /*
+                             * Only take width/height from the video
+                             * strl: an audio strf is a WAVEFORMATEX
+                             * and its bytes are not dimensions.
+                             */
+                            if (in_video_strl && detail::is_fourcc(data, q, "strf") &&
+                                sub.data + 20 <= sub.end) {
+                                width = detail::read_u32(data, sub.data + 4);
+                                height = detail::read_u32(data, sub.data + 8);
+                            }
+
+                            q = sub.end;
+                        }
+                    }
 
                     p = item.end;
                 }
