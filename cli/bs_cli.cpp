@@ -363,9 +363,58 @@ int main(int argc, char** argv) {
     }
 
     /*
-     * Parse + build the report.
+     * Parse + build the report — hardened for unsupported input.
+     * Any exception from build_report (malformed/truncated/unsupported
+     * codec) is turned into a user error, not a crash (fuzz-safe).
      */
-    cli::Report report = cli::build_report(codec, data, mode, length_size);
+    cli::Report report;
+    try {
+        report = cli::build_report(codec, data, mode, length_size);
+    } catch (const std::exception& e) {
+        std::cerr << "error: unsupported or malformed input (" << e.what() << ")\n";
+        std::cerr << "hint: try --codec <hevc|avc|vvc|av1|vp9|vp8> and --format <annexb|length|obu|ivf>\n";
+        return 2;
+    } catch (...) {
+        std::cerr << "error: unsupported or malformed input (unknown)\n";
+        return 2;
+    }
+
+    // No NALs/OBUs parsed at all — treat as unsupported (e.g. text, PDF, empty video track)
+    if (report.entries.empty() && report.parsed == 0) {
+        // Distinguish "supported container but no valid video" vs pure garbage
+        if (container != demux::Container::Unknown) {
+            std::cerr << "error: container detected (" << static_cast<unsigned>(container)
+                      << ") but no decodable video stream found — unsupported codec or empty track\n";
+        } else {
+            // Quick magic check for obviously non-video files
+            bool looks_like_text = true;
+            for (size_t k = 0; k < std::min<size_t>(data.size(), 256); ++k) {
+                unsigned char c = data[k];
+                if (c < 0x09 || (c > 0x0D && c < 0x20) || c > 0x7E) { looks_like_text = false; break; }
+            }
+            if (looks_like_text && data.size() > 0) {
+                std::cerr << "error: input does not look like a video bitstream (no start codes, no OBU, no IVF)\n";
+            } else {
+                std::cerr << "error: no NALs/OBUs parsed — unsupported, truncated, or empty stream\n";
+            }
+            std::cerr << "hint: file type not recognized; supported: Annex-B HEVC/AVC/VVC, AV1 OBU, VP8/9 IVF, "
+                         "and containers MP4/MOV/fMP4, MKV/WebM, FLV, AVI, TS, OGG, PS\n";
+        }
+        // Still emit the empty JSON report for tooling, but signal failure
+        const std::string empty_payload = (infer_kind(out_path) == OutputKind::Html) ? cli::to_html(report) : cli::to_json(report);
+        if (have_out) {
+            std::ofstream out(out_path, std::ios::binary);
+            if (out) out.write(empty_payload.data(), (std::streamsize)empty_payload.size());
+        } else {
+            std::cout << empty_payload;
+        }
+        return 2;
+    }
+
+    // Non-fatal warning: explicit --codec disagrees with parse result
+    if (codec_arg != "auto" && report.entries.empty() && report.parsed == 0) {
+        std::cerr << "warning: --codec " << codec_arg << " produced no output — try --codec auto\n";
+    }
 
     /*
      * Determine output kind.
