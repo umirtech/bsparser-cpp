@@ -55,112 +55,85 @@ void print_help(const char* prog) {
 }
 
 /*
- * Very small auto-detector: scan the first few NAL units.
+ * Auto-detector for raw streams (demux already handled).
  *
- * The very first NAL of a stream is not necessarily a parameter set
- * (an encoder may start with AUD, SEI or a VCL slice), so look at up to
- * 64 leading Annex-B NALs and count HEVC vs AVC parameter-set types:
- *
- *   HEVC  VPS=32, SPS=33, PPS=34
- *   AVC   SPS=7,  PPS=8
- *
- * The codec with any matching parameter sets wins; with none we fall
- * back to inspecting the first NAL byte (an AVC type 1..21 is AVC,
- * otherwise HEVC).
+ * 1. IVF: DKIF + VP80/VP90 fourcc
+ * 2. AV1 OBU: Annex-B vs low-overhead OBU probing via obu_framer
+ * 3. VVC: Annex-B NAL types 12-15, 25-28 contain DCI/OPI/VPS/SPS/PPS
+ * 4. HEVC/AVC: scan up to 64 Annex-B NALs for VPS/SPS/PPS
  */
 [[nodiscard]]
 bs::Codec detect_codec(std::span<const std::uint8_t> data) {
-    unsigned hevc_ps = 0;
-    unsigned avc_ps = 0;
+    // IVF
+    if (data.size() >= 32 && std::memcmp(data.data(), "DKIF", 4) == 0) {
+        const bool vp9 = data.size() >= 12 && data[8] == 'V' && data[9] == 'P' && data[10] == '9';
+        return vp9 ? bs::Codec::Vp9 : bs::Codec::Vp8;
+    }
+    // AV1 OBU — try to parse as OBU, check for SEQUENCE_HEADER (type 1)
+    {
+        bs::av1::ObuFramer f{data};
+        unsigned seq = 0, other = 0;
+        while (f.valid() && seq + other < 8) {
+            try {
+                bs::av1::Obu obu = bs::av1::parse_obu(f.obu());
+                if (obu.type() == 1) ++seq;
+                else ++other;
+            } catch (...) { ++other; }
+            f.next();
+        }
+        if (seq > 0) return bs::Codec::Av1;
+    }
+    // VVC Annex-B — validate by actually parsing VPS/SPS (avoids AVC SEI alias)
+    {
+        bs::AnnexBNalIterator it{data};
+        unsigned vvc_ps = 0, vvc_nal = 0;
+        while (it.valid() && vvc_nal < 32) {
+            auto nal = it.nal();
+            if (nal.size() >= 2) {
+                try {
+                    auto vnal = bs::vvc::parse_nal_unit(nal);
+                    unsigned vtype = vnal.nal_type();
+                    if (vtype==14) { // VPS
+                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_vps(r); ++vvc_ps; } catch (...) {}
+                    } else if (vtype==15) { // SPS
+                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_sps(r); ++vvc_ps; } catch (...) {}
+                    } else if (vtype==16) { // PPS
+                        try { bs::RbspReader r(vnal.payload_bytes()); (void)bs::vvc::parse_pps(r); ++vvc_ps; } catch (...) {}
+                    }
+                } catch (...) {}
+                ++vvc_nal;
+            }
+            it.next();
+        }
+        if (vvc_ps > 0) return bs::Codec::Vvc;
+    }
+    // HEVC vs AVC
+    unsigned hevc_ps = 0, avc_ps = 0;
     std::size_t i = 0;
     unsigned nal_count = 0;
-
     while (i < data.size() && nal_count < 64) {
-        if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 &&
-            data[i + 3] == 0x01) {
-            i += 4;
-        } else if (i + 3 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 &&
-                   data[i + 2] == 0x01) {
-            i += 3;
-        } else {
-            break;
-        }
-
-        if (i >= data.size()) {
-            break;
-        }
-
-        const std::uint8_t b0 = data[i];
-        const std::uint8_t b1 = (i + 1 < data.size()) ? data[i + 1] : 0;
-
-        /*
-         * HEVC parameter sets: 2-byte NAL header.  For a base-layer
-         * (layer_id 0) temporal-0 set, byte1 == 0x01 (temporal_id_plus1).
-         * This distinguishes HEVC VPS/SPS/PPS from an AVC slice whose
-         * first byte could alias the same HEVC type (e.g. AVC type-1
-         * 0x41 -> HEVC type 32).
-         */
+        if (i + 4 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 && data[i + 3] == 0x01) i += 4;
+        else if (i + 3 <= data.size() && data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x01) i += 3;
+        else break;
+        if (i >= data.size()) break;
+        const uint8_t b0 = data[i], b1 = (i + 1 < data.size()) ? data[i + 1] : 0;
         const unsigned hevc_type = (b0 >> 1) & 0x3F;
-
-        if ((hevc_type == 32 || hevc_type == 33 || hevc_type == 34) && (b1 >> 3) == 0 &&
-            (b1 & 0x07) != 0) {
-            ++hevc_ps;
-        }
-
-        /*
-         * AVC parameter sets: SPS = 0x67 / 0x27, PPS = 0x68 / 0x28.
-         */
-        if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28) {
-            ++avc_ps;
-        }
-
+        if ((hevc_type == 32 || hevc_type == 33 || hevc_type == 34) && (b1 >> 3) == 0 && (b1 & 0x07) != 0) ++hevc_ps;
+        if (b0 == 0x67 || b0 == 0x68 || b0 == 0x27 || b0 == 0x28) ++avc_ps;
         ++nal_count;
-
-        /*
-         * Advance to the next Annex-B start code.  If the stream is
-         * length-prefixed there is no start code and we stop after the
-         * first NAL, which the fallback below still resolves.
-         */
-        std::size_t j = i;
-
-        while (j + 3 < data.size() &&
-               !(data[j] == 0x00 && data[j + 1] == 0x00 && data[j + 2] == 0x01)) {
-            ++j;
-        }
-
-        if (j + 3 >= data.size()) {
-            break;
-        }
-
+        size_t j = i;
+        while (j + 3 < data.size() && !(data[j]==0x00 && data[j+1]==0x00 && data[j+2]==0x01)) ++j;
+        if (j + 3 >= data.size()) break;
         i = j;
     }
-
-    if (hevc_ps > avc_ps) {
-        return bs::Codec::Hevc;
-    }
-
-    if (avc_ps > 0) {
-        return bs::Codec::Avc;
-    }
-
-    if (data.size() >= 3 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01) {
-        i = 3;
-    } else if (data.size() >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 &&
-               data[3] == 0x01) {
-        i = 4;
-    }
-
-    if (i >= data.size()) {
-        return bs::Codec::Hevc;
-    }
-
-    const std::uint8_t b0 = data[i];
+    if (hevc_ps > avc_ps) return bs::Codec::Hevc;
+    if (avc_ps > 0) return bs::Codec::Avc;
+    if (data.size() >= 3 && data[0]==0x00 && data[1]==0x00 && data[2]==0x01) i = 3;
+    else if (data.size() >= 4 && data[0]==0x00 && data[1]==0x00 && data[2]==0x00 && data[3]==0x01) i = 4;
+    if (i >= data.size()) return bs::Codec::Hevc;
+    const uint8_t b0 = data[i];
     const unsigned avc_type = b0 & 0x1F;
-
-    if (avc_type >= 1 && avc_type <= 21) {
-        return bs::Codec::Avc;
-    }
-
+    if (avc_type >= 1 && avc_type <= 21) return bs::Codec::Avc;
     return bs::Codec::Hevc;
 }
 
@@ -356,33 +329,37 @@ int main(int argc, char** argv) {
     std::span<const std::uint8_t> data{bytes.data(), bytes.size()};
 
     /*
-     * Container auto-detection: if the input is a muxed file
-     * (MP4 / TS / FLV / AVI / IVF), demux it to an elementary
-     * stream and let the demuxer choose the codec + framing.
+     * Container auto-detection: try demux for all known containers
+     * (MP4/MOV/fMP4, MKV/WebM, FLV, AVI, TS, IVF, OGG, PS) via
+     * bs::demux::sniff/demux. The demuxer's es.codec/framing always
+     * win for muxed files (container is authoritative).
      */
     std::vector<std::uint8_t> demuxed;
     const demux::Container container = demux::sniff(data);
-
     if (container != demux::Container::Unknown) {
         const demux::ElementaryStream es = demux::demux(container, data);
-
         if (es.ok && !es.bytes.empty()) {
             demuxed = es.bytes;
             data = std::span<const std::uint8_t>(demuxed.data(), demuxed.size());
             codec = es.codec;
             mode = es.framing;
-
             static const char* container_names[] = {
-                "?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF", "MKV"
+                "?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF", "MKV", "Ogg", "PS"
             };
-
-            std::cout << "container=" << container_names[static_cast<unsigned>(container)]
+            const unsigned ci = static_cast<unsigned>(container);
+            const char* cname = ci < 9 ? container_names[ci] : "?";
+            std::cout << "container=" << cname
                       << " codec=" << es.codec_name << " " << es.width << "x" << es.height
                       << " (demuxed " << es.bytes.size() << " bytes)\n";
         } else {
-            std::cerr << "warning: detected " << static_cast<unsigned>(container)
-                      << " container but demux failed; parsing as raw stream\n";
+            std::cerr << "warning: detected container " << static_cast<unsigned>(container)
+                      << " but demux failed; parsing as raw stream\n";
         }
+    }
+    // Raw streams: pick framing from codec when auto (AV1→OBU, VP9/8→IVF)
+    if (container == demux::Container::Unknown && codec_arg == "auto" && format_arg == "annexb") {
+        if (codec == Codec::Av1) mode = NalFramingMode::Obu;
+        else if (codec == Codec::Vp9 || codec == Codec::Vp8) mode = NalFramingMode::Ivf;
     }
 
     /*

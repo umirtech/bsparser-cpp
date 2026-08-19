@@ -5,6 +5,8 @@
 #include "flv_demuxer.hpp"
 #include "mkv_demuxer.hpp"
 #include "mp4_demuxer.hpp"
+#include "ogg_demuxer.hpp"
+#include "ps_demuxer.hpp"
 #include "ts_demuxer.hpp"
 
 #include <algorithm>
@@ -52,6 +54,20 @@ inline Container sniff(std::span<const std::uint8_t> data) {
             std::memcmp(data.data() + i + 4, "moof", 4) == 0) {
             return Container::Mp4;
         }
+    }
+
+    if (data.size() >= 4 && data[0]==0x4F && data[1]==0x67 && data[2]==0x67 && data[3]==0x53) {
+        return Container::Ogg;
+    }
+
+    if (data.size() >= 4 && data[0]==0x00 && data[1]==0x00 && data[2]==0x01 && data[3]==0xBA) {
+        return Container::Ps;
+    }
+
+    // fMP4 (fragmented) also has ftyp/moov — already caught above; also detect moof
+    for (size_t i=0;i+8<=scan;++i) {
+        if (std::memcmp(data.data()+i+4, "moof",4)==0) return Container::Mp4;
+        if (std::memcmp(data.data()+i+4, "sidx",4)==0) return Container::Mp4;
     }
 
     /*
@@ -106,6 +122,12 @@ inline ElementaryStream demux(Container container, std::span<const std::uint8_t>
 
             case Container::Mkv:
                 return mkv::demux_mkv(data);
+
+            case Container::Ogg:
+                return ogg::demux_ogg(data);
+
+            case Container::Ps:
+                return ps::demux_ps(data);
 
             default:
                 return out;
