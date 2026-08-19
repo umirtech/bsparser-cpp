@@ -33,8 +33,8 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 |---|---|---|
 | H.265/HEVC | Annex-B / length-prefixed | VPS/SPS/PPS, slice headers, SEI |
 | H.264/AVC | Annex-B / length-prefixed | SPS/PPS, slice headers, SEI |
-| H.266/VVC | Annex-B / length-prefixed | NAL headers, DCI/OPI/VPS/SPS/PPS/PH, slice headers |
-| AV1 | Annex-B OBU / low-overhead OBU | sequence + frame headers |
+| H.266/VVC | Annex-B / length-prefixed | DCI/OPI/VPS/SPS/PPS/PH, slice headers (full H.266 §7.3) |
+| AV1 | Annex-B OBU / low-overhead OBU | sequence + frame headers (full Annex A) |
 | VP9 | IVF | frame headers |
 | VP8 | IVF | frame headers |
 
