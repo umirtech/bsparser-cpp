@@ -327,6 +327,12 @@ def parse_members(body, codec, all_names, aliases, resolve):
             continue
         if not re.match(r"[A-Za-z_]\w*$", name):
             continue
+        # Skip nested vectors and arrays of vectors (not yet supported in C mirrors)
+        # These are correctly parsed but omitted from the C API (report via JSON instead)
+        if "vector<vector" in typepart or typepart.count("vector") > 1:
+            continue
+        if namedims and "vector" in typepart:
+            continue
         typepart = expand_aliases(typepart, aliases)
         kind, cbase, innerdims, orig = classify(typepart, codec, all_names, resolve)
         dims = namedims + innerdims
