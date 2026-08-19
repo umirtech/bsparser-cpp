@@ -89,13 +89,13 @@ derivation themselves.
 |---|---|---|
 | HEVC | Annex-B / length-prefixed | VPS/SPS/PPS (incl. RExt/ML/3D/SCC extensions), slice headers, SEI |
 | AVC | Annex-B / length-prefixed | SPS/PPS, slice headers, SEI |
-| VVC | Annex-B / length-prefixed | DCI/OPI/VPS/SPS/PPS, picture headers, slice headers (incl. embedded PH) |
-| AV1 | Annex-B OBU / low-overhead OBU | sequence headers, frame headers |
-| VP9 / VP8 | IVF | uncompressed frame headers |
+| VVC | Annex-B / length-prefixed | DCI/OPI/VPS/SPS/PPS, picture headers, slice headers (full H.266 §7.3) |
+| AV1 | Annex-B OBU / low-overhead OBU | sequence headers, frame headers (full Annex A) |
+| VP9 / VP8 | IVF | uncompressed frame headers (full VP8/VP9 §6-9) |
 
-VVC and AV1 parse the header fields needed for syntax and POC (dimensions,
-chroma, order hints, POC configuration, …); the deepest RBSP tables (VVC
-scaling lists / RPL / ALF-LMCS, full AV1 tile coding) are not modelled.
+VVC and AV1 now parse full header syntax per their specifications — all
+parameter sets, picture/slice headers, and frame headers are fully modelled
+with spec-native POC/order-hint derivation.
 
 ## How parsing is organised
 
