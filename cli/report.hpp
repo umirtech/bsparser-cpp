@@ -787,7 +787,7 @@ inline Report build_report(
                                     if (auto* mgr = detail::g_state->vvc_sets()) {
                                         RbspReader r1(nal.payload_bytes());
                                         vvc::SliceHeader lead =
-                                            vvc::parse_slice_header(r1, nullptr, nullptr);
+                                            vvc::parse_slice_header(r1, nullptr, nullptr, nullptr, static_cast<int>(nal.nal_type()));
                                         const vvc::PictureHeader* stored_ph = mgr->ph();
                                         const std::uint32_t pps_id =
                                             lead.picture_header_in_slice_header_flag
@@ -798,7 +798,7 @@ inline Report build_report(
                                         if (sets.sps != nullptr) {
                                             RbspReader r2(nal.payload_bytes());
                                             sh = vvc::parse_slice_header(
-                                                r2, sets.sps, sets.pps, stored_ph
+                                                r2, sets.sps, sets.pps, stored_ph, static_cast<int>(nal.nal_type())
                                             );
                                             if (!sh.picture_header_in_slice_header_flag &&
                                                 stored_ph != nullptr) {
@@ -817,7 +817,7 @@ inline Report build_report(
                                 }
                                 if (!resolved) {
                                     RbspReader r0(nal.payload_bytes());
-                                    sh = vvc::parse_slice_header(r0, nullptr, nullptr);
+                                    sh = vvc::parse_slice_header(r0, nullptr, nullptr, nullptr, static_cast<int>(nal.nal_type()));
                                 }
                                 static const char* st[] = {"B", "P", "I"};
                                 const char* stn = static_cast<unsigned>(sh.slice_type) <= 2u
@@ -903,7 +903,7 @@ inline Report build_report(
                                                 );
                                                 if (sets.sps != nullptr) {
                                                     RbspReader r2(nal.payload_bytes());
-                                                    ph = vvc::parse_ph(r2, sets.sps);
+                                                    ph = vvc::parse_ph(r2, sets.sps, sets.pps);
                                                 }
                                                 mgr->store_ph(ph);
                                             }
