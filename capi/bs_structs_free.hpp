@@ -8,12 +8,27 @@
 namespace bs {
 namespace capi {
 
+inline void bs_free_BsAv1ColorConfig(BsAv1ColorConfig* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsAv1DecoderModelInfo(BsAv1DecoderModelInfo* s) {
+    if (!s)
+        return;
+}
+
+inline void bs_free_BsAv1FilmGrainParams(BsAv1FilmGrainParams* s) {
+    if (!s)
+        return;
+}
+
 inline void bs_free_BsAv1FrameHeader(BsAv1FrameHeader* s) {
     if (!s)
         return;
 }
 
-inline void bs_free_BsAv1SequenceHeader(BsAv1SequenceHeader* s) {
+inline void bs_free_BsAv1TimingInfo(BsAv1TimingInfo* s) {
     if (!s)
         return;
 }
@@ -548,6 +563,11 @@ inline void bs_free_BsVvcVideoParameterSet(BsVvcVideoParameterSet* s) {
     delete[] s->pt_present_flag;
     delete[] s->ptl_max_tid;
     delete[] s->ols_ptl_idx;
+}
+
+inline void bs_free_BsAv1SequenceHeader(BsAv1SequenceHeader* s) {
+    if (!s)
+        return;
 }
 
 inline void bs_free_BsAvcPictureParameterSet(BsAvcPictureParameterSet* s) {
