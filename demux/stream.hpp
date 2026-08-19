@@ -15,7 +15,7 @@ namespace demux {
  * Container formats
  * -----------------------------------------------------------
  */
-enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv };
+enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv, Ogg, Ps };
 
 /*
  * -----------------------------------------------------------

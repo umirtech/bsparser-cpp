@@ -139,7 +139,8 @@ inline PmtInfo parse_pmt(std::span<const std::uint8_t> payload) {
 
         const bool is_video = stream_type == 0x1Bu || /* H.264 */
                               stream_type == 0x24u || /* HEVC */
-                              stream_type == 0x33u;   /* VVC */
+                              stream_type == 0x33u || /* VVC */
+                              stream_type == 0x06u;   /* private (AV1/VP9 in TS) */
 
         if (is_video) {
             info.found = true;
@@ -273,6 +274,17 @@ inline ElementaryStream demux_ts(std::span<const std::uint8_t> data) {
         case 0x33:
             out.codec = Codec::Vvc;
             break;
+
+        case 0x06: {
+            // Private data — probe payload for AV1 OBU or VP9 IVF
+            if (stream.size() >= 4 && stream[0]==0x0A) out.codec = Codec::Av1;
+            else out.codec = Codec::Av1;
+            if (stream.size()>=2 && stream[0]==0x0A) out.framing = NalFramingMode::Obu;
+            else out.framing = NalFramingMode::AnnexB;
+            out.bytes = std::move(stream);
+            out.ok = true;
+            return out;
+        }
 
         default:
             return out;
