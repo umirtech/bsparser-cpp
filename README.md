@@ -223,12 +223,9 @@ docs/architecture.md  architecture documentation
 ```
 
 
-
 ## Contributors
 
-<a href="https://github.com/umirtech/bsparser-cpp/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=umirtech/bsparser-cpp" />
-</a>
+See the [Contributors](https://github.com/umirtech/bsparser-cpp/graphs/contributors)
 
 
 
