@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 #!/usr/bin/env python3
 """
 Generate C struct mirrors of the C++ parsed syntax structs.

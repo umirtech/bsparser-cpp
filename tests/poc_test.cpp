@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 /*
  * ---------------------------------------------------------------------------
  * POC derivation tests (H.265 §8.3.1, H.264 §8.2.1, H.266 §8.3.1)
