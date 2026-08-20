@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 #include "rbsp_bitstream_reader.hpp"
 #include "hevc_sps_parser.hpp"
 #include "hevc_pps_parser.hpp"

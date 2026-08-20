@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 #pragma once
 
 #include "hevc_short_term_ref_pic_set.hpp"

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 /*
  * ---------------------------------------------------------------------------
  * C API smoke test (compiled as C, links the C++ runtime via bs_capi)

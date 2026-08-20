@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 #!/usr/bin/env python3
 """Download the real-world samples described in tests/real/manifest.json.
 
