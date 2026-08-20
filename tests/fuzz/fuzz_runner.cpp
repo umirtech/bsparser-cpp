@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 /*
  * In-process mutational fuzz runner (ASan/UBSan build).
  * Generates truncated / bit-flipped / randomized inputs from the

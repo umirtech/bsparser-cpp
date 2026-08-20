@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 /*
  * ---------------------------------------------------------------------------
  * VP8 unified parse test

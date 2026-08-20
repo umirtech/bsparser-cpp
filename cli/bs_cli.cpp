@@ -1,4 +1,7 @@
-﻿/*
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
+/*
  * ---------------------------------------------------------------------------
  * bs_cli - command-line bitstream parser
  * ---------------------------------------------------------------------------
@@ -34,7 +37,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <span>
 #include <string>
 #include <vector>

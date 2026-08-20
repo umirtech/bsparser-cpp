@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 // Framing correctness checker: compares the SWAR start-code
 // finder against a simple scalar reference over real and random
 // buffers. Exits non-zero on mismatch.

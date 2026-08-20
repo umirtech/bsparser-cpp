@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mohd Umeer
+// SPDX-License-Identifier: BSD-2-Clause
+
 /* SIMD vs scalar Annex-B start-code scan throughput test.
  * Compile: clang++ -O3 -std=c++17 -DNDEBUG tools/bench_framing.cpp -o build/bench_framing.exe
  */
