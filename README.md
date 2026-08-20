@@ -191,19 +191,7 @@ Output formats: JSON or a self-contained HTML viewer.
 
 ## Performance
 
-Slice-header parsing uses a zero-allocation sequential bit reader and skips
-building the full EBSP→RBSP map that parameter-set parsing requires. On a 5 MB
-HEVC stream:
-
-```
-                    before         after
-  typed-slice       25.3 ms        17.3 ms     −32%
-  typed-full        31.9 ms        24.9 ms     −22%
-  c-api-full        39.1 ms        32.5 ms     −17%
-```
-
-See [docs/architecture.md](docs/architecture.md) for the full design and the
-reasoning behind the two-reader architecture.
+See [docs/architecture.md](docs/architecture.md) for the full design and architecture.
 
 ---
 
