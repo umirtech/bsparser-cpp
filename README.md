@@ -1,4 +1,4 @@
-# bsparser
+# bsparser-cpp
 
 A fast, header-only **C++20** bitstream syntax parser for **H.265/HEVC**,
 **H.264/AVC**, **H.266/VVC**, **AV1**, **VP9** and **VP8**, with a stable
