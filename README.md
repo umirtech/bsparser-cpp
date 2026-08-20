@@ -221,3 +221,17 @@ tools/                dev tools (bench, sample downloader, …)
 tests/                unit, integration and fuzz tests
 docs/architecture.md  architecture documentation
 ```
+
+
+
+## Contributors
+
+<a href="https://github.com/umirtech/bsparser-cpp/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=umirtech/bsparser-cpp" />
+</a>
+
+
+
+## AI-Assisted Development
+
+This project was developed with assistance from AI coding agents. All AI-assisted work was performed under the supervision and review of the project author, including architectural decisions, implementation, testing, debugging, and validation.
