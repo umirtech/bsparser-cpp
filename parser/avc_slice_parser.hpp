@@ -95,6 +95,15 @@ inline PredWeightTable parse_pred_weight_table(
         table.chroma_log2_weight_denom = read_ue_max(reader, "chroma_log2_weight_denom", 7);
     }
 
+    /*
+     * 7.3.3.2: the chroma fields are **inside** the per-reference loop - one
+     * luma flag/weight/offset triple followed by one chroma flag/weight/offset
+     * group for the *same* reference index.  Reading all luma flags first and
+     * all chroma flags after (as this did) is indistinguishable for a single
+     * reference and misaligns the header for every slice with more than one -
+     * the parse then failed on those slices, their pictures were never
+     * emitted, and the frame table lost them.
+     */
     for (unsigned i = 0; i < num_l0; ++i) {
         table.luma_weight_l0_flag[i] = reader.read_bit();
 
@@ -104,10 +113,8 @@ inline PredWeightTable parse_pred_weight_table(
             table.luma_offset_l0[i] =
                 static_cast<std::int16_t>(read_se_bounded(reader, "luma_offset_l0", 128));
         }
-    }
 
-    if (sps.chroma_format_idc != 0) {
-        for (unsigned i = 0; i < num_l0; ++i) {
+        if (sps.chroma_format_idc != 0) {
             table.chroma_weight_l0_flag[i] = reader.read_bit();
 
             if (table.chroma_weight_l0_flag[i]) {
@@ -131,10 +138,8 @@ inline PredWeightTable parse_pred_weight_table(
                 table.luma_offset_l1[i] =
                     static_cast<std::int16_t>(read_se_bounded(reader, "luma_offset_l1", 128));
             }
-        }
 
-        if (sps.chroma_format_idc != 0) {
-            for (unsigned i = 0; i < num_l1; ++i) {
+            if (sps.chroma_format_idc != 0) {
                 table.chroma_weight_l1_flag[i] = reader.read_bit();
 
                 if (table.chroma_weight_l1_flag[i]) {
@@ -321,6 +326,7 @@ inline SliceHeader parse_slice_header(
             (pps.weighted_bipred_idc == 1 && is_b)) {
             header.pred_weight_table = detail::parse_pred_weight_table(reader, sps, header);
         }
+
     }
 
     if (nal_ref_idc != 0) {
