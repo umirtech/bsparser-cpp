@@ -398,6 +398,17 @@ inline void parse_lr(
 }
 
 inline void parse_tile_info(BooleanDecoder& bd, FrameHeader& fh, const SequenceHeader& seq) {
+    // An all-zero or truncated frame header can leave the frame dimensions at
+    // zero.  There are no superblocks to tile in that case, and computing the
+    // tile width from zero would divide by zero.
+    if (fh.frame_width == 0 || fh.frame_height == 0) {
+        fh.tile_cols = 1;
+        fh.tile_rows = 1;
+        fh.tile_cols_log2 = 0;
+        fh.tile_rows_log2 = 0;
+        return;
+    }
+
     int mi_cols = 2 * ((fh.frame_width + 7) >> 3);
     int mi_rows = 2 * ((fh.frame_height + 7) >> 3);
     int sb_cols = seq.use_128x128_superblock ? ((mi_cols + 31) >> 5) : ((mi_cols + 15) >> 4);
