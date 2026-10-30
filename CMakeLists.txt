@@ -246,9 +246,9 @@ if(BS_CXX20_SUPPORTED)
     )
 
     install(
-        DIRECTORY bitstream parser syntax logging
+        DIRECTORY bitstream parser syntax logging utils
         DESTINATION include
-        FILES_MATCHING PATTERN "*.hpp"
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
     )
 endif()
 
@@ -349,6 +349,484 @@ add_test(
     NAME bs_hevc_test
     COMMAND bs_hevc_test
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
+)
+
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Parser-local object pool and zero-copy motion-buffer pool
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+add_executable(
+    bs_object_pool_test
+    tests/object_pool_test.cpp
+)
+
+target_link_libraries(
+    bs_object_pool_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_object_pool_test
+    COMMAND bs_object_pool_test
+)
+
+add_executable(
+    bs_motion_buffer_test
+    tests/motion_buffer_test.cpp
+)
+
+target_link_libraries(
+    bs_motion_buffer_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_motion_buffer_test
+    COMMAND bs_motion_buffer_test
+)
+
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Portable SIMD kernels for the 4x4 motion-cell grid
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+add_executable(
+    bs_avc_simd_test
+    tests/avc_cell_simd_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_simd_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_simd_test
+    COMMAND bs_avc_simd_test
+)
+
+#Run the same suite with AVX2 disabled so the SSE2 baseline kernel is
+#exercised even on a machine whose runtime dispatch would pick AVX2.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i[3-6]86)$")
+
+    add_executable(
+        bs_avc_simd_sse2_test
+        tests/avc_cell_simd_test.cpp
+    )
+
+    target_compile_definitions(
+        bs_avc_simd_sse2_test
+        PRIVATE
+            BS_AVC_CELL_SIMD_DISABLE_AVX2=1
+    )
+
+    target_link_libraries(
+        bs_avc_simd_sse2_test
+        PRIVATE
+            bs
+    )
+
+    add_test(
+        NAME bs_avc_simd_sse2_test
+        COMMAND bs_avc_simd_sse2_test
+    )
+
+endif()
+
+add_executable(
+    bs_avc_cavlc_test
+    tests/avc_cavlc_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_cavlc_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_cavlc_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_cavlc.h264
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc.h264
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_x264_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc_x264.h264
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_8x8_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc_8x8.h264
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_intra4x4_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc_intra4x4.h264
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_b_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc_b.h264
+)
+
+
+add_test(
+    NAME bs_avc_bpyramid_cavlc_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_bpyramid_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_bpyramid_cavlc.mv.txt
+        15
+)
+
+add_test(
+    NAME bs_avc_residual_cavlc_lossless_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_cavlc_lossless.h264
+)
+
+add_test(
+    NAME bs_avc_multislice_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_multislice_cabac.h264
+)
+
+add_test(
+    NAME bs_avc_422_static_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_422_cabac.h264
+)
+
+add_test(
+    NAME bs_avc_444_static_test
+    COMMAND bs_avc_cavlc_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_444_cabac.h264
+)
+
+add_executable(
+    bs_avc_cabac_test
+    tests/avc_cabac_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_cabac_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_cabac_test
+    COMMAND bs_avc_cabac_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_422_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_444_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_10bit_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_420.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_444.h264
+)
+
+add_executable(
+    bs_avc_mv_test
+    tests/avc_mv_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_test
+    COMMAND bs_avc_mv_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_static_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_move_b_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mv_static.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_main.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mv_main.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_sdr_hd.h264
+)
+
+add_executable(
+    bs_avc_mv_field_test
+    tests/avc_mv_field_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_field_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_field_test
+    COMMAND bs_avc_mv_field_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_paff_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_cavlc.h264
+)
+
+add_executable(
+    bs_avc_mv_dpb_test
+    tests/avc_mv_dpb_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_dpb_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_dpb_test
+    COMMAND bs_avc_mv_dpb_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mv_multiref_b.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mv_multiref_b.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mmco_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_field_reorder_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_field_mmco_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_field_b_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_frame_num_wrap_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_frame_num_gap_cavlc.h264
+)
+
+add_executable(
+    bs_avc_mv_ext_test
+    tests/avc_mv_ext_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_ext_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_ext_test
+    COMMAND bs_avc_mv_ext_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_frame_num_gap_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_frame_num_gap_field_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_frame_num_gap_poc0_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_multislice_refs_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_no_output_prior_cavlc.h264
+)
+
+add_executable(
+    bs_avc_mv_chroma_test
+    tests/avc_mv_chroma_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_chroma_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_chroma_test
+    COMMAND bs_avc_mv_chroma_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_residual_422_cabac.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_residual_422_cavlc.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_residual_444_cabac.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_residual_444_cavlc.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_cavlc_8x8.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_residual_444_cavlc_8x8.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_10bit_cabac.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_10bit_qp60_cabac.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_pcm_cavlc.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm_cavlc.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_pcm10_cavlc.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm10_cavlc.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm_cabac.h264
+        -
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_420.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_420.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_422.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_422.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_444.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_444.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_420_10bit.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_420_10bit.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_422_10bit.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_422_10bit.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_444_10bit.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cabac_444_10bit.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cavlc_420.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_pcm_cavlc_420.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mono_cabac.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mono_cavlc.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_pcm_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mono_pcm_cabac.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_pcm_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mono_pcm_cavlc.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_10bit_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mono_10bit_cabac.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cavlc_frame.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mbaff_422_cavlc_frame.mv.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cavlc_frame.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/reference/avc_mbaff_444_cavlc_frame.mv.txt
+)
+
+add_executable(
+    bs_avc_mv_pcm_test
+    tests/avc_mv_pcm_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_mv_pcm_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_mv_pcm_test
+    COMMAND bs_avc_mv_pcm_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_420.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_422.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_444.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_420_10bit.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_422_10bit.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cabac_444_10bit.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_pcm_cavlc_420.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_pcm_cavlc.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm_cavlc.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_422_pcm10_cavlc.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm10_cavlc.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_residual_444_pcm_cabac.h264
+        pcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_cabac.h264
+        mono
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_cavlc.h264
+        mono
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_pcm_cabac.h264
+        mono
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_pcm_cavlc.h264
+        mono
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mono_10bit_cabac.h264
+        mono
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_sep_planes_cavlc.h264
+        sep
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_b_pcm_cavlc.h264
+        bpcm
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_b_pcm_cabac.h264
+        bpcm-cabac
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_paff_422_cavlc.h264
+        field-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_paff_444_cavlc.h264
+        field-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_paff_422_10bit_cavlc.h264
+        field-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_paff_444_10bit_cavlc.h264
+        field-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cabac.h264
+        mbaff-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cabac.h264
+        mbaff-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cabac_10bit.h264
+        mbaff-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cabac_10bit.h264
+        mbaff-chroma
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cabac_noskip.h264
+        mbaff-chroma-8
+)
+
+add_test(
+    NAME bs_avc_mbaff_cavlc_test
+    COMMAND bs_avc_mv_pcm_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cavlc.h264
+        mbaff-chroma-cavlc
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cavlc.h264
+        mbaff-chroma-cavlc
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cavlc_10bit.h264
+        mbaff-chroma-cavlc-10bit
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cavlc_10bit.h264
+        mbaff-chroma-cavlc-10bit
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_422_cavlc_frame.h264
+        mbaff-chroma-cavlc-frame
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_mbaff_444_cavlc_frame.h264
+        mbaff-chroma-cavlc-frame
+)
+
+add_executable(
+    bs_avc_fmo_test
+    tests/avc_fmo_test.cpp
+)
+
+target_link_libraries(
+    bs_avc_fmo_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_avc_fmo_test
+    COMMAND bs_avc_fmo_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map0_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map0_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map1_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map1_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map2_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map2_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map3_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map3_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map4_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map4_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map5_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map5_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map6_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_map6_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map0_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map0_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map1_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map1_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map2_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map2_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map3_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map3_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map4_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map4_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map5_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map5_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map6_cavlc.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_refs_map6_cabac.h264
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/avc_fmo_mixed_i_p_map0_cavlc.h264
 )
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -662,6 +1140,48 @@ if(BS_ENABLE_FUZZING)
         COMMAND bs_fuzz_driver
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/stream.hevc
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/ext_stream.hevc
+    )
+
+endif()
+
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Optional benchmark and deterministic-hash tools (development only)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#
+#These targets are not part of ctest and are never built by default:
+#
+#    cmake -B build-bench -DBS_BUILD_BENCHMARKS=ON
+#    cmake --build build-bench --target the AVC benchmark tool hash_avc_mv
+#    ./build-bench/the AVC benchmark tool stream.h264 5 150 1920 1080
+#    ./build-bench/hash_avc_mv stream.h264
+#
+option(BS_BUILD_BENCHMARKS
+    "Build the optional AVC benchmark and deterministic hash tools"
+    OFF
+)
+
+if(BS_BUILD_BENCHMARKS)
+
+    add_executable(
+        the AVC benchmark tool
+        tools/the AVC benchmark tool.cpp
+    )
+
+    target_link_libraries(
+        the AVC benchmark tool
+        PRIVATE
+            bs
+    )
+
+    add_executable(
+        hash_avc_mv
+        tools/hash_avc_mv.cpp
+    )
+
+    target_link_libraries(
+        hash_avc_mv
+        PRIVATE
+            bs
     )
 
 endif()

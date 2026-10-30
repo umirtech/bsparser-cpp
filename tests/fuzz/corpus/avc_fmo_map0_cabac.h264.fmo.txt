@@ -1,0 +1,4 @@
+# avc fmo reference
+map_type 0
+entropy cabac
+groups 2

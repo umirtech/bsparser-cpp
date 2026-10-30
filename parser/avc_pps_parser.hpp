@@ -54,6 +54,10 @@ inline PictureParameterSet parse_picture_parameter_set(RbspBitstreamReader& read
                 }
                 break;
 
+            case 1:
+                /* Dispersed map: no additional syntax (8.2.2.2). */
+                break;
+
             case 2:
                 for (int i = 0; i < num_slice_groups - 1; ++i) {
                     map.top_left[i] = detail::read_ue_max(reader, "top_left", 0xFFFFFu);

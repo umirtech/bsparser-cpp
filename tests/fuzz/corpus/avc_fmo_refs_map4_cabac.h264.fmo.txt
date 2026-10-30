@@ -1,0 +1,24 @@
+# avc fmo per-slice reference mapping
+map_type 4
+entropy cabac
+groups 2
+refs 2
+project_poc 2
+group 0 active 1 poc 4
+group 1 active 2 poc 2 4
+mb_group 0 0
+mb_group 1 0
+mb_group 2 0
+mb_group 3 0
+mb_group 4 1
+mb_group 5 1
+mb_group 6 1
+mb_group 7 1
+mb_group 8 1
+mb_group 9 1
+mb_group 10 1
+mb_group 11 1
+mb_group 12 1
+mb_group 13 1
+mb_group 14 1
+mb_group 15 1

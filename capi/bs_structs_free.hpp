@@ -88,6 +88,8 @@ inline void bs_free_BsAvcSliceGroupMap(BsAvcSliceGroupMap* s) {
 inline void bs_free_BsAvcSliceHeader(BsAvcSliceHeader* s) {
     if (!s)
         return;
+    bs_free_BsAvcRefPicListModification(&s->ref_pic_list_modification_l0);
+    bs_free_BsAvcRefPicListModification(&s->ref_pic_list_modification_l1);
     delete[] s->mmco_operations;
 }
 

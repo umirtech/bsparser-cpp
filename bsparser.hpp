@@ -59,6 +59,7 @@
 #include <parser/avc_pps_parser.hpp>
 #include <parser/avc_sei_parser.hpp>
 #include <parser/avc_slice_parser.hpp>
+#include <parser/avc_motion_vector_parser.hpp>
 #include <parser/avc_sps_parser.hpp>
 #include <parser/avc_poc.hpp>
 #include <parser/av1_frame_header_parser.hpp>
@@ -142,6 +143,12 @@ struct AvcParsedHandlers {
     void (*pps)(const avc::PictureParameterSet&) = nullptr;
     void (*sei)(const avc::ParsedSei&) = nullptr;
     void (*slice)(const avc::SliceHeader&) = nullptr;
+
+    /*
+     * Opt-in H.264 motion-vector extraction.  Both callbacks must be set;
+     * when they are null no slice-data parsing is performed at all.
+     */
+    avc::MotionVectorSink motion_vectors{};
 };
 
 /*
@@ -240,6 +247,9 @@ class StateImpl {
             case Codec::Avc:
                 avc_->clear();
                 avc_poc_.reset();
+                if (avc_motion_) {
+                    avc_motion_->reset();
+                }
                 break;
 
             case Codec::Vvc:
@@ -284,6 +294,19 @@ class StateImpl {
         return vvc_poc_;
     }
 
+    [[nodiscard]]
+    avc::MotionVectorExtractor& avc_motion() {
+        if (!avc_motion_) {
+            avc_motion_ = std::make_unique<avc::MotionVectorExtractor>();
+        }
+        return *avc_motion_;
+    }
+
+    [[nodiscard]]
+    avc::MotionVectorExtractor* avc_motion_if_present() noexcept {
+        return avc_motion_.get();
+    }
+
     /*
      * Last-seen AV1 sequence header (provides OrderHintBits and the
      * screen-content / integer-MV selection for frame headers).
@@ -312,6 +335,8 @@ class StateImpl {
     avc::PocState avc_poc_{};
 
     vvc::PocState vvc_poc_{};
+
+    std::unique_ptr<avc::MotionVectorExtractor> avc_motion_{};
 
     av1::SequenceHeader av1_seq_{};
 };
@@ -557,7 +582,11 @@ inline std::size_t dispatch_state_avc(
              * pps_id from the front of the RBSP, resolve it, then
              * re-parse the full header.
              */
-            if (ph.slice) {
+            const bool want_motion_vectors =
+                    ph.motion_vectors.acquire != nullptr &&
+                    ph.motion_vectors.ready != nullptr;
+
+            if (ph.slice || want_motion_vectors) {
                 const auto t = nal.type();
                 if (t == avc::NalUnitType::SliceNonIdr || t == avc::NalUnitType::SliceIdr) {
                     try {
@@ -586,11 +615,37 @@ inline std::size_t dispatch_state_avc(
                                 t == avc::NalUnitType::SliceIdr,
                                 static_cast<std::uint8_t>(nal.header.nal_ref_idc)
                             );
-                            ph.slice(hdr);
+                            hdr.derived_poc_top = impl.avc_poc().last_top_poc();
+                            hdr.derived_poc_bottom = impl.avc_poc().last_bottom_poc();
+
+                            if (want_motion_vectors) {
+                                auto& extractor = impl.avc_motion();
+                                extractor.set_sink(ph.motion_vectors);
+                                extractor.on_slice(
+                                    nal,
+                                    *resolved.sps,
+                                    *resolved.pps,
+                                    hdr,
+                                    t == avc::NalUnitType::SliceIdr,
+                                    static_cast<std::uint8_t>(nal.header.nal_ref_idc)
+                                );
+                            }
+
+                            if (ph.slice) ph.slice(hdr);
                         }
                     } catch (...) {
                         /* malformed slice: skip */
                     }
+                } else if (want_motion_vectors &&
+                           (t == avc::NalUnitType::SliceDataPartitionA ||
+                            t == avc::NalUnitType::SliceDataPartitionB ||
+                            t == avc::NalUnitType::SliceDataPartitionC)) {
+                    /*
+                     * Data-partitioned slices cannot be combined into one
+                     * macroblock grid; report Unsupported instead of
+                     * delivering a partial picture.
+                     */
+                    impl.avc_motion().noteUnsupportedDataPartition();
                 }
             }
 
@@ -603,6 +658,11 @@ inline std::size_t dispatch_state_avc(
         }
 
         framer.next();
+    }
+
+    if (ph.motion_vectors.acquire != nullptr && ph.motion_vectors.ready != nullptr &&
+        ph.motion_vectors.options.flush_on_parse_end) {
+        impl.avc_motion().finish();
     }
 
     return parsed_count;
@@ -951,6 +1011,16 @@ class State {
     [[nodiscard]]
     avc::PocState* avc_poc() noexcept {
         return impl_->codec() == Codec::Avc ? &impl_->avc_poc() : nullptr;
+    }
+
+    /*
+     * The opt-in AVC motion-vector extractor, or nullptr until a sink has
+     * been installed.  Exposed for status checks and manual flush from
+     * callers that parse a picture across several chunks.
+     */
+    [[nodiscard]]
+    avc::MotionVectorExtractor* avc_motion_vectors() noexcept {
+        return impl_->codec() == Codec::Avc ? impl_->avc_motion_if_present() : nullptr;
     }
 
     [[nodiscard]]

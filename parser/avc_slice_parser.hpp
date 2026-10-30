@@ -91,7 +91,8 @@ inline PredWeightTable parse_pred_weight_table(
 
     table.luma_log2_weight_denom = read_ue_max(reader, "luma_log2_weight_denom", 7);
 
-    if (sps.chroma_format_idc != 0) {
+    const bool has_chroma = sps.chroma_array_type() != 0;
+    if (has_chroma) {
         table.chroma_log2_weight_denom = read_ue_max(reader, "chroma_log2_weight_denom", 7);
     }
 
@@ -114,7 +115,7 @@ inline PredWeightTable parse_pred_weight_table(
                 static_cast<std::int16_t>(read_se_bounded(reader, "luma_offset_l0", 128));
         }
 
-        if (sps.chroma_format_idc != 0) {
+        if (has_chroma) {
             table.chroma_weight_l0_flag[i] = reader.read_bit();
 
             if (table.chroma_weight_l0_flag[i]) {
@@ -139,7 +140,7 @@ inline PredWeightTable parse_pred_weight_table(
                     static_cast<std::int16_t>(read_se_bounded(reader, "luma_offset_l1", 128));
             }
 
-            if (sps.chroma_format_idc != 0) {
+            if (has_chroma) {
                 table.chroma_weight_l1_flag[i] = reader.read_bit();
 
                 if (table.chroma_weight_l1_flag[i]) {
@@ -244,6 +245,15 @@ inline SliceHeader parse_slice_header(
 
     header.pic_parameter_set_id =
         static_cast<std::uint8_t>(detail::read_ue_max(reader, "pic_parameter_set_id", 255));
+
+    /*
+     * 7.3.3.1: colour_plane_id follows pic_parameter_set_id, before
+     * frame_num, when separate_colour_plane_flag is set.
+     */
+    if (sps.separate_colour_plane_flag) {
+        header.colour_plane_id =
+            static_cast<std::uint8_t>(reader.read_bits(2));
+    }
 
     header.frame_num = static_cast<std::uint32_t>(reader.read_bits(sps.log2_max_frame_num()));
 

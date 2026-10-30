@@ -79,6 +79,12 @@ class RbspReader {
      */
     unsigned zero_count_ = 0;
 
+    /*
+     * Number of logical RBSP bits consumed, excluding emulation-prevention
+     * bytes and alignment introduced by the reader itself.
+     */
+    std::size_t logical_bits_ = 0;
+
    public:
     RbspReader() = default;
 
@@ -113,6 +119,16 @@ class RbspReader {
     [[nodiscard]]
     std::size_t physical_bit_position() const noexcept {
         return byte_pos_ * 8 + bit_pos_;
+    }
+
+    /*
+     * Logical RBSP bit position (emulation-prevention bytes are not counted).
+     * This is the offset expected by the slice-data parsers, which operate on
+     * an extracted RBSP.
+     */
+    [[nodiscard]]
+    std::size_t logical_bit_position() const noexcept {
+        return logical_bits_;
     }
 
     /*
@@ -281,6 +297,7 @@ class RbspReader {
         const bool value = ((byte >> shift) & 1U) != 0;
 
         ++bit_pos_;
+        ++logical_bits_;
 
         if (bit_pos_ == 8) {
             bit_pos_ = 0;

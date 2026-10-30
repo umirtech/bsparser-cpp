@@ -76,6 +76,16 @@ struct SequenceParameterSet {
         return chroma_format_idc == static_cast<std::uint8_t>(ChromaFormat::Monochrome);
     }
 
+    /*
+     * ChromaArrayType (7.4.2.1.1): zero for monochrome and for separate
+     * colour planes, otherwise chroma_format_idc.  Macroblock-layer chroma
+     * syntax is gated on this value.
+     */
+    [[nodiscard]]
+    constexpr std::uint8_t chroma_array_type() const noexcept {
+        return separate_colour_plane_flag ? 0u : chroma_format_idc;
+    }
+
     [[nodiscard]]
     constexpr std::uint32_t log2_max_frame_num() const noexcept {
         return static_cast<std::uint32_t>(log2_max_frame_num_minus4) + 4;

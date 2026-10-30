@@ -71,6 +71,7 @@ struct SliceHeader {
     std::uint8_t pic_parameter_set_id = 0;
 
     std::uint32_t frame_num = 0;
+    std::uint8_t colour_plane_id = 0;
     bool field_pic_flag = false;
     bool bottom_field_flag = false;
 
@@ -114,8 +115,14 @@ struct SliceHeader {
     /*
      * Presentation-order POC (H.264 §8.2.1), filled by the unified
      * dispatch layer's avc::PocState; 0 when parsing outside a State.
+     *
+     * The top/bottom values are the field POCs of a frame picture (or the
+     * POC of the single coded field for a field picture).  Consumers that
+     * only need display order keep using `derived_poc`.
      */
     std::int32_t derived_poc = 0;
+    std::int32_t derived_poc_top = 0;
+    std::int32_t derived_poc_bottom = 0;
 };
 
 }  // namespace avc

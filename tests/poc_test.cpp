@@ -172,6 +172,24 @@ void test_avc_poc_type0() {
     CHECK(poc.derive(make_slice(4, 10), sps, false, 0) == 10);
 }
 
+void test_avc_poc_type0_fields() {
+    bs::avc::PocState poc;
+    const auto sps = make_sps_type0();
+
+    /* IDR complementary field pair. */
+    CHECK(poc.derive(make_slice(0, 0, bs::avc::SliceType::I, true, false), sps, true, 3) == 0);
+    CHECK(poc.derive(make_slice(0, 0, bs::avc::SliceType::I, true, true), sps, true, 3) == 0);
+
+    /* PAFF pair: bottom field's LSB is compared with the top field's LSB. */
+    CHECK(poc.derive(make_slice(1, 8, bs::avc::SliceType::P, true, false), sps, false, 2) == 8);
+    CHECK(poc.derive(make_slice(1, 10, bs::avc::SliceType::P, true, true), sps, false, 2) == 10);
+    CHECK(poc.derive(make_slice(2, 14, bs::avc::SliceType::P, true, false), sps, false, 2) == 14);
+
+    /* LSB wrap in the bottom field: 14 -> 0 means BottomFieldOrderCnt 16. */
+    CHECK(poc.derive(make_slice(2, 0, bs::avc::SliceType::P, true, true), sps, false, 2) == 16);
+    CHECK(poc.derive(make_slice(3, 2, bs::avc::SliceType::P, true, false), sps, false, 2) == 18);
+}
+
 void test_avc_poc_type1() {
     bs::avc::PocState poc;
     const auto sps = make_sps_type1();
@@ -480,6 +498,7 @@ void test_unified_vp8(const std::string& path) {
 int main(int argc, char** argv) {
     test_hevc_poc_state();
     test_avc_poc_type0();
+    test_avc_poc_type0_fields();
     test_avc_poc_type1();
     test_avc_poc_type2();
     test_vvc_poc_state();

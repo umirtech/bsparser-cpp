@@ -70,25 +70,36 @@ class PocState {
         std::int32_t bottom = 0;
         std::int32_t pic_order_cnt = 0;
 
+        const bool bottom_of_pair =
+                sh.field_pic_flag && sh.bottom_field_flag && last_field_ &&
+                !last_bottom_field_ && last_frame_num_ == sh.frame_num;
+
         if (idr) {
             pic_order_cnt = 0;
 
         } else if (sps.pic_order_cnt_type == 0) {
             const std::uint32_t max_poc_lsb = std::uint32_t{1} << sps.log2_max_pic_order_cnt_lsb();
             const std::uint32_t poc_lsb = sh.pic_order_cnt_lsb;
+            /*
+             * The bottom field of a complementary pair compares its LSB
+             * against the immediately preceding top field (8.2.1.1), while
+             * the MSB prediction is the top field's MSB.
+             */
+            const std::int32_t prev_msb = bottom_of_pair ? top_field_msb_ : prev_poc_msb_;
+            const std::uint32_t prev_lsb = prev_poc_lsb_;
 
             /*
              * PicOrderCntMsb derivation (§8.2.1).
              */
             if (max_poc_lsb < 16 &&
-                (prev_poc_msb_ - 16) >= static_cast<std::int32_t>(prev_poc_lsb_)) {
-                poc_msb = prev_poc_msb_ - static_cast<std::int32_t>(max_poc_lsb);
-            } else if (poc_lsb < prev_poc_lsb_ && (prev_poc_lsb_ - poc_lsb) >= (max_poc_lsb / 2)) {
-                poc_msb = prev_poc_msb_ + static_cast<std::int32_t>(max_poc_lsb);
-            } else if (poc_lsb > prev_poc_lsb_ && (poc_lsb - prev_poc_lsb_) > (max_poc_lsb / 2)) {
-                poc_msb = prev_poc_msb_ - static_cast<std::int32_t>(max_poc_lsb);
+                (prev_msb - 16) >= static_cast<std::int32_t>(prev_lsb)) {
+                poc_msb = prev_msb - static_cast<std::int32_t>(max_poc_lsb);
+            } else if (poc_lsb < prev_lsb && (prev_lsb - poc_lsb) >= (max_poc_lsb / 2)) {
+                poc_msb = prev_msb + static_cast<std::int32_t>(max_poc_lsb);
+            } else if (poc_lsb > prev_lsb && (poc_lsb - prev_lsb) > (max_poc_lsb / 2)) {
+                poc_msb = prev_msb - static_cast<std::int32_t>(max_poc_lsb);
             } else {
-                poc_msb = prev_poc_msb_;
+                poc_msb = prev_msb;
             }
 
             top = poc_msb + static_cast<std::int32_t>(poc_lsb);
@@ -144,6 +155,9 @@ class PocState {
             bottom = poc;
         }
 
+        last_top_poc_ = top;
+        last_bottom_poc_ = bottom;
+
         if (!sh.field_pic_flag) {
             pic_order_cnt = (top < bottom) ? top : bottom;
         } else if (sh.bottom_field_flag) {
@@ -154,7 +168,9 @@ class PocState {
 
         /*
          * State update (§8.2.1): IDR resets everything; otherwise only
-         * reference pictures update the previous state.
+         * reference pictures update the previous state.  For a bottom field
+         * the update uses the PicOrderCntMsb derived for that field, which
+         * may be the top field's MSB plus one LSB cycle.
          */
         if (idr) {
             prev_frame_num_ = 0;
@@ -171,14 +187,35 @@ class PocState {
             }
         }
 
+        if (sh.field_pic_flag && !sh.bottom_field_flag) {
+            top_field_msb_ = poc_msb;
+        }
+        last_field_ = sh.field_pic_flag;
+        last_bottom_field_ = sh.bottom_field_flag;
+        last_frame_num_ = sh.frame_num;
+
         return pic_order_cnt;
     }
+
+    /*
+     * Field POCs produced by the most recent derive() call.  `top`/`bottom`
+     * are the two field POCs of a frame picture, or the coded field's POC
+     * (with the inferred value for the missing field) of a field picture.
+     */
+    [[nodiscard]] std::int32_t last_top_poc() const noexcept { return last_top_poc_; }
+    [[nodiscard]] std::int32_t last_bottom_poc() const noexcept { return last_bottom_poc_; }
 
    private:
     std::uint32_t prev_frame_num_ = 0;
     std::int32_t prev_frame_num_offset_ = 0;
     std::int32_t prev_poc_msb_ = 0;
     std::uint32_t prev_poc_lsb_ = 0;
+    bool last_field_ = false;
+    bool last_bottom_field_ = false;
+    std::uint32_t last_frame_num_ = 0;
+    std::int32_t top_field_msb_ = 0;
+    std::int32_t last_top_poc_ = 0;
+    std::int32_t last_bottom_poc_ = 0;
 };
 
 }  // namespace avc

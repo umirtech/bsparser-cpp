@@ -1,0 +1,6 @@
+# avc fmo reference
+map_type 0
+entropy cavlc
+groups 2
+coded 0 -3 -3
+coded 2 0 2

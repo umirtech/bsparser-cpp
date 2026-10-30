@@ -133,6 +133,82 @@ resolved through the `State`, then the full header is parsed with the resolved
 parameter sets. This is also where `derived_poc` is stamped, immediately after
 the header parse.
 
+
+## Optional H.264 motion vectors
+
+`bs::avc::MotionVectorSink` installs an opt-in slice-data parser.  When both
+`acquire` and `ready` are null the dispatcher stops at the slice header exactly
+as before.  When installed, `parser/avc_motion_vector_parser.hpp` keeps a small
+MV-DPB for reference pictures and writes a versioned `MotionVectorBufferHeader`
+plus a dense 4x4 `MvCell` grid directly into the consumer buffer.  The
+reference-picture lease is retained until DPB eviction, so the consumer pool is
+free to recycle non-reference slots immediately.
+
+The extractor covers H.264 CABAC and CAVLC, progressive frame pictures,
+field pictures (`frame_mbs_only_flag = 0`, `field_pic_flag = 1`), MBAFF frame
+pictures, P/B slices, spatial/temporal direct mode, field/frame reference
+entries, reference-list indexing, and multi-slice picture accumulation.
+Field pictures use a field-sized grid; MBAFF frame pictures use the frame grid,
+mark field-coded cells with `MvField`, and normalise their vertical motion to
+frame lines.  4:2:0, 4:2:2 and 4:4:4 residual syntax is traversed for CABAC and
+CAVLC, including the 4:2:2 chroma-DC layout, the three luma-like 4:4:4 planes,
+8x8 transform blocks and I_PCM sample skipping in both entropy modes.
+CAVLC `nC` lookups in MBAFF pictures resolve the neighbouring transform block
+in the plane's frame grid, so mixed field/frame pairs use the correct field
+macroblock and block row.  CABAC
+I_PCM additionally byte-aligns after `mb_type`, skips the raw samples and
+re-initialises the arithmetic engine while keeping the context model, as
+specified in 7.3.5 and 9.3.1.2.  Monochrome pictures are parsed with
+ChromaArrayType 0 luma-only syntax.  With `separate_colour_plane_flag = 1`
+the extractor owns one independent plane decoder (and MV-DPB) per
+`colour_plane_id`; each plane is delivered in its own buffer tagged with
+`colour_plane_id`/`plane_count`, and the planes of one access unit share the
+same POC and frame_num.  Slice groups (FMO) are decoded with the 8.2.2 map
+types 0-6 and NextMbAddress iteration, including CAVLC skip runs and CABAC
+terminate bins across non-contiguous macroblock addresses.  Macroblock
+availability follows both the slice and slice-group identity.  CABAC and CAVLC residual-heavy streams, including mixed
+I_PCM/inter streams, including CAVLC B-pyramid with multiple active
+references, are validated against FFmpeg reference grids.
+The MV-DPB implements sliding-window marking and adaptive MMCO operations 1-6,
+keeps long-term frames together with their `LongTermFrameIdx`, and applies
+short-term and long-term list reordering for frame and field lists.  PAFF
+field pairs share one frame entry; a frame picture that references a pair uses
+an owned interleaved grid with field-normalised vertical motion.  Frame_num
+gaps are synthesized per 8.2.5.2 (including field pairs), non-existing
+references are flagged and omitted from B lists where POC is undefined.
+Multi-slice pictures carry a per-slice `MotionSliceReference` table and a
+version-3 `MotionSliceRun` map from macroblock address to slice-table index,
+so each cell resolves the list/POC mapping of its own slice even when an FMO
+slice group is non-contiguous.  A picture may also mix I/SI and P/B slices;
+an I slice marks only macroblocks that no inter slice has coded yet, so a P
+group decoded before a later I group keeps its motion.  IDR
+`no_output_of_prior_pics_flag` is honoured by the default deferred-ready
+queue; `defer_ready = false` opts into immediate legacy delivery.  Weighted
+prediction does not affect MV syntax.
+
+AVC motion-vector extraction is **experimental**: the opt-in sink API, the
+versioned buffer layout and the generated fixtures may change in future
+releases.  Treat extracted grids as best-effort and re-validate against your
+own reference when upgrading the module.
+
+The hot path is implemented for throughput as well as clarity.  CAVLC uses a
+64-bit bit reservoir plus compile-time primary VLC tables (long codes fall
+back to the source table); CABAC uses a 64-bit reservoir, a packed
+range/state table and `countl_zero` renormalisation.  `detail::MbData` is a
+160-byte hot-first struct (no write-only intra modes, 16-bit direct mask, and
+saturating absolute-MVD context instead of a second signed MVD array).  Cell
+fills for skip, partition, direct and intra paths use
+`parser/avc_cell_simd.hpp`: SSE2 is the x86 baseline, AVX2 is selected once at
+runtime, NEON is used on ARM, and every kernel has a scalar reference.
+Deferred delivery is zero-copy: each picture is written once into the leased
+consumer buffer and the queued entry keeps that lease until the IDR decision.
+The resulting single-thread throughput is at or above a full FFmpeg decode on
+the same machine while extracting only motion, as documented in the README.
+
+`utils/ObjectPool.h` is the parser-local bounded object pool (no global
+eviction thread, non-throwing `tryAcquire`); `utils/MotionBufferPool.h` is the
+zero-copy consumer-buffer pool built on top of it.
+
 ## Container demuxing (`demux/`)
 
 A separate layer lets callers feed **muxed files** directly instead of
