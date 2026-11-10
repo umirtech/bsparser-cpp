@@ -15,15 +15,17 @@ namespace es {
 
 /*
  * -----------------------------------------------------------
- * Shared elementary-stream reconstruction helpers
+ * Elementary-stream helpers: parameter-set extraction and
+ * length-prefixed framing detection.  Used by the streaming
+ * index builders; payloads themselves are never copied here.
  * -----------------------------------------------------------
  */
 
-inline void annex_b_nal(ElementaryStream& out, std::span<const std::uint8_t> nal) {
-    out.bytes.push_back(0x00);
-    out.bytes.push_back(0x00);
-    out.bytes.push_back(0x01);
-    out.bytes.insert(out.bytes.end(), nal.begin(), nal.end());
+inline void annex_b_nal(std::vector<std::uint8_t>& out, std::span<const std::uint8_t> nal) {
+    out.push_back(0x00);
+    out.push_back(0x00);
+    out.push_back(0x01);
+    out.insert(out.end(), nal.begin(), nal.end());
 }
 
 /*
@@ -32,7 +34,7 @@ inline void annex_b_nal(ElementaryStream& out, std::span<const std::uint8_t> nal
  * and true is returned; on failure the output is rolled back.
  */
 inline bool try_prepend_hvc_arrays(
-    ElementaryStream& out, std::span<const std::uint8_t> cfg, std::size_t num_arrays_offset
+    std::vector<std::uint8_t>& out, std::span<const std::uint8_t> cfg, std::size_t num_arrays_offset
 ) {
     if (num_arrays_offset >= cfg.size()) {
         return false;
@@ -46,11 +48,11 @@ inline bool try_prepend_hvc_arrays(
         return false;
     }
 
-    const std::size_t saved = out.bytes.size();
+    const std::size_t saved = out.size();
 
     for (std::uint8_t a = 0; a < num_arrays; ++a) {
         if (p + 3 > cfg.size()) {
-            out.bytes.resize(saved);
+            out.resize(saved);
             return false;
         }
 
@@ -61,13 +63,13 @@ inline bool try_prepend_hvc_arrays(
         p += 2;
 
         if (num_nalus > 64) {
-            out.bytes.resize(saved);
+            out.resize(saved);
             return false;
         }
 
         for (std::uint16_t i = 0; i < num_nalus; ++i) {
             if (p + 2 > cfg.size()) {
-                out.bytes.resize(saved);
+                out.resize(saved);
                 return false;
             }
 
@@ -76,7 +78,7 @@ inline bool try_prepend_hvc_arrays(
             p += 2;
 
             if (p + len > cfg.size()) {
-                out.bytes.resize(saved);
+                out.resize(saved);
                 return false;
             }
 
@@ -93,7 +95,7 @@ inline bool try_prepend_hvc_arrays(
  * Prepend the parameter-set NALs from avcC / hvcC / vvcC.
  */
 inline void prepend_param_sets(
-    ElementaryStream& out, std::span<const std::uint8_t> cfg, bool is_hvc_or_vvc
+    std::vector<std::uint8_t>& out, std::span<const std::uint8_t> cfg, bool is_hvc_or_vvc
 ) {
     if (cfg.empty()) {
         return;
@@ -157,33 +159,6 @@ inline void prepend_param_sets(
 }
 
 /*
- * Convert length-prefixed NAL units to an Annex-B stream.
- */
-inline void emit_length_prefixed(
-    ElementaryStream& out, std::span<const std::uint8_t> data, std::uint32_t length_size
-) {
-    std::size_t pos = 0;
-
-    while (pos + length_size <= data.size()) {
-        std::uint32_t nal_size = 0;
-
-        for (std::uint32_t i = 0; i < length_size; ++i) {
-            nal_size = (nal_size << 8) | data[pos + i];
-        }
-
-        pos += length_size;
-
-        if (pos + nal_size > data.size()) {
-            break;
-        }
-
-        annex_b_nal(out, data.subspan(pos, nal_size));
-
-        pos += nal_size;
-    }
-}
-
-/*
  * True when `data` parses as a length-prefixed NAL stream that consumes
  * the entire buffer (every length is valid and the last NAL ends exactly
  * at the end).  Used to disambiguate a frame that starts with an Annex-B
@@ -217,40 +192,6 @@ inline bool fully_length_prefixed(std::span<const std::uint8_t> data, std::uint3
     }
 
     return nals > 0 && pos == data.size();
-}
-
-inline void append_ivf_header(
-    ElementaryStream& out, const char* fourcc, std::uint32_t width, std::uint32_t height
-) {
-    out.bytes.insert(out.bytes.end(), {'D', 'K', 'I', 'F'});
-    out.bytes.insert(out.bytes.end(), {0x00, 0x00});
-    out.bytes.insert(out.bytes.end(), {0x20, 0x00});
-    out.bytes.insert(out.bytes.end(), fourcc, fourcc + 4);
-    out.bytes.push_back(static_cast<std::uint8_t>(width & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>((width >> 8) & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>(height & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>((height >> 8) & 0xFFu));
-    out.bytes.insert(out.bytes.end(), {0x00, 0x00, 0x00, 0x1E});
-    out.bytes.insert(out.bytes.end(), {0x00, 0x00, 0x00, 0x01});
-    out.bytes.insert(out.bytes.end(), {0x00, 0x00, 0x00, 0x00});
-    out.bytes.insert(out.bytes.end(), {0x00, 0x00, 0x00, 0x00});
-}
-
-inline void append_ivf_frame(
-    ElementaryStream& out, std::span<const std::uint8_t> frame, std::uint64_t ts
-) {
-    const std::uint32_t size = static_cast<std::uint32_t>(frame.size());
-
-    out.bytes.push_back(static_cast<std::uint8_t>(size & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>((size >> 8) & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>((size >> 16) & 0xFFu));
-    out.bytes.push_back(static_cast<std::uint8_t>((size >> 24) & 0xFFu));
-
-    for (int i = 0; i < 8; ++i) {
-        out.bytes.push_back(static_cast<std::uint8_t>((ts >> (i * 8)) & 0xFFu));
-    }
-
-    out.bytes.insert(out.bytes.end(), frame.begin(), frame.end());
 }
 
 }  // namespace es

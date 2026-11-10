@@ -1299,6 +1299,13 @@ inline std::size_t parse(
             );
         }
 
+        case NalFramingMode::RawFrame: {
+            RawFrameFramer framer{data};
+            return detail::dispatch_state_vp_frame(
+                framer, vp9::parse_frame_header, handlers.frame_header
+            );
+        }
+
         default:
             break;
     }
@@ -1328,6 +1335,13 @@ inline std::size_t parse(
     switch (mode) {
         case NalFramingMode::Ivf: {
             IvfFramer framer{data};
+            return detail::dispatch_state_vp_frame(
+                framer, vp8::parse_frame_header, handlers.frame_header
+            );
+        }
+
+        case NalFramingMode::RawFrame: {
+            RawFrameFramer framer{data};
             return detail::dispatch_state_vp_frame(
                 framer, vp8::parse_frame_header, handlers.frame_header
             );

@@ -19,11 +19,11 @@ namespace ts {
  * -----------------------------------------------------------
  *
  * Parses the transport stream (188-byte packets), follows
- * PAT -> PMT to the first video stream, strips the PES headers
- * and returns the concatenated Annex-B elementary stream.
+ * PAT -> PMT to the video streams and indexes their PES payload
+ * spans without copying the elementary-stream bytes.
  *
  * Supported video stream types: H.264 (0x1B), HEVC (0x24),
- * VVC (0x33).
+ * VVC (0x33), private (0x06).
  */
 
 namespace detail {
@@ -162,146 +162,6 @@ inline PmtInfo parse_pmt(std::span<const std::uint8_t> payload) {
 }
 
 }  // namespace detail
-
-[[nodiscard]]
-inline ElementaryStream demux_ts(std::span<const std::uint8_t> data) {
-    ElementaryStream out;
-
-    const std::size_t packet_count = data.size() / detail::kPacketSize;
-
-    if (packet_count < 2) {
-        return out;
-    }
-
-    std::uint16_t pmt_pid = 0;
-    detail::PmtInfo info;
-
-    std::vector<std::uint8_t> stream;
-
-    bool pes_open = false;
-    std::size_t pes_skip = 0;
-
-    for (std::size_t i = 0; i < packet_count; ++i) {
-        const auto packet = data.subspan(i * detail::kPacketSize, detail::kPacketSize);
-
-        if (packet[0] != detail::kSync) {
-            continue;
-        }
-
-        const std::uint16_t pid = detail::read_pid(packet);
-
-        const auto payload = detail::packet_payload(packet);
-
-        if (pid == detail::kPatPid) {
-            if (detail::payload_start(packet)) {
-                pmt_pid = detail::pat_pmt_pid(payload);
-            }
-
-            continue;
-        }
-
-        if (pmt_pid != 0 && pid == pmt_pid) {
-            if (detail::payload_start(packet)) {
-                info = detail::parse_pmt(payload);
-            }
-
-            continue;
-        }
-
-        if (info.found && pid == info.video_pid) {
-            if (payload.empty()) {
-                continue;
-            }
-
-            if (detail::payload_start(packet)) {
-                pes_open = true;
-                pes_skip = 0;
-
-                /*
-                 * A payload-start packet begins a PES. Locate the
-                 * first Annex-B start code after the PES header
-                 * (whose exact length is muxer-dependent), and
-                 * skip everything before it. If none is present in
-                 * this packet the data begins in a continuation.
-                 */
-                if (payload.size() >= 4 && payload[0] == 0x00 && payload[1] == 0x00 &&
-                    payload[2] == 0x01) {
-                    std::size_t i = 4;
-
-                    for (; i + 3 <= payload.size(); ++i) {
-                        if (payload[i] == 0x00 && payload[i + 1] == 0x00 &&
-                            payload[i + 2] == 0x01) {
-                            pes_skip = i;
-                            break;
-                        }
-                    }
-
-                    if (i + 3 > payload.size()) {
-                        pes_skip = payload.size();
-                    }
-                }
-            }
-
-            if (!pes_open) {
-                continue;
-            }
-
-            if (pes_skip >= payload.size()) {
-                pes_skip -= payload.size();
-                continue;
-            }
-
-            const auto body = payload.subspan(pes_skip);
-
-            stream.insert(stream.end(), body.begin(), body.end());
-
-            pes_skip = 0;
-        }
-    }
-
-    if (!info.found || stream.empty()) {
-        return out;
-    }
-
-    out.bytes = std::move(stream);
-
-    switch (info.stream_type) {
-        case 0x1B:
-            out.codec = Codec::Avc;
-            break;
-
-        case 0x24:
-            out.codec = Codec::Hevc;
-            break;
-
-        case 0x33:
-            out.codec = Codec::Vvc;
-            break;
-
-        case 0x06: {
-            // Private data — probe payload for AV1 OBU or VP9 IVF
-            if (stream.size() >= 4 && stream[0] == 0x0A)
-                out.codec = Codec::Av1;
-            else
-                out.codec = Codec::Av1;
-            if (stream.size() >= 2 && stream[0] == 0x0A)
-                out.framing = NalFramingMode::Obu;
-            else
-                out.framing = NalFramingMode::AnnexB;
-            out.bytes = std::move(stream);
-            out.ok = true;
-            return out;
-        }
-
-        default:
-            return out;
-    }
-
-    out.framing = NalFramingMode::AnnexB;
-    out.ok = true;
-
-    return out;
-}
 
 }  // namespace ts
 }  // namespace demux

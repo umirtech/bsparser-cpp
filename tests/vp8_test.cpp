@@ -22,6 +22,9 @@ namespace {
 
 bs::vp8::FrameHeader g_fh;
 bool g_hit = false;
+bool g_raw_hit = false;
+std::uint32_t g_raw_width = 0;
+std::uint32_t g_raw_height = 0;
 
 std::vector<std::uint8_t> read_file(const char* path) {
     std::ifstream f(path, std::ios::binary);
@@ -54,7 +57,36 @@ int main(int argc, char** argv) {
 
     (void)bs::parse(*state, data, bs::NalFramingMode::Ivf, h);
 
+    if (data.size() >= 32 + 12) {
+        const std::uint32_t frame_size =
+            static_cast<std::uint32_t>(data[32]) |
+            (static_cast<std::uint32_t>(data[33]) << 8) |
+            (static_cast<std::uint32_t>(data[34]) << 16) |
+            (static_cast<std::uint32_t>(data[35]) << 24);
+
+        if (32 + 12 + frame_size <= data.size()) {
+            bs::Vp8ParsedHandlers rh{};
+            rh.frame_header = [](const bs::vp8::FrameHeader& f) {
+                g_raw_hit = true;
+                g_raw_width = f.width;
+                g_raw_height = f.height;
+            };
+
+            (void)bs::parse(
+                *state,
+                std::span<const std::uint8_t>(data.data() + 32 + 12, frame_size),
+                bs::NalFramingMode::RawFrame,
+                rh
+            );
+        }
+    }
+
     int failures = 0;
+
+    if (!g_raw_hit) {
+        std::cerr << "VP8: RawFrame handler missing\n";
+        ++failures;
+    }
 
     if (!g_hit) {
         std::cerr << "VP8: frame header handler never fired\n";

@@ -35,13 +35,13 @@ and syntax fields (parameter sets, slice/frame headers, SEI, OBUs) — it does
 | H.264/AVC | Annex-B / length-prefixed | SPS/PPS, slice headers, SEI |
 | H.266/VVC | Annex-B / length-prefixed | DCI/OPI/VPS/SPS/PPS/PH, slice headers (full H.266 §7.3) |
 | AV1 | Annex-B OBU / low-overhead OBU | sequence + frame headers (full Annex A) |
-| VP9 | IVF | frame headers |
-| VP8 | IVF | frame headers |
+| VP9 | IVF / RawFrame | frame headers |
+| VP8 | IVF / RawFrame | frame headers |
 
 ## Container demuxing
 
 Feed **muxed files directly** — the `demux/` layer auto-detects the container
-and extracts the elementary stream:
+and indexes zero-copy elementary-stream samples:
 
 | Container | Supported codecs |
 |---|---|
@@ -50,23 +50,39 @@ and extracts the elementary stream:
 | FLV | H.264, HEVC, VVC, AV1, VP8, VP9 |
 | AVI | H.264, HEVC, VVC, AV1, VP8, VP9 |
 | **MKV / WebM** | **H.264, HEVC, VVC, AV1, VP8, VP9** |
+| Ogg | VP8, VP9, AV1, HEVC, AVC |
+| MPEG-PS | H.264, HEVC |
 | IVF | VP8, VP9 |
+
+MP4 includes fragmented (`moof`) files and files whose `moov` atom is at the
+end.
+
+### Streaming / zero-copy demuxing
 
 ```cpp
 #include <bsparser.hpp>
 #include <demux/demuxer.hpp>
 
-auto es = bs::demux::demux(bytes);        // auto-detect container
-if (es.ok) {
-    auto state = bs::create_state(es.codec);
+auto demuxer = bs::demux::Demuxer::init("input.mp4");   // path, fd, or span
+for (auto& track : demuxer.tracks()) {
+    auto state = bs::create_state(track.codec);
     bs::HevcParsedHandlers h{};
     // ...
-    bs::parse(*state, es.bytes, es.framing, h);   // es.codec / es.framing chosen
+    bs::demux::SampleView sample;
+    while (track.hasNext() && track.next(sample)) {
+        // sample.data is a zero-copy span into the mmap-backed file
+        bs::parse(*state, sample.data, sample.framing, h);
+    }
 }
 ```
 
-The CLI does this automatically: `bs_cli input.mp4` demuxes and parses the
-video track without any `--codec`/`--format` flags.
+`Track` also supports `seek(sample_index)` and `seek_time(pts)`.  The
+`SampleView::mmap_backed` flag tells you whether the span points into mapped
+file memory or a reusable internal buffer.  MP4 support includes fragmented
+(`moof`) files and files whose `moov` atom is at the end.
+
+The CLI uses the same streaming API, parses samples chunk by chunk, and prints
+progress while processing large files.
 
 ---
 

@@ -357,47 +357,69 @@ int main(int argc, char** argv) {
     /*
      * Load the stream.
      */
-    std::vector<std::uint8_t> bytes = read_file(input_path);
-
-    if (bytes.empty()) {
-        std::cerr << "error: cannot open '" << input_path << "'\n";
-        return 1;
-    }
-
-    if (bytes.size() < 3) {
-        std::cerr << "error: input too small\n";
-        return 1;
-    }
-
-    std::span<const std::uint8_t> data{bytes.data(), bytes.size()};
+    std::vector<std::uint8_t> bytes;
+    std::vector<cli::ReportChunk> chunks;
+    std::span<const std::uint8_t> data;
+    demux::Container container = demux::Container::Unknown;
 
     /*
-     * Container auto-detection: try demux for all known containers
-     * (MP4/MOV/fMP4, MKV/WebM, FLV, AVI, TS, IVF, OGG, PS) via
-     * bs::demux::sniff/demux. The demuxer's es.codec/framing always
-     * win for muxed files (container is authoritative).
+     * Container auto-detection: use the streaming demuxer for all known
+     * containers.  It mmaps the file and yields zero-copy sample spans;
+     * the report builder consumes those spans chunk by chunk.
      */
-    std::vector<std::uint8_t> demuxed;
-    const demux::Container container = demux::sniff(data);
-    if (container != demux::Container::Unknown) {
-        const demux::ElementaryStream es = demux::demux(container, data);
-        if (es.ok && !es.bytes.empty()) {
-            demuxed = es.bytes;
-            data = std::span<const std::uint8_t>(demuxed.data(), demuxed.size());
-            codec = es.codec;
-            mode = es.framing;
-            static const char* container_names[] = {
-                "?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF", "MKV", "Ogg", "PS"
-            };
-            const unsigned ci = static_cast<unsigned>(container);
-            const char* cname = ci < 9 ? container_names[ci] : "?";
-            std::cout << "container=" << cname << " codec=" << es.codec_name << " " << es.width
-                      << "x" << es.height << " (demuxed " << es.bytes.size() << " bytes)\n";
-        } else {
-            std::cerr << "warning: detected container " << static_cast<unsigned>(container)
-                      << " but demux failed; parsing as raw stream\n";
+    const auto demuxer = demux::Demuxer::init(input_path);
+
+    if (demuxer.ok()) {
+        container = demuxer.container();
+        auto tracks = demuxer.tracks();
+        demux::Track* video = nullptr;
+
+        for (auto& track : tracks) {
+            if (track.is_video && track.sampleCount() > 0) {
+                video = &track;
+                break;
+            }
+        }
+
+        if (video != nullptr) {
+            demux::SampleView sample;
+
+            while (video->hasNext() && video->next(sample)) {
+                chunks.push_back(cli::ReportChunk{sample.data, sample.framing});
+            }
+
+            if (!chunks.empty()) {
+                codec = video->codec;
+                mode = video->framing;
+
+                static const char* container_names[] = {
+                    "?", "MP4", "MPEG-TS", "AVI", "FLV", "IVF", "MKV", "Ogg", "PS"
+                };
+                const unsigned ci = static_cast<unsigned>(container);
+                const char* cname = ci < 9 ? container_names[ci] : "?";
+                std::cout << "container=" << cname << " codec=" << video->codec_name << " "
+                          << video->width << "x" << video->height << " (" << chunks.size()
+                          << " samples)\n";
+            }
         }
     }
+
+    if (chunks.empty()) {
+        bytes = read_file(input_path);
+
+        if (bytes.empty()) {
+            std::cerr << "error: cannot open '" << input_path << "'\n";
+            return 1;
+        }
+
+        if (bytes.size() < 3) {
+            std::cerr << "error: input too small\n";
+            return 1;
+        }
+
+        data = std::span<const std::uint8_t>(bytes.data(), bytes.size());
+    }
+
     // Raw streams: pick framing from codec when auto (AV1→OBU, VP9/8→IVF)
     if (container == demux::Container::Unknown && codec_arg == "auto" && format_arg == "annexb") {
         if (codec == Codec::Av1)
@@ -413,7 +435,23 @@ int main(int argc, char** argv) {
      */
     cli::Report report;
     try {
-        report = cli::build_report(codec, data, mode, length_size);
+        if (!chunks.empty()) {
+            std::size_t last_reported = 0;
+
+            auto progress = [&last_reported](std::size_t done, std::size_t total) {
+                const std::size_t step = total / 100 + 1;
+                if (done == total || done % 100 == 0 || done - last_reported >= step) {
+                    std::cerr << "\rprogress: " << done << '/' << total << " samples"
+                              << std::flush;
+                    last_reported = done;
+                }
+            };
+
+            report = cli::build_report_chunks(codec, chunks, mode, length_size, progress);
+            std::cerr << "\n";
+        } else {
+            report = cli::build_report(codec, data, mode, length_size);
+        }
     } catch (const std::exception& e) {
         std::cerr << "error: unsupported or malformed input (" << e.what() << ")\n";
         std::cerr << "hint: try --codec <hevc|avc|vvc|av1|vp9|vp8> and --format "
