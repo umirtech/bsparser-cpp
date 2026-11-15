@@ -42,6 +42,8 @@ int main() {
 
     auto* header = static_cast<bs::avc::MotionVectorBufferHeader*>(buffer.data);
     *header = bs::avc::MotionVectorBufferHeader{};
+    header->magic = bs::avc::kMotionVectorBufferMagic;
+    header->version = bs::avc::kMotionVectorBufferVersion;
     header->header_bytes = sizeof(*header);
     header->total_bytes = static_cast<std::uint32_t>(request.required_bytes);
     header->cell_count = request.cell_count;
@@ -105,6 +107,8 @@ int main() {
             auto* slice_header =
                     static_cast<bs::avc::MotionVectorBufferHeader*>(slice_buffer.data);
             *slice_header = bs::avc::MotionVectorBufferHeader{};
+            slice_header->magic = bs::avc::kMotionVectorBufferMagic;
+            slice_header->version = bs::avc::kMotionVectorBufferVersion;
             slice_header->header_bytes = sizeof(*slice_header);
             slice_header->total_bytes = static_cast<std::uint32_t>(slice_request.required_bytes);
             slice_header->poc = 8;
@@ -196,6 +200,8 @@ int main() {
             auto* map_header =
                     static_cast<bs::avc::MotionVectorBufferHeader*>(map_buffer.data);
             *map_header = bs::avc::MotionVectorBufferHeader{};
+            map_header->magic = bs::avc::kMotionVectorBufferMagic;
+            map_header->version = bs::avc::kMotionVectorBufferVersion;
             map_header->header_bytes = sizeof(*map_header);
             map_header->total_bytes =
                     static_cast<std::uint32_t>(map_request.required_bytes);
