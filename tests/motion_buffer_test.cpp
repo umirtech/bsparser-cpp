@@ -126,6 +126,8 @@ int main() {
 
             auto* slices = reinterpret_cast<bs::avc::MotionSliceReference*>(
                     static_cast<std::uint8_t*>(slice_buffer.data) + table_offset);
+            slices[0] = bs::avc::MotionSliceReference{};
+            slices[1] = bs::avc::MotionSliceReference{};
             slices[0].mb_addr_begin = 0;
             slices[0].mb_addr_end = 2;
             slices[0].num_ref_idx[0] = 2;
@@ -226,6 +228,8 @@ int main() {
 
             auto* map_slices = reinterpret_cast<bs::avc::MotionSliceReference*>(
                     static_cast<std::uint8_t*>(map_buffer.data) + table_offset);
+            map_slices[0] = bs::avc::MotionSliceReference{};
+            map_slices[1] = bs::avc::MotionSliceReference{};
             map_slices[0].ref_poc[0][0] = 4;
             map_slices[0].num_ref_idx[0] = 1;
             map_slices[0].mb_addr_begin = 0;
@@ -238,6 +242,7 @@ int main() {
             auto* runs = reinterpret_cast<bs::avc::MotionSliceRun*>(
                     static_cast<std::uint8_t*>(map_buffer.data) + map_offset);
             for (std::uint32_t i = 0; i < 4; ++i) {
+                runs[i] = bs::avc::MotionSliceRun{};
                 runs[i].mb_addr = i;
                 runs[i].slice_index = i & 1u;
             }

@@ -529,7 +529,6 @@ class SliceDataParser {
         : sps_(sps),
           pps_(pps),
           header_(header),
-          idr_(idr),
           width4x4_(width4x4),
           height4x4_(height4x4),
           cells_(cells),
@@ -539,6 +538,7 @@ class SliceDataParser {
           list1_(list1),
           status_(status),
           chroma_array_type_(sps.separate_colour_plane_flag ? 0 : sps.chroma_format_idc) {
+        (void)idr;
         if (pps_.entropy_coding_mode_flag) {
             cabac_.emplace(rbsp, slice_data_bit);
         } else {
@@ -3074,9 +3074,9 @@ class SliceDataParser {
                                (is_b() && raw_type >= 23);
         if (intra_raw) {
             mb.intra = true;
-            if (is_i()) raw_type = raw_type; // 0 = I_NxN, 1..24 = I16
-            else if (is_p()) raw_type -= 5;
-            else raw_type -= 23;
+            if (is_p()) raw_type -= 5;       // 5.. = I16 in P slices
+            else if (is_b()) raw_type -= 23;  // 23.. = I16 in B slices
+            // is_i(): 0 = I_NxN, 1..24 = I16 (no adjustment)
 
             if (raw_type == 0) {
                 mb.is_intra4x4 = true;
@@ -3468,7 +3468,6 @@ class SliceDataParser {
     const SequenceParameterSet& sps_;
     const PictureParameterSet& pps_;
     const SliceHeader& header_;
-    bool idr_ = false;
     std::uint32_t width4x4_ = 0;
     std::uint32_t height4x4_ = 0;
     std::uint32_t mb_width_ = 0;
