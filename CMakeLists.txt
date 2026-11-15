@@ -982,6 +982,44 @@ foreach(pair IN ITEMS
 
 endforeach()
 
+add_executable(
+    bs_demux_stream_test
+    tests/demux_stream_test.cpp
+)
+
+target_link_libraries(
+    bs_demux_stream_test
+    PRIVATE
+        bs
+)
+
+foreach(sample IN ITEMS
+    hevc.mp4
+    h264.mp4
+    vvc.mp4
+    av1.mp4
+    vp9.mp4
+    h264_enc.ts
+    h264_enc.flv
+    h264_enc.avi
+    vp9.webm
+    hevc.mkv
+    h264.mkv
+    av1.mkv
+    multi.mkv
+    multi.mp4
+    multi.ts
+    multi.flv
+)
+
+    add_test(
+        NAME bs_demux_stream_${sample}
+        COMMAND bs_demux_stream_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${sample}
+    )
+
+endforeach()
+
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #Fuzzing
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

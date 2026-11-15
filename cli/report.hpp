@@ -25,6 +25,7 @@
 #include <parser/hevc_slice_parser.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <cstdint>
 #include <span>
 #include <sstream>
@@ -57,6 +58,11 @@ struct Report {
     std::string framing;
     std::size_t parsed = 0;
     std::vector<NalEntry> entries;
+};
+
+struct ReportChunk {
+    std::span<const std::uint8_t> data;
+    NalFramingMode framing = NalFramingMode::AnnexB;
 };
 
 /*
@@ -359,8 +365,9 @@ inline void add_entry(
  * ---------------------------------------------------------------------------
  */
 [[nodiscard]]
-inline Report build_report(
-    Codec codec, std::span<const std::uint8_t> data, NalFramingMode mode, unsigned length_size = 4
+inline Report build_report_chunks(
+    Codec codec, const std::vector<ReportChunk>& chunks, NalFramingMode mode,
+    unsigned length_size = 4, std::function<void(std::size_t, std::size_t)> progress = {}
 ) {
     Report report;
     report.codec = (codec == Codec::Hevc) ? "HEVC" : "AVC";
@@ -369,7 +376,6 @@ inline Report build_report(
     auto state = create_state(codec);
 
     detail::g_report = &report;
-    detail::g_data_start = data.data();
     detail::g_state = state.get();
 
     if (codec == Codec::Hevc) {
@@ -586,7 +592,14 @@ inline Report build_report(
             );
         };
 
-        report.parsed = parse(*state, data, mode, handlers, length_size);
+        for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+            const auto& chunk = chunks[ci];
+            if (progress) {
+                progress(ci + 1, chunks.size());
+            }
+            detail::g_data_start = chunk.data.data();
+            report.parsed += parse(*state, chunk.data, chunk.framing, handlers, length_size);
+        }
 
     } else if (codec == Codec::Avc) {
         avc::NalHandlers handlers{};
@@ -759,16 +772,24 @@ inline Report build_report(
             );
         };
 
-        report.parsed = parse(*state, data, mode, handlers, length_size);
+        for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+            const auto& chunk = chunks[ci];
+            if (progress) {
+                progress(ci + 1, chunks.size());
+            }
+            detail::g_data_start = chunk.data.data();
+            report.parsed += parse(*state, chunk.data, chunk.framing, handlers, length_size);
+        }
     } else if (codec == Codec::Vvc || codec == Codec::Av1 || codec == Codec::Vp9 ||
                codec == Codec::Vp8) {
         report.codec = (codec == Codec::Vvc)   ? "VVC"
                        : (codec == Codec::Av1) ? "AV1"
                        : (codec == Codec::Vp9) ? "VP9"
                                                : "VP8";
-        report.framing = (mode == NalFramingMode::AnnexB) ? "Annex-B"
-                         : (mode == NalFramingMode::Obu)  ? "OBU"
-                         : (mode == NalFramingMode::Ivf)  ? "IVF"
+        report.framing = (mode == NalFramingMode::AnnexB)  ? "Annex-B"
+                         : (mode == NalFramingMode::Obu)   ? "OBU"
+                         : (mode == NalFramingMode::Ivf)   ? "IVF"
+                         : (mode == NalFramingMode::RawFrame) ? "Raw frame"
                                                           : "Length-prefixed";
 
         if (codec == Codec::Vvc) {
@@ -1000,16 +1021,30 @@ inline Report build_report(
                 return i;
             };
 
-            if (mode == NalFramingMode::AnnexB) {
-                report.parsed = add_vvc(AnnexBNalIterator{data});
-            } else {
-                report.parsed = add_vvc(LengthPrefixedNalIterator{data, length_size});
+            for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto& chunk = chunks[ci];
+                if (progress) {
+                    progress(ci + 1, chunks.size());
+                }
+                detail::g_data_start = chunk.data.data();
+                if (chunk.framing == NalFramingMode::AnnexB) {
+                    report.parsed += add_vvc(AnnexBNalIterator{chunk.data});
+                } else {
+                    report.parsed +=
+                        add_vvc(LengthPrefixedNalIterator{chunk.data, length_size});
+                }
             }
 
         } else if (codec == Codec::Av1) {
-            av1::ObuFramer framer{data};
             av1::SequenceHeader seq{};
             std::size_t i = 0;
+            for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+            const auto& chunk = chunks[ci];
+            if (progress) {
+                progress(ci + 1, chunks.size());
+            }
+            detail::g_data_start = chunk.data.data();
+            av1::ObuFramer framer{chunk.data};
             while (framer.valid()) {
                 const auto span = framer.obu();
                 try {
@@ -1077,13 +1112,13 @@ inline Report build_report(
                 framer.next();
                 ++i;
             }
+            }
             report.parsed = i;
 
         } else if (codec == Codec::Vp9) {
-            IvfFramer framer{data};
             std::size_t i = 0;
-            while (framer.valid()) {
-                const auto frame = framer.frame();
+
+            auto add_frame = [&](std::span<const std::uint8_t> frame) {
                 try {
                     auto fh = vp9::parse_frame_header(frame);
                     fh.presentation_order = static_cast<std::int32_t>(i);
@@ -1105,7 +1140,7 @@ inline Report build_report(
                             {"show_frame", fh.show_frame ? "1" : "0"},
                             {"show_existing_frame", fh.show_existing_frame ? "1" : "0"},
                             {"presentation_order", std::to_string(fh.presentation_order)},
-                            {"error_resilient_mode", fh.error_resilient_mode ? "1" : "0"},
+                            {"error_resilient_mode", std::to_string(fh.error_resilient_mode)},
                             {"width", std::to_string(fh.width)},
                             {"height", std::to_string(fh.height)},
                         }
@@ -1115,16 +1150,33 @@ inline Report build_report(
                         "frame", 0, false, frame.data(), frame.size(), "unparsable", {}
                     );
                 }
-                framer.next();
                 ++i;
+            };
+
+            for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto& chunk = chunks[ci];
+                if (progress) {
+                    progress(ci + 1, chunks.size());
+                }
+                detail::g_data_start = chunk.data.data();
+                if (chunk.framing == NalFramingMode::RawFrame) {
+                    if (!chunk.data.empty()) {
+                        add_frame(chunk.data);
+                    }
+                } else {
+                    IvfFramer framer{chunk.data};
+                    while (framer.valid()) {
+                        add_frame(framer.frame());
+                        framer.next();
+                    }
+                }
             }
             report.parsed = i;
 
         } else {
-            IvfFramer framer{data};
             std::size_t i = 0;
-            while (framer.valid()) {
-                const auto frame = framer.frame();
+
+            auto add_frame = [&](std::span<const std::uint8_t> frame) {
                 try {
                     auto fh = vp8::parse_frame_header(frame);
                     fh.presentation_order = static_cast<std::int32_t>(i);
@@ -1153,8 +1205,26 @@ inline Report build_report(
                         "frame", 0, false, frame.data(), frame.size(), "unparsable", {}
                     );
                 }
-                framer.next();
                 ++i;
+            };
+
+            for (std::size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto& chunk = chunks[ci];
+                if (progress) {
+                    progress(ci + 1, chunks.size());
+                }
+                detail::g_data_start = chunk.data.data();
+                if (chunk.framing == NalFramingMode::RawFrame) {
+                    if (!chunk.data.empty()) {
+                        add_frame(chunk.data);
+                    }
+                } else {
+                    IvfFramer framer{chunk.data};
+                    while (framer.valid()) {
+                        add_frame(framer.frame());
+                        framer.next();
+                    }
+                }
             }
             report.parsed = i;
         }
@@ -1165,6 +1235,15 @@ inline Report build_report(
     detail::g_state = nullptr;
 
     return report;
+}
+
+[[nodiscard]]
+inline Report build_report(
+    Codec codec, std::span<const std::uint8_t> data, NalFramingMode mode, unsigned length_size = 4
+) {
+    return build_report_chunks(
+        codec, std::vector<ReportChunk>{ReportChunk{data, mode}}, mode, length_size
+    );
 }
 
 /*

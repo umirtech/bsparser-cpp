@@ -538,11 +538,40 @@ inline std::vector<FramedNalSpan> split_length_prefixed(
 
 /*
  * -----------------------------------------------------------
+ * Raw single-frame framer (VP8/VP9 samples already extracted
+ * from their container; the span is exactly one frame).
+ * -----------------------------------------------------------
+ */
+class RawFrameFramer {
+   public:
+    explicit RawFrameFramer(std::span<const std::uint8_t> data) : data_(data) {}
+
+    [[nodiscard]]
+    bool valid() const noexcept {
+        return !done_ && !data_.empty();
+    }
+
+    [[nodiscard]]
+    std::span<const std::uint8_t> frame() const noexcept {
+        return data_;
+    }
+
+    void next() noexcept {
+        done_ = true;
+    }
+
+   private:
+    std::span<const std::uint8_t> data_{};
+    bool done_ = false;
+};
+
+/*
+ * -----------------------------------------------------------
  * Unified NAL framing mode
  * -----------------------------------------------------------
  */
 
-enum class NalFramingMode : std::uint8_t { AnnexB, LengthPrefixed, Obu, Ivf };
+enum class NalFramingMode : std::uint8_t { AnnexB, LengthPrefixed, Obu, Ivf, RawFrame };
 
 /*
  * -----------------------------------------------------------
@@ -580,6 +609,12 @@ inline std::vector<FramedNalSpan> split_nal_units(
             }
             return out;
         }
+
+        case NalFramingMode::RawFrame:
+            if (data.empty()) {
+                return {};
+            }
+            return {data};
     }
 
     throw NalFramingError("NAL framing: unsupported framing mode");

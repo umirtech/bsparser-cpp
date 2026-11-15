@@ -6,9 +6,10 @@
  * Container demux test
  * ---------------------------------------------------------------------------
  *
- * Reads a muxed file (MP4 / TS / FLV / AVI / IVF), auto-detects
- * the container, demuxes it to an elementary stream and parses
- * it with the unified bs::parse API.
+ * Reads a muxed file (MP4 / TS / FLV / AVI / IVF / MKV / Ogg / PS),
+ * auto-detects the container through the streaming Demuxer, selects the
+ * first video track and parses every zero-copy sample with the unified
+ * bs::parse API.
  *
  * Usage: bs_demux_test <muxed-file> <expected-codec>
  *        expected-codec: hevc|avc|vvc|av1|vp9|vp8
@@ -18,26 +19,88 @@
 
 #include <cstdint>
 #include <cstring>
-#include <fstream>
 #include <iostream>
-#include <iterator>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace {
 
-std::vector<std::uint8_t> read_file(const char* path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) {
-        return {};
+bool g_fired = false;
+
+void parse_sample(
+    const bs::demux::Track& track, const bs::demux::SampleView& sample, bs::State& state
+) {
+    switch (track.codec) {
+        case bs::Codec::Hevc: {
+            bs::HevcParsedHandlers h{};
+            h.vps = [](const bs::VideoParameterSet&) { g_fired = true; };
+            h.sps = [](const bs::SequenceParameterSet&) { g_fired = true; };
+            h.pps = [](const bs::PictureParameterSet&) { g_fired = true; };
+            h.slice = [](const bs::SliceSegmentHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
+
+        case bs::Codec::Avc: {
+            bs::AvcParsedHandlers h{};
+            h.sps = [](const bs::avc::SequenceParameterSet&) { g_fired = true; };
+            h.pps = [](const bs::avc::PictureParameterSet&) { g_fired = true; };
+            h.slice = [](const bs::avc::SliceHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
+
+        case bs::Codec::Vvc: {
+            bs::VvcParsedHandlers h{};
+            h.sps = [](const bs::vvc::SequenceParameterSet&) { g_fired = true; };
+            h.pps = [](const bs::vvc::PictureParameterSet&) { g_fired = true; };
+            h.slice = [](const bs::vvc::SliceHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
+
+        case bs::Codec::Av1: {
+            bs::Av1ParsedHandlers h{};
+            h.sequence_header = [](const bs::av1::SequenceHeader&) { g_fired = true; };
+            h.frame_header = [](const bs::av1::FrameHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
+
+        case bs::Codec::Vp9: {
+            bs::Vp9ParsedHandlers h{};
+            h.frame_header = [](const bs::vp9::FrameHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
+
+        case bs::Codec::Vp8: {
+            bs::Vp8ParsedHandlers h{};
+            h.frame_header = [](const bs::vp8::FrameHeader&) { g_fired = true; };
+            (void)bs::parse(state, sample.data, sample.framing, h);
+            break;
+        }
     }
-    return std::vector<std::uint8_t>(
-        std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()
-    );
 }
 
-bool g_fired = false;
+const char* codec_name(bs::Codec codec) {
+    switch (codec) {
+        case bs::Codec::Hevc:
+            return "hevc";
+        case bs::Codec::Avc:
+            return "avc";
+        case bs::Codec::Vvc:
+            return "vvc";
+        case bs::Codec::Av1:
+            return "av1";
+        case bs::Codec::Vp9:
+            return "vp9";
+        case bs::Codec::Vp8:
+            return "vp8";
+    }
+
+    return "?";
+}
 
 }  // namespace
 
@@ -47,103 +110,43 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    auto data = read_file(argv[1]);
-    if (data.empty()) {
-        std::cerr << "cannot open " << argv[1] << "\n";
-        return 2;
-    }
+    const auto demuxer = bs::demux::Demuxer::init(argv[1]);
 
-    const bs::demux::Container container = bs::demux::sniff(data);
-
-    if (container == bs::demux::Container::Unknown) {
-        std::cerr << "container not detected\n";
-        return 1;
-    }
-
-    const bs::demux::ElementaryStream es = bs::demux::demux(data);
-
-    if (!es.ok || es.bytes.empty()) {
+    if (!demuxer.ok()) {
         std::cerr << "demux failed\n";
         return 1;
     }
 
-    const char* want = argv[2];
+    auto tracks = demuxer.tracks();
+    bs::demux::Track* video = nullptr;
 
-    const char* got = es.codec == bs::Codec::Hevc  ? "hevc"
-                      : es.codec == bs::Codec::Avc ? "avc"
-                      : es.codec == bs::Codec::Vvc ? "vvc"
-                      : es.codec == bs::Codec::Av1 ? "av1"
-                      : es.codec == bs::Codec::Vp9 ? "vp9"
-                      : es.codec == bs::Codec::Vp8 ? "vp8"
-                                                   : "?";
+    for (auto& track : tracks) {
+        if (track.is_video && track.sampleCount() > 0) {
+            video = &track;
+            break;
+        }
+    }
+
+    if (video == nullptr) {
+        std::cerr << "no video track\n";
+        return 1;
+    }
+
+    const char* want = argv[2];
+    const char* got = codec_name(video->codec);
 
     if (std::strcmp(want, got) != 0) {
         std::cerr << "codec mismatch: expected " << want << " got " << got << "\n";
         return 1;
     }
 
-    /*
-     * Parse the demuxed elementary stream and verify at least one
-     * unit handler fired. The bs::parse return value counts raw
-     * dispatch, so use handler flags instead.
-     */
-    auto state = bs::create_state(es.codec);
-
     g_fired = false;
 
-    switch (es.codec) {
-        case bs::Codec::Hevc: {
-            bs::HevcParsedHandlers h{};
-            h.vps = [](const bs::VideoParameterSet&) { g_fired = true; };
-            h.sps = [](const bs::SequenceParameterSet&) { g_fired = true; };
-            h.pps = [](const bs::PictureParameterSet&) { g_fired = true; };
-            h.slice = [](const bs::SliceSegmentHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
+    auto state = bs::create_state(video->codec);
+    bs::demux::SampleView sample;
 
-        case bs::Codec::Avc: {
-            bs::AvcParsedHandlers h{};
-            h.sps = [](const bs::avc::SequenceParameterSet&) { g_fired = true; };
-            h.pps = [](const bs::avc::PictureParameterSet&) { g_fired = true; };
-            h.slice = [](const bs::avc::SliceHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
-
-        case bs::Codec::Vvc: {
-            bs::VvcParsedHandlers h{};
-            h.sps = [](const bs::vvc::SequenceParameterSet&) { g_fired = true; };
-            h.pps = [](const bs::vvc::PictureParameterSet&) { g_fired = true; };
-            h.slice = [](const bs::vvc::SliceHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
-
-        case bs::Codec::Av1: {
-            bs::Av1ParsedHandlers h{};
-            h.sequence_header = [](const bs::av1::SequenceHeader&) { g_fired = true; };
-            h.frame_header = [](const bs::av1::FrameHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
-
-        case bs::Codec::Vp9: {
-            bs::Vp9ParsedHandlers h{};
-            h.frame_header = [](const bs::vp9::FrameHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
-
-        case bs::Codec::Vp8: {
-            bs::Vp8ParsedHandlers h{};
-            h.frame_header = [](const bs::vp8::FrameHeader&) { g_fired = true; };
-            (void)bs::parse(*state, es.bytes, es.framing, h);
-            break;
-        }
-
-        default:
-            break;
+    while (video->hasNext() && video->next(sample)) {
+        parse_sample(*video, sample, *state);
     }
 
     if (!g_fired) {
@@ -151,8 +154,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::cout << "demux OK: container=" << static_cast<unsigned>(container) << " codec=" << got
-              << " bytes=" << es.bytes.size() << " " << es.width << "x" << es.height << "\n";
+    std::cout << "demux OK: container=" << static_cast<unsigned>(demuxer.container())
+              << " codec=" << got << " samples=" << video->sampleCount() << " " << video->width
+              << "x" << video->height << "\n";
 
     return 0;
 }

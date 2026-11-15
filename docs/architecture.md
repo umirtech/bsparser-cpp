@@ -91,7 +91,7 @@ derivation themselves.
 | AVC | Annex-B / length-prefixed | SPS/PPS, slice headers, SEI |
 | VVC | Annex-B / length-prefixed | DCI/OPI/VPS/SPS/PPS, picture headers, slice headers (full H.266 §7.3) |
 | AV1 | Annex-B OBU / low-overhead OBU | sequence headers, frame headers (full Annex A) |
-| VP9 / VP8 | IVF | uncompressed frame headers (full VP8/VP9 §6-9) |
+| VP9 / VP8 | IVF / RawFrame | uncompressed frame headers (full VP8/VP9 §6-9) |
 
 VVC and AV1 now parse full header syntax per their specifications — all
 parameter sets, picture/slice headers, and frame headers are fully modelled
@@ -108,8 +108,8 @@ byte stream → framing → unit header → EBSP→RBSP → syntax fields
 
 - **Framing** (`parser/nal_framer.hpp`, `obu_framer.hpp`, `ivf_framer.hpp`):
   splits the raw bytes into NAL units / OBUs / frames. Annex-B start codes,
-  length-prefixed NALs, AV1 OBUs (Annex-B and low-overhead) and IVF frames.
-  Codec-agnostic and shared.
+  length-prefixed NALs, AV1 OBUs (Annex-B and low-overhead), IVF frames, and
+  single raw VP8/VP9 frames (`RawFrame`).  Codec-agnostic and shared.
 - **Unit layer** (`parser/*_nal_unit_parser.hpp`): unpacks the codec's NAL /
   OBU header (2-byte HEVC/VVC, 1-byte AVC, 1-byte OBU).
 - **Bit readers** (`bitstream/`):
@@ -212,21 +212,41 @@ zero-copy consumer-buffer pool built on top of it.
 ## Container demuxing (`demux/`)
 
 A separate layer lets callers feed **muxed files** directly instead of
-pre-extracting an elementary stream. `demux::sniff()` detects the container and
-`demux::demux()` extracts the first video track into an `ElementaryStream`
-(codec, framing, bytes, dimensions):
+pre-extracting an elementary stream.  `demux::sniff()` detects the container.
+The streaming API below is the memory-friendly path and exposes all indexed
+tracks.  The CLI uses it and collects the selected track's samples into a
+contiguous buffer for its report builder.
 
 - MP4/ISO-BMFF (`mp4_demuxer.hpp`) — walks `moov/trak/mdia/stbl` and rebuilds
   a self-contained elementary stream (parameter sets prepended from `avcC` /
-  `hvcC` / `vvcC`).
-- MPEG-TS (`ts_demuxer.hpp`) — PAT/PMT to the first video stream, PES
-  stripped.
+  `hvcC` / `vvcC`).  Fragmented (`moof`) files and files whose `moov` atom is
+  at the end are supported.
+- MPEG-TS (`ts_demuxer.hpp`) — PAT/PMT to the video streams, PES stripped.
 - FLV (`flv_demuxer.hpp`), AVI (`avi_demuxer.hpp`), MKV/WebM
-  (`mkv_demuxer.hpp`) — extract the video track into Annex-B / OBUs / IVF.
-- IVF passes through as the VP8/VP9 elementary stream.
+  (`mkv_demuxer.hpp`) — extract video samples as Annex-B / length-prefixed /
+  OBU / raw-frame spans.
+- Ogg and MPEG-PS are indexed directly in `demux/index.hpp` (Ogg pages/packets
+  to VP8/VP9/AV1/HEVC/AVC spans; PS video PES payload spans).
+- IVF frame headers are indexed directly as VP8/VP9 raw frame spans.
 
-The demux layer is deliberately limited: one video track, no fragmented MP4,
-no laced MKV blocks, no audio/subtitles.
+The demux layer is deliberately limited: no laced MKV blocks, no audio/subtitle
+sample extraction.  MP4 includes fragmented (`moof`) files and files whose
+`moov` atom is at the end.
+
+### Streaming / zero-copy API
+
+`bs::demux::Demuxer::init(path | fd | span)` detects the container and returns
+an initialized `Demuxer`.  `tracks()` exposes `TrackView` metadata and each
+`Track` handle supports `hasNext()` / `next(SampleView&)` to pull one sample /
+access unit at a time.  Samples are spans into the demuxer's mmap-backed file
+buffer (`SampleView::mmap_backed == true`), so no elementary-stream copy is
+made.  `seek(sample_index)` and `seek_time(pts)` are index-backed.  A buffered
+fallback is used when mmap is unavailable and is reported through the same
+flag.
+
+For raw VP8/VP9 frames that are already extracted from their container, the
+new `NalFramingMode::RawFrame` framing mode parses one frame per sample without
+an IVF wrapper copy.
 
 ## C API (`capi/`)
 
@@ -274,8 +294,11 @@ bytes), since SEI is heterogeneous and view-backed. Errors surface through
 
 `bs_cli` reads a stream (or a muxed file, using the demux layer) and exports a
 structured report as **JSON** or a self-contained **HTML** viewer with
-filtering. Reports show the per-unit syntax summary and, for each codec, the
-picture-order values (`derived_poc` / `order_hint` / `presentation_order`).
+filtering. Muxed input is parsed chunk by chunk through the streaming
+`Demuxer`, so progress is reported while the file is processed instead of
+waiting for a full elementary-stream buffer to be built. Reports show the
+per-unit syntax summary and, for each codec, the picture-order values
+(`derived_poc` / `order_hint` / `presentation_order`).
 
 ## Tests
 
@@ -285,7 +308,9 @@ picture-order values (`derived_poc` / `order_hint` / `presentation_order`).
   against spec-computed expectations.
 - `tests/unified_test.cpp` exercises the `Codec`/`State`/`parse` API;
   `tests/capi_test.c` covers the C ABI; `tests/demux_test.cpp` covers all
-  container paths.
+  container paths through the streaming `Demuxer`, and
+  `tests/demux_stream_test.cpp` adds zero-copy sample, parsing, and seeking
+  checks.
 - `tests/hevc_hdr_test.cpp` / `avc_hdr_test.cpp` and `tools/verify_c.c`
   compare parsed HDR/SPS/VUI/SEI fields against pre-generated expected-value
   reference files (`tests/fuzz/reference/*.txt`).
@@ -304,7 +329,8 @@ bitstream/                bit readers (map-based, zero-alloc, plain, boolean)
 parser/                   framing, dispatch, syntax parsers, POC trackers,
                           parameter-set managers
 syntax/                   immutable parsed models
-demux/                    MP4 / TS / FLV / AVI / MKV demuxers
+demux/                    streaming Demuxer, zero-copy indexes, mmap FileSource,
+                          container detail parsers (MP4 / MKV / TS / FLV / AVI)
 capi/                     C public API (compiled into bs_capi)
 cli/                      bs_cli: JSON / HTML report exporter
 tools/                    generators, validators, bench, reference tooling

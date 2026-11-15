@@ -97,14 +97,22 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::span<const std::uint8_t> sp(data, size);
 
     /*
-     * Container demux path: auto-detect and parse the extracted
-     * elementary stream.
+     * Container demux path: auto-detect and parse the streamed samples.
      */
     try {
-        const bs::demux::ElementaryStream es = bs::demux::demux(sp);
+        const auto demuxer = bs::demux::Demuxer::init(sp);
 
-        if (es.ok && !es.bytes.empty()) {
-            parse_with_codec(es.codec, es.framing, es.bytes);
+        if (demuxer.ok()) {
+            for (auto& track : demuxer.tracks()) {
+                if (!track.is_video) {
+                    continue;
+                }
+
+                bs::demux::SampleView sample;
+                while (track.hasNext() && track.next(sample)) {
+                    parse_with_codec(track.codec, sample.framing, sample.data);
+                }
+            }
         }
     } catch (...) {
     }
