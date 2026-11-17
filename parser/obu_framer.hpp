@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <vector>
 
 namespace bs {
 namespace av1 {
@@ -53,6 +54,22 @@ class ObuFramer {
 
     void next() {
         locate_next();
+    }
+
+    /*
+     * Non-throwing variant of next() for untrusted input: swallows a
+     * malformed/truncated OBU size and marks the framer finished, so a
+     * valid()/obu()/next_nothrow() loop terminates cleanly.
+     *
+     * valid() and obu() are already noexcept and cannot throw, so no
+     * valid_nothrow()/obu_nothrow() variants are needed.
+     */
+    void next_nothrow() noexcept {
+        try {
+            next();
+        } catch (...) {
+            finished_ = true;
+        }
     }
 
    private:
@@ -186,6 +203,27 @@ class ObuFramer {
     bool low_overhead_ = false;
     bool finished_ = true;
 };
+
+/*
+ * Non-throwing variant for untrusted input: returns an empty vector on
+ * malformed/truncated data.
+ */
+[[nodiscard]]
+inline std::vector<std::span<const std::uint8_t>> split_obus_nothrow(
+    std::span<const std::uint8_t> data
+) noexcept {
+    try {
+        std::vector<std::span<const std::uint8_t>> result;
+        ObuFramer framer{data};
+        while (framer.valid()) {
+            result.push_back(framer.obu());
+            framer.next();
+        }
+        return result;
+    } catch (...) {
+        return {};
+    }
+}
 
 }  // namespace av1
 }  // namespace bs

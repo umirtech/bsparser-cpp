@@ -364,6 +364,21 @@ inline std::vector<FramedNalSpan> split_annex_b(std::span<const std::uint8_t> da
 }
 
 /*
+ * Non-throwing variant for untrusted input: returns an empty vector on
+ * malformed/truncated data.
+ */
+[[nodiscard]]
+inline std::vector<FramedNalSpan> split_annex_b_nothrow(
+    std::span<const std::uint8_t> data
+) noexcept {
+    try {
+        return split_annex_b(data);
+    } catch (...) {
+        return {};
+    }
+}
+
+/*
  * -----------------------------------------------------------
  * Length-prefixed NAL framing
  * -----------------------------------------------------------
@@ -537,6 +552,21 @@ inline std::vector<FramedNalSpan> split_length_prefixed(
 }
 
 /*
+ * Non-throwing variant for untrusted input: returns an empty vector on
+ * malformed/truncated data.
+ */
+[[nodiscard]]
+inline std::vector<FramedNalSpan> split_length_prefixed_nothrow(
+    std::span<const std::uint8_t> data, unsigned length_size = 4
+) noexcept {
+    try {
+        return split_length_prefixed(data, length_size);
+    } catch (...) {
+        return {};
+    }
+}
+
+/*
  * -----------------------------------------------------------
  * Raw single-frame framer (VP8/VP9 samples already extracted
  * from their container; the span is exactly one frame).
@@ -618,6 +648,23 @@ inline std::vector<FramedNalSpan> split_nal_units(
     }
 
     throw NalFramingError("NAL framing: unsupported framing mode");
+}
+
+/*
+ * Non-throwing variant for untrusted input: returns an empty vector on
+ * malformed/truncated data.
+ */
+[[nodiscard]]
+inline std::vector<FramedNalSpan> split_nal_units_nothrow(
+    std::span<const std::uint8_t> data,
+    NalFramingMode mode = NalFramingMode::AnnexB,
+    unsigned length_size = 4
+) noexcept {
+    try {
+        return split_nal_units(data, mode, length_size);
+    } catch (...) {
+        return {};
+    }
 }
 
 }  // namespace bs

@@ -50,33 +50,44 @@ class DemuxerImpl {
 
         container_ = sniff(source_.data());
 
-        switch (container_) {
-            case Container::Mp4:
-                return build_mp4(source_, index_);
+        /*
+         * Container detail parsers read fields straight out of the input
+         * buffer.  A malformed file must make Demuxer::init() return false,
+         * never throw into the caller (no exceptions cross this API).
+         */
+        try {
+            switch (container_) {
+                case Container::Mp4:
+                    return build_mp4(source_, index_);
 
-            case Container::Mkv:
-                return build_mkv(source_, index_);
+                case Container::Mkv:
+                    return build_mkv(source_, index_);
 
-            case Container::MpegTs:
-                return build_ts(source_, index_);
+                case Container::MpegTs:
+                    return build_ts(source_, index_);
 
-            case Container::Flv:
-                return build_flv(source_, index_);
+                case Container::Flv:
+                    return build_flv(source_, index_);
 
-            case Container::Avi:
-                return build_avi(source_, index_);
+                case Container::Avi:
+                    return build_avi(source_, index_);
 
-            case Container::Ivf:
-                return build_ivf(source_, index_);
+                case Container::Ivf:
+                    return build_ivf(source_, index_);
 
-            case Container::Ogg:
-                return build_ogg(source_, index_);
+                case Container::Ogg:
+                    return build_ogg(source_, index_);
 
-            case Container::Ps:
-                return build_ps(source_, index_);
+                case Container::Ps:
+                    return build_ps(source_, index_);
 
-            default:
-                return false;
+                default:
+                    return false;
+            }
+        } catch (...) {
+            index_ = IndexBuildResult{};
+            container_ = Container::Unknown;
+            return false;
         }
     }
 
@@ -88,6 +99,11 @@ class DemuxerImpl {
     [[nodiscard]]
     Container container() const noexcept {
         return container_;
+    }
+
+    [[nodiscard]]
+    const ContainerMetadata& metadata() const noexcept {
+        return index_.metadata;
     }
 
     [[nodiscard]]
@@ -333,6 +349,13 @@ class Demuxer {
     [[nodiscard]]
     const FileSource* source() const noexcept {
         return impl_ ? &impl_->source_ : nullptr;
+    }
+
+    /* File-level tags; empty when the container has no metadata. */
+    [[nodiscard]]
+    const ContainerMetadata& metadata() const noexcept {
+        static const ContainerMetadata empty{};
+        return impl_ ? impl_->metadata() : empty;
     }
 
     [[nodiscard]]

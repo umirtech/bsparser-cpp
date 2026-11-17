@@ -39,6 +39,9 @@ struct IndexBuildResult {
      * them without reconstructing an Annex-B stream.
      */
     std::vector<std::vector<std::uint8_t>> param_sets;
+
+    /* File-level tags (MP4 udta/meta/ilst, MKV Info + Tags). */
+    ContainerMetadata metadata;
 };
 
 inline Codec codec_from_fourcc(const std::string& f) {
@@ -66,9 +69,199 @@ namespace mp4_index {
 using mp4::detail::Box;
 using mp4::detail::box_at;
 using mp4::detail::find_child;
+using mp4::detail::is_fourcc;
 using mp4::detail::read_u32;
 using mp4::detail::read_u64;
 using mp4::detail::VideoEntry;
+
+/*
+ * -----------------------------------------------------------
+ * MP4 metadata (udta/meta/ilst + mdhd language / creation time)
+ * -----------------------------------------------------------
+ *
+ * The parser mirrors the layout written by the mux writers. Every
+ * offset is bounds-checked and malformed boxes are skipped; nothing
+ * here throws.
+ */
+
+/* MP4 uses 1904-01-01 as its epoch; Unix time uses 1970-01-01. */
+inline constexpr std::uint32_t kMp4UnixEpoch = 2082844800u;
+
+inline std::int64_t mp4_creation_time(std::span<const std::uint8_t> data, std::size_t box_pos) {
+    const Box b = box_at(data, box_pos);
+    if (b.data + 8 > b.end) {
+        return 0;
+    }
+
+    const std::uint8_t version = data[b.data];
+
+    if (version == 0) {
+        const std::uint32_t raw = read_u32(data, b.data + 4);
+        if (raw > kMp4UnixEpoch) {
+            return static_cast<std::int64_t>(raw - kMp4UnixEpoch);
+        }
+    } else if (version == 1 && b.data + 12 <= b.end) {
+        const std::uint64_t raw = read_u64(data, b.data + 4);
+        if (raw > kMp4UnixEpoch) {
+            return static_cast<std::int64_t>(raw - kMp4UnixEpoch);
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * Decode the ISO-639-2/T 3x5-bit language field of an mdhd box.
+ * Returns an empty string for unset / implausible values so callers
+ * can leave an existing language untouched.
+ */
+inline std::string mp4_language(std::span<const std::uint8_t> data, std::size_t box_pos) {
+    const Box b = box_at(data, box_pos);
+    if (b.data >= b.end) {
+        return {};
+    }
+
+    const std::uint8_t version = data[b.data];
+    const std::size_t off = (version == 1) ? b.data + 32 : b.data + 20;
+    if (off + 2 > b.end) {
+        return {};
+    }
+
+    const std::uint16_t v = static_cast<std::uint16_t>((data[off] << 8) | data[off + 1]);
+    const int c0 = static_cast<int>((v >> 10) & 0x1Fu) + 'a' - 1;
+    const int c1 = static_cast<int>((v >> 5) & 0x1Fu) + 'a' - 1;
+    const int c2 = static_cast<int>(v & 0x1Fu) + 'a' - 1;
+
+    if (c0 < 'a' || c0 > 'z' || c1 < 'a' || c1 > 'z' || c2 < 'a' || c2 > 'z') {
+        return {};
+    }
+
+    return std::string{static_cast<char>(c0), static_cast<char>(c1), static_cast<char>(c2)};
+}
+
+/*
+ * Parse an Apple `meta` FullBox. Children start after the 4-byte
+ * version/flags word. `keys` (mdta entries) supplies the names for
+ * numbered custom `ilst` items; `hdlr` is ignored.
+ */
+inline void parse_meta_box(
+    std::span<const std::uint8_t> data, std::size_t meta_pos, ContainerMetadata& out
+) {
+    const Box meta = box_at(data, meta_pos);
+    if (meta.data + 4 > meta.end) {
+        return;
+    }
+
+    std::vector<std::string> keys;
+    std::size_t ilst_pos = data.size();
+
+    std::size_t p = meta.data + 4;
+    while (p + 8 <= meta.end) {
+        const Box child = box_at(data, p);
+        if (child.end <= p || child.end > meta.end) {
+            break;
+        }
+
+        if (is_fourcc(data, p + 4, "keys")) {
+            /* keys: FullBox, u32 entry_count, then `mdta` boxes. */
+            if (child.data + 8 <= child.end) {
+                const std::uint32_t count = read_u32(data, child.data + 4);
+                std::size_t q = child.data + 8;
+                for (std::uint32_t i = 0; i < count && q + 8 <= child.end; ++i) {
+                    const Box e = box_at(data, q);
+                    if (e.end <= q || e.end > child.end) {
+                        break;
+                    }
+                    if (is_fourcc(data, q + 4, "mdta") && e.data + 4 <= e.end) {
+                        /* Cap metadata strings/counts: a tiny file must not be
+                         * able to force unbounded allocations. */
+                        constexpr std::size_t kMaxTagLen = 64u * 1024u;
+                        constexpr std::size_t kMaxTags = 4096u;
+                        if (keys.size() >= kMaxTags) {
+                            break;
+                        }
+                        const std::size_t key_len = std::min<std::size_t>(
+                            e.end - e.data - 4, kMaxTagLen
+                        );
+                        std::string key(
+                            reinterpret_cast<const char*>(data.data() + e.data + 4), key_len
+                        );
+                        while (!key.empty() && key.back() == '\0') {
+                            key.pop_back();
+                        }
+                        if (!key.empty()) {
+                            keys.push_back(std::move(key));
+                        }
+                    }
+                    q = e.end;
+                }
+            }
+        } else if (is_fourcc(data, p + 4, "ilst")) {
+            ilst_pos = p;
+        }
+
+        p = child.end;
+    }
+
+    if (ilst_pos == data.size()) {
+        return;
+    }
+
+    const Box ilst = box_at(data, ilst_pos);
+    std::size_t q = ilst.data;
+    while (q + 8 <= ilst.end) {
+        const Box item = box_at(data, q);
+        if (item.end <= q || item.end > ilst.end) {
+            break;
+        }
+
+        const std::uint32_t type = read_u32(data, q + 4);
+        std::string custom_key;
+        std::string* dst = nullptr;
+
+        switch (type) {
+            case 0xA96E616Du: /* (c)nam */
+                dst = &out.title;
+                break;
+            case 0xA9415254u: /* (c)ART */
+                dst = &out.artist;
+                break;
+            case 0xA9636D74u: /* (c)cmt */
+                dst = &out.comment;
+                break;
+            case 0xA9637079u: /* (c)cpy */
+                dst = &out.copyright;
+                break;
+            default:
+                if (!keys.empty() && type >= 1u && type <= keys.size()) {
+                    custom_key = keys[type - 1u];
+                }
+                break;
+        }
+
+        const std::size_t data_pos = find_child(data, item.data, item.end, "data");
+        if (data_pos != data.size()) {
+            const Box db = box_at(data, data_pos);
+            if (db.data + 8 <= db.end) {
+                /* data: FullBox version/flags + u32 locale + UTF-8 value. */
+                constexpr std::size_t kMaxTagLen = 64u * 1024u;
+                constexpr std::size_t kMaxTags = 4096u;
+                const std::size_t vpos = db.data + 8;
+                const std::size_t value_len = std::min<std::size_t>(db.end - vpos, kMaxTagLen);
+                std::string value(
+                    reinterpret_cast<const char*>(data.data() + vpos), value_len
+                );
+                if (dst != nullptr) {
+                    *dst = std::move(value);
+                } else if (!custom_key.empty() && out.custom.size() < kMaxTags) {
+                    out.custom.emplace_back(std::move(custom_key), std::move(value));
+                }
+            }
+        }
+
+        q = item.end;
+    }
+}
 
 inline std::vector<std::size_t> top_level_boxes(
     std::span<const std::uint8_t> data, const char* type
@@ -243,6 +436,11 @@ inline std::vector<std::uint8_t> extract_avc_param_sets(
         return out;
     }
 
+    const std::size_t limit =
+        entry.config_offset <= data.size()
+            ? std::min(entry.config_offset + entry.config_size, data.size())
+            : data.size();
+
     const std::uint8_t num_sps = data[entry.config_offset + 5] & 0x1Fu;
     std::size_t p = entry.config_offset + 6;
 
@@ -253,26 +451,26 @@ inline std::vector<std::uint8_t> extract_avc_param_sets(
         out.insert(out.end(), data.begin() + nal, data.begin() + nal + len);
     };
 
-    for (std::uint8_t i = 0; i < num_sps && p + 2 <= data.size(); ++i) {
+    for (std::uint8_t i = 0; i < num_sps && p + 2 <= limit; ++i) {
         const std::uint16_t len = static_cast<std::uint16_t>((data[p] << 8) | data[p + 1]);
         p += 2;
-        if (p + len > data.size()) {
+        if (p + len > limit) {
             break;
         }
         push_nal(p, len);
         p += len;
     }
 
-    if (p >= data.size()) {
+    if (p >= limit) {
         return out;
     }
 
     const std::uint8_t num_pps = data[p++];
 
-    for (std::uint8_t i = 0; i < num_pps && p + 2 <= data.size(); ++i) {
+    for (std::uint8_t i = 0; i < num_pps && p + 2 <= limit; ++i) {
         const std::uint16_t len = static_cast<std::uint16_t>((data[p] << 8) | data[p + 1]);
         p += 2;
-        if (p + len > data.size()) {
+        if (p + len > limit) {
             break;
         }
         push_nal(p, len);
@@ -312,7 +510,10 @@ inline void build_sample_table(
 
     {
         Box b = box_at(data, pt.stsz);
-        if (b.data + 8 > b.end) {
+        if (b.data + 12 > data.size()) {
+            return;
+        }
+        if (b.data + 12 > b.end) {
             return;
         }
 
@@ -400,6 +601,12 @@ inline void build_sample_table(
         return count;
     };
 
+    /*
+     * Timing runs are attacker-controlled counts; cap them to the number of
+     * real samples so a tiny stts/ctts cannot force a multi-gigabyte vector.
+     */
+    const std::size_t max_timing_entries = sizes.size();
+
     std::vector<std::int64_t> dts_list;
     std::vector<std::int64_t> dur_list;
 
@@ -414,9 +621,15 @@ inline void build_sample_table(
                 const std::uint32_t d = read_u32(data, p + 4);
                 p += 8;
                 for (std::uint32_t k = 0; k < c; ++k) {
+                    if (dts_list.size() >= max_timing_entries) {
+                        break;
+                    }
                     dts_list.push_back(cur);
                     dur_list.push_back(d);
                     cur += d;
+                }
+                if (dts_list.size() >= max_timing_entries) {
+                    break;
                 }
             }
         }
@@ -433,7 +646,13 @@ inline void build_sample_table(
                 const std::int32_t off = static_cast<std::int32_t>(read_u32(data, p + 4));
                 p += 8;
                 for (std::uint32_t k = 0; k < c; ++k) {
+                    if (ctts_off.size() >= max_timing_entries) {
+                        break;
+                    }
                     ctts_off.push_back(off);
+                }
+                if (ctts_off.size() >= max_timing_entries) {
+                    break;
                 }
             }
         }
@@ -473,7 +692,8 @@ inline void build_sample_table(
 
             const std::uint32_t size = sizes[sample_index];
 
-            if (off + size <= data.size()) {
+            if (off <= data.size() && static_cast<std::uint64_t>(size) <=
+                                          static_cast<std::uint64_t>(data.size() - off)) {
                 SampleEntry e;
                 e.offset = static_cast<std::size_t>(off);
                 e.size = size;
@@ -641,7 +861,8 @@ inline void build_fragment_samples(
                         }
                     }
 
-                    std::uint64_t offset = static_cast<std::uint64_t>(base + data_offset);
+                    std::uint64_t offset = static_cast<std::uint64_t>(base) +
+                                           static_cast<std::uint64_t>(data_offset);
                     std::int64_t elapsed = 0;
 
                     for (std::uint32_t i = 0; i < sample_count; ++i) {
@@ -683,6 +904,9 @@ inline void build_fragment_samples(
                                 SampleEntry e;
                                 e.offset = static_cast<std::size_t>(offset);
                                 e.size = size;
+                                if (offset > data.size() || size > data.size() - offset) {
+                                    break;  // skip out-of-range fragment sample
+                                }
                                 e.dts = static_cast<std::int64_t>(base_decode_time) + elapsed;
                                 e.pts = e.dts;
                                 e.duration = duration;
@@ -704,6 +928,77 @@ inline void build_fragment_samples(
 
             traf = find_child(data, traf_box.end, moof_box.end, "traf");
         }
+    }
+}
+
+/*
+ * Populate container- and per-track metadata. Called after the track
+ * views have been copied into `out` so the indices line up with the
+ * order in which the `trak` boxes appear under `moov` (the same order
+ * parse_moov_tracks uses).
+ */
+inline void build_mp4_metadata(std::span<const std::uint8_t> data, std::size_t moov, IndexBuildResult& out) {
+    if (moov >= data.size()) {
+        return;
+    }
+
+    const Box moov_box = box_at(data, moov);
+
+    /* File-level tags: udta/meta first, then a direct moov/meta. */
+    std::size_t meta_pos = data.size();
+    const std::size_t udta = find_child(data, moov_box.data, moov_box.end, "udta");
+    if (udta != data.size()) {
+        const Box u = box_at(data, udta);
+        meta_pos = find_child(data, u.data, u.end, "meta");
+    }
+    if (meta_pos == data.size()) {
+        meta_pos = find_child(data, moov_box.data, moov_box.end, "meta");
+    }
+    if (meta_pos != data.size()) {
+        parse_meta_box(data, meta_pos, out.metadata);
+    }
+
+    /* File-level creation time from mvhd (fall back to the first mdhd). */
+    const std::size_t mvhd = find_child(data, moov_box.data, moov_box.end, "mvhd");
+    if (mvhd != data.size()) {
+        out.metadata.creation_time = mp4_creation_time(data, mvhd);
+    }
+
+    /* Per-track tags and language, walking trak boxes in order. */
+    std::size_t trak = find_child(data, moov_box.data, moov_box.end, "trak");
+    std::size_t index = 0;
+    while (trak != data.size() && index < out.tracks.size()) {
+        const Box tb = box_at(data, trak);
+
+        const std::size_t t_udta = find_child(data, tb.data, tb.end, "udta");
+        if (t_udta != data.size()) {
+            const Box u = box_at(data, t_udta);
+            const std::size_t t_meta = find_child(data, u.data, u.end, "meta");
+            if (t_meta != data.size()) {
+                parse_meta_box(data, t_meta, out.tracks[index].metadata);
+            }
+        }
+
+        const std::size_t mdia = find_child(data, tb.data, tb.end, "mdia");
+        if (mdia != data.size()) {
+            const Box mb = box_at(data, mdia);
+            const std::size_t mdhd = find_child(data, mb.data, mb.end, "mdhd");
+            if (mdhd != data.size()) {
+                const std::string lang = mp4_language(data, mdhd);
+                if (!lang.empty()) {
+                    out.tracks[index].language = lang;
+                }
+                if (out.tracks[index].metadata.creation_time == 0) {
+                    out.tracks[index].metadata.creation_time = mp4_creation_time(data, mdhd);
+                }
+                if (index == 0 && out.metadata.creation_time == 0) {
+                    out.metadata.creation_time = mp4_creation_time(data, mdhd);
+                }
+            }
+        }
+
+        ++index;
+        trak = find_child(data, tb.end, moov_box.end, "trak");
     }
 }
 
@@ -802,6 +1097,10 @@ inline bool build_mp4(FileSource& src, IndexBuildResult& out) {
         out.tracks[i].sample_count = out.samples[i].size();
     }
 
+    if (moov != data.size()) {
+        mp4_index::build_mp4_metadata(data, moov, out);
+    }
+
     return true;
 }
 
@@ -831,6 +1130,165 @@ using mkv::detail::read_id;
 using mkv::detail::read_size;
 using mkv::detail::read_vint;
 using mkv::detail::VideoTrack;
+
+/*
+ * -----------------------------------------------------------
+ * Matroska metadata (Info / Tags + per-track Language/CodecName)
+ * -----------------------------------------------------------
+ *
+ * ID values are the complete EBML element IDs (marker bits included).
+ * All reads are bounds-checked; malformed elements are skipped.
+ */
+inline constexpr std::uint64_t kInfo = 0x1549A966ull;
+inline constexpr std::uint64_t kTitle = 0x7BA9ull;
+inline constexpr std::uint64_t kDateUTC = 0x4461ull;
+inline constexpr std::uint64_t kTags = 0x1254C367ull;
+inline constexpr std::uint64_t kTag = 0x7373ull;
+inline constexpr std::uint64_t kSimpleTag = 0x67C8ull;
+inline constexpr std::uint64_t kTagName = 0x45A3ull;
+inline constexpr std::uint64_t kTagString = 0x4487ull;
+inline constexpr std::uint64_t kTrackLanguage = 0x22B59Cull;
+inline constexpr std::uint64_t kCodecName = 0x258688ull;
+
+/*
+ * Read one EBML element header and expose its payload. Returns false
+ * on any malformed / truncated element, leaving `pos` undefined to
+ * callers (they stop the loop in that case).
+ */
+inline bool next_ebml(
+    std::span<const std::uint8_t> d,
+    std::size_t& pos,
+    std::uint64_t& id,
+    std::span<const std::uint8_t>& payload
+) {
+    std::uint64_t id_len = 0;
+    std::uint64_t size = 0;
+
+    if (!read_vint(d, pos, id, id_len, true)) {
+        return false;
+    }
+    if (!read_size(d, pos, size)) {
+        return false;
+    }
+    /* An empty element (size 0, e.g. MkvTargets) is valid; pos still
+     * advanced past its ID and size vints, so the loop makes progress. */
+    if (size > d.size() - pos) {
+        return false;
+    }
+
+    payload = d.subspan(pos, static_cast<std::size_t>(size));
+    pos += static_cast<std::size_t>(size);
+    return true;
+}
+
+inline std::string as_text(std::span<const std::uint8_t> d) {
+    /* Bound metadata string allocation independently of the file size. */
+    constexpr std::size_t kMaxTagLen = 64u * 1024u;
+    const std::size_t n = std::min(d.size(), kMaxTagLen);
+    return std::string(reinterpret_cast<const char*>(d.data()), n);
+}
+
+inline void parse_info(std::span<const std::uint8_t> d, ContainerMetadata& out) {
+    std::size_t p = 0;
+    std::uint64_t id = 0;
+    std::span<const std::uint8_t> payload;
+
+    while (p < d.size()) {
+        if (!next_ebml(d, p, id, payload)) {
+            break;
+        }
+        if (id == kTitle) {
+            out.title = as_text(payload);
+        } else if (id == kDateUTC && payload.size() >= 8) {
+            std::uint64_t ns = 0;
+            for (std::size_t i = 0; i < 8; ++i) {
+                ns = (ns << 8) | payload[i];
+            }
+            out.creation_time = static_cast<std::int64_t>(ns / 1000000000ull);
+        }
+    }
+}
+
+inline void parse_tags(std::span<const std::uint8_t> d, ContainerMetadata& out) {
+    std::size_t p = 0;
+    std::uint64_t id = 0;
+    std::span<const std::uint8_t> tag;
+
+    while (p < d.size()) {
+        if (!next_ebml(d, p, id, tag)) {
+            break;
+        }
+        if (id != kTag) {
+            continue;
+        }
+
+        std::size_t q = 0;
+        std::uint64_t tag_id = 0;
+        std::span<const std::uint8_t> simple;
+
+        while (q < tag.size()) {
+            if (!next_ebml(tag, q, tag_id, simple)) {
+                break;
+            }
+            if (tag_id != kSimpleTag) {
+                continue;
+            }
+
+            std::string name;
+            std::string value;
+
+            std::size_t r = 0;
+            std::uint64_t field_id = 0;
+            std::span<const std::uint8_t> field;
+
+            while (r < simple.size()) {
+                if (!next_ebml(simple, r, field_id, field)) {
+                    break;
+                }
+                if (field_id == kTagName) {
+                    name = as_text(field);
+                } else if (field_id == kTagString) {
+                    value = as_text(field);
+                }
+            }
+
+            if (name.empty() || value.empty()) {
+                continue;
+            }
+            if (name == "TITLE") {
+                if (out.title.empty()) out.title = value;
+            } else if (name == "ARTIST") {
+                if (out.artist.empty()) out.artist = value;
+            } else if (name == "COMMENT") {
+                if (out.comment.empty()) out.comment = value;
+            } else if (name == "COPYRIGHT") {
+                if (out.copyright.empty()) out.copyright = value;
+            } else if (out.custom.size() < 4096u) {
+                out.custom.emplace_back(std::move(name), std::move(value));
+            }
+        }
+    }
+}
+
+/* Language and CodecName live directly under a TrackEntry. */
+inline void parse_track_meta(
+    std::span<const std::uint8_t> d, ContainerMetadata& out, std::string& language
+) {
+    std::size_t p = 0;
+    std::uint64_t id = 0;
+    std::span<const std::uint8_t> payload;
+
+    while (p < d.size()) {
+        if (!next_ebml(d, p, id, payload)) {
+            break;
+        }
+        if (id == kTrackLanguage) {
+            language = as_text(payload);
+        } else if (id == kCodecName) {
+            out.title = as_text(payload);
+        }
+    }
+}
 
 inline bool parse_block_header(
     std::span<const std::uint8_t> d, std::uint64_t& track_number, std::int16_t& time,
@@ -924,6 +1382,8 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
     }
 
     std::vector<mkv::detail::VideoTrack> tracks;
+    /* TrackEntry payloads, kept in the same (found-only) order as `tracks`. */
+    std::vector<std::span<const std::uint8_t>> track_entries;
 
     {
         std::size_t p = seg_begin;
@@ -945,6 +1405,12 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
 
             const auto element = data.subspan(p, static_cast<std::size_t>(size));
 
+            if (id == mkv_index::kInfo) {
+                mkv_index::parse_info(element, out.metadata);
+            } else if (id == mkv_index::kTags) {
+                mkv_index::parse_tags(element, out.metadata);
+            }
+
             if (id == mkv::detail::kTracks) {
                 std::size_t q = 0;
 
@@ -964,12 +1430,12 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                     }
 
                     if (eid == mkv::detail::kTrackEntry) {
+                        const auto entry = element.subspan(q, static_cast<std::size_t>(esize));
                         mkv::detail::VideoTrack t;
-                        mkv::detail::parse_track_entry(
-                            element.subspan(q, static_cast<std::size_t>(esize)), t
-                        );
+                        mkv::detail::parse_track_entry(entry, t);
                         if (t.found) {
                             tracks.push_back(std::move(t));
+                            track_entries.push_back(entry);
                         }
                     }
 
@@ -1045,6 +1511,11 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                 out.samples[i].push_back(e);
             }
         }
+    }
+
+    /* Per-track Language / CodecName from the TrackEntry elements. */
+    for (std::size_t i = 0; i < out.tracks.size() && i < track_entries.size(); ++i) {
+        mkv_index::parse_track_meta(track_entries[i], out.tracks[i].metadata, out.tracks[i].language);
     }
 
     // Walk clusters and index blocks.
@@ -1812,12 +2283,14 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
         const bool is_video = is_fourcc(data, p2, "00dc") || is_fourcc(data, p2, "00db") ||
                               is_fourcc(data, p2, "00dw");
 
-        if (is_video && c.data < c.data + c.size) {
-            const auto frame = data.subspan(c.data, c.size);
+        const std::size_t video_size = (c.end > c.data) ? (c.end - c.data) : 0u;
+
+        if (is_video && video_size > 0) {
+            const auto frame = data.subspan(c.data, video_size);
 
             SampleEntry e;
             e.offset = c.data;
-            e.size = c.size;
+            e.size = video_size;
             e.pts = static_cast<std::int64_t>(index) * 1000;
             e.dts = e.pts;
             e.duration = 1000;
@@ -1948,6 +2421,8 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         const std::size_t seg_table = pos + 27;
         const std::size_t data_off = seg_table + segments;
 
+        if (seg_table + segments > data.size()) break;
+
         std::size_t total = 0;
         for (std::uint8_t i = 0; i < segments; ++i) {
             total += data[seg_table + i];
@@ -2026,6 +2501,8 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         const std::uint8_t segments = data[p2 + 26];
         const std::size_t seg_table = p2 + 27;
         const std::size_t data_off = seg_table + segments;
+
+        if (seg_table + segments > data.size()) break;
 
         std::size_t total = 0;
         for (std::uint8_t i = 0; i < segments; ++i) {

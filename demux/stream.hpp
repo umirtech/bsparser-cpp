@@ -9,10 +9,31 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace bs {
 namespace demux {
+
+/*
+ * -----------------------------------------------------------
+ * Container / track metadata
+ * -----------------------------------------------------------
+ *
+ * A codec-neutral view of the standard tag sets carried by MP4
+ * (udta/meta/ilst) and Matroska (Info/Tags).  `creation_time` is
+ * Unix seconds (0 = unset); `custom` holds container-specific
+ * key/value pairs that have no dedicated field.
+ */
+struct ContainerMetadata {
+    std::string title;
+    std::string artist;
+    std::string comment;
+    std::string copyright;
+    std::int64_t creation_time = 0;
+
+    std::vector<std::pair<std::string, std::string>> custom;
+};
 
 /*
  * -----------------------------------------------------------
@@ -55,6 +76,8 @@ struct TrackView {
     std::size_t sample_count = 0;
     unsigned length_size = 4; /* for LengthPrefixed framing */
     bool mmap_backed = false;
+
+    ContainerMetadata metadata; /* per-track tags, when the container carries them */
 };
 
 struct SampleView {

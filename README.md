@@ -84,6 +84,88 @@ file memory or a reusable internal buffer.  MP4 support includes fragmented
 The CLI uses the same streaming API, parses samples chunk by chunk, and prints
 progress while processing large files.
 
+## Container muxing
+
+The `mux/` layer is the write-side mirror of `demux/`: a header-only muxer in
+the `bs::mux` namespace that writes the same containers the demuxer reads. Its
+output is auto-detected by `demux::sniff()` on the buffer, so a muxed buffer can
+be fed straight back to `Demuxer::init()`. Muxing is zero-copy — sample spans
+are only borrowed until `finalize()` serializes them, so the caller's payload
+must stay alive until then.
+
+| Container | Supported codecs |
+|---|---|
+| MP4 / ISO-BMFF | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| MKV / WebM | H.264, HEVC, VVC, AV1, VP8, VP9 |
+| IVF | VP8, VP9 |
+
+```cpp
+#include <mux/muxer.hpp>
+
+auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4);  // or .open("out.mp4")
+bs::mux::TrackConfig cfg;
+cfg.codec = bs::Codec::Avc;
+cfg.width = 1920; cfg.height = 1080;
+auto track = muxer.add_track(cfg);
+track.add_sample(sample.data, sample.pts, sample.dts, sample.duration, sample.is_key, sample.framing);
+muxer.finalize();
+auto bytes = muxer.data();  // feed to Demuxer::init(bytes)
+```
+
+There are three sink destinations: an in-memory buffer via `create(container)`,
+a file path via `create(container, path)` or `open(path)` (container inferred
+from the file extension), and a file descriptor via `create(container, fd)`.
+OS writes are deferred — for path and fd sinks `open()` only records the
+destination, and bytes reach the handle when `finalize()` flushes the buffered
+sink.
+
+H.26x samples are converted between Annex-B and 4-byte length-prefixed NAL
+framing as each container requires. `avcC` / `hvcC` / `vvcC` currently carry
+minimal decoder configs (no parameter-set arrays — H.26x parameter sets stay
+in-band in the media samples), but media frames still index correctly through
+the demuxer. Round-trip tests verify the output by reading it back through
+`demux::Demuxer`.
+
+### Robustness
+
+Both layers are built for untrusted input: container parsers bounds-check
+file-derived offsets/sizes, cap attacker-controlled counts and metadata string
+lengths, and `Demuxer::init()` never throws — a malformed file simply returns
+an uninitialized demuxer. Tiny hand-crafted malformed fixtures
+(`tests/fuzz/corpus/malicious/`) cover previously vulnerable paths (AVI chunk
+sizes, fragmented-MP4 offsets, truncated `stsz`/`stts`, Ogg segment tables)
+and run as CTest cases. Real samples from samples.mplayerhq.hu (all < 5 MB)
+and the fixtures were exercised under ASan/UBSan with no errors.
+
+The MP4 writer also emits an `stss` sync-sample table when keyframes and
+non-keyframes are mixed, so keyframe flags survive a remux. Metadata strings
+are sanitized (embedded NULs removed, invalid UTF-8 replaced with U+FFFD)
+before they reach either container. Files whose `mdat` exceeds 4 GiB use
+64-bit extended box headers and `co64` chunk offsets instead of being
+rejected, and the framing helpers have non-throwing `*_nothrow` variants for
+untrusted input.
+
+### Metadata
+
+MP4 and MKV carry standard and custom tags. Set file-level tags with
+`muxer.set_metadata()` and per-track tags through `TrackConfig::metadata`:
+
+```cpp
+bs::mux::Metadata meta;
+meta.title = "Round Trip";
+meta.artist = "bsparser";
+meta.creation_time = 1700000000;                 // Unix seconds
+meta.custom.emplace_back("ENCODER", "bsparser"); // arbitrary key/value pairs
+muxer.set_metadata(meta);
+```
+
+`title`, `artist`, `comment`, `copyright`, `creation_time` and the custom
+key/value list are written to MP4 `udta/meta/ilst` (plus `mdhd` language and
+`mvhd`/`tkhd`/`mdhd` creation times) and to MKV `Info` / `Tags` (plus
+per-track `Language` / `CodecName`). The demuxer exposes them as
+`demux::Demuxer::metadata()` and `demux::TrackView::metadata`, so they
+round-trip like any other container field. IVF has no metadata fields.
+
 ---
 
 ## H.264 motion vectors (opt-in)

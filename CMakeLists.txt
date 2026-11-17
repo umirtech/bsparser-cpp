@@ -246,7 +246,7 @@ if(BS_CXX20_SUPPORTED)
     )
 
     install(
-        DIRECTORY bitstream parser syntax logging utils
+        DIRECTORY bitstream parser syntax logging utils demux mux
         DESTINATION include
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
     )
@@ -1019,6 +1019,112 @@ foreach(sample IN ITEMS
     )
 
 endforeach()
+
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+#Container mux tests(samples->muxed file->demux round trip)
+#-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+add_executable(
+    bs_mux_test
+    tests/mux_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_test
+    PRIVATE
+        bs
+)
+
+add_executable(
+    bs_mux_stream_test
+    tests/mux_stream_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_stream_test
+    PRIVATE
+        bs
+)
+
+foreach(sample IN ITEMS
+    h264.mp4
+    hevc.mp4
+    vvc.mp4
+    av1.mp4
+    vp9.mp4
+    vp8_sample.ivf
+)
+
+    add_test(
+        NAME bs_mux_${sample}
+        COMMAND bs_mux_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/${sample}
+    )
+
+endforeach()
+
+add_executable(
+    bs_mux_metadata_test
+    tests/mux_metadata_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_metadata_test
+    PRIVATE
+        bs
+)
+
+add_executable(
+    bs_malformed_test
+    tests/malformed_test.cpp
+)
+
+target_link_libraries(
+    bs_malformed_test
+    PRIVATE
+        bs
+)
+
+foreach(fixture IN ITEMS
+    avi_bad_chunk.avi
+    mp4_bad_fragsize.mp4
+    mp4_bad_stsz.mp4
+    ogg_bad_segments.ogg
+)
+
+    add_test(
+        NAME bs_malformed_${fixture}
+        COMMAND bs_malformed_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz/corpus/malicious/${fixture}
+    )
+
+endforeach()
+
+add_executable(
+    bs_mux_robustness_test
+    tests/mux_robustness_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_robustness_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_mux_robustness_test
+    COMMAND bs_mux_robustness_test
+)
+
+add_test(
+    NAME bs_mux_metadata_test
+    COMMAND bs_mux_metadata_test
+)
+
+add_test(
+    NAME bs_mux_stream_test
+    COMMAND bs_mux_stream_test
+)
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #Fuzzing

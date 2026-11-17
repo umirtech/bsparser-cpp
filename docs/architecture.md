@@ -248,6 +248,61 @@ For raw VP8/VP9 frames that are already extracted from their container, the
 new `NalFramingMode::RawFrame` framing mode parses one frame per sample without
 an IVF wrapper copy.
 
+## Container muxing (`mux/`)
+
+The write-side mirror of `demux/`, also header-only and in the `bs::mux`
+namespace. Its public surface is four types: `Container` (`Mp4`, `Mkv`, `Ivf`,
+plus `Unknown`, with `to_demux()` / `from_demux()` converters so output can be
+fed straight back through `Demuxer::init()`), `TrackConfig` (write-side mirror
+of `demux::TrackView`: codec, framing, dimensions, timescale, flags), `Sample`
+(mirror of `demux::SampleView`: a borrowed span plus pts/dts/duration/key and
+framing metadata) and `FileSink` (buffered write-side mirror of
+`demux::FileSource`, with in-memory / path / fd destinations).
+
+The implementation follows the demuxer's handle pattern: `detail::MuxerImpl`
+owns the sink, track configs and per-track sample buckets; a lightweight,
+copyable `Track` handle owns no payload and only references the impl by index;
+and the `Muxer` facade offers static `create(container[, path | fd])` /
+`open(path | fd, ...)` factories mirroring `Demuxer::init()` / `open()`, plus
+`add_track()` and `finalize()`. `add_sample()` borrows the caller's span; it is
+not copied until `finalize()` serializes it, so each payload must stay alive
+until that call.
+
+Each container has a small writer in `bs::mux::detail`: `write_mp4`,
+`write_mkv` and `write_ivf`. All three build the container in a local byte
+buffer and emit it in one pass through the buffered `FileSink`, which defers
+the OS write until `finalize()` flushes it. MP4 emits `ftyp` / `moov` / `mdat`;
+because `stco` chunk offsets depend on the size of `moov` itself, `moov` is
+built twice — once with placeholder offsets to learn its size, then with the
+real offsets. MKV writes an EBML `Segment` with the 8-byte unknown-size vint,
+so it needs no back-patch. IVF patches the frame count into the 32-byte `DKIF`
+header — the frame block is assembled first so the count is accurate — then
+writes the header before the frames.
+
+### Metadata symmetry
+
+Both layers expose the same codec-neutral `ContainerMetadata` /
+`mux::Metadata` value type: `title`, `artist`, `comment`, `copyright`,
+`creation_time` (Unix seconds) and a vector of custom key/value pairs.
+File-level tags are written through `Muxer::set_metadata()` and per-track
+tags through `TrackConfig::metadata`; the demuxer reads them back through
+`Demuxer::metadata()` and `TrackView::metadata`. MP4 maps them to
+`udta/meta/ilst` (with `keys`/`mdta` for custom pairs, `mdhd` language and
+1904-epoch creation times in `mvhd`/`tkhd`/`mdhd`); MKV maps them to
+`Info` (Title / DateUTC), segment-level `Tags`, and per-track `Language` /
+`CodecName`. `tests/mux_metadata_test.cpp` verifies both directions. IVF
+has no metadata fields in its format. Caller-supplied tag strings pass through
+`mux::sanitize_metadata_string()` before being written, so embedded NULs and
+malformed UTF-8 cannot produce invalid container tags.
+
+MP4 output emits an `stss` sync-sample table whenever keyframes and
+non-keyframes are mixed. Payloads above 4 GiB use 64-bit extended box headers
+and `co64` chunk offsets; `tests/mux_robustness_test.cpp` covers those
+thresholds. Framers additionally expose `*_nothrow` wrappers
+(`split_nal_units_nothrow`, `split_annex_b_nothrow`,
+`split_length_prefixed_nothrow`, `av1::split_obus_nothrow`) that return an
+empty result instead of throwing on truncated input.
+
 ## C API (`capi/`)
 
 `capi/bs_capi.cpp` bridges the C ABI to the same `bs::State` / `bs::parse`
@@ -310,7 +365,9 @@ per-unit syntax summary and, for each codec, the picture-order values
   `tests/capi_test.c` covers the C ABI; `tests/demux_test.cpp` covers all
   container paths through the streaming `Demuxer`, and
   `tests/demux_stream_test.cpp` adds zero-copy sample, parsing, and seeking
-  checks.
+  checks. `tests/mux_test.cpp` covers mux→demux round trips,
+  `tests/mux_stream_test.cpp` the mux API / sinks, and
+  `tests/mux_metadata_test.cpp` metadata round trips.
 - `tests/hevc_hdr_test.cpp` / `avc_hdr_test.cpp` and `tools/verify_c.c`
   compare parsed HDR/SPS/VUI/SEI fields against pre-generated expected-value
   reference files (`tests/fuzz/reference/*.txt`).
@@ -331,6 +388,8 @@ parser/                   framing, dispatch, syntax parsers, POC trackers,
 syntax/                   immutable parsed models
 demux/                    streaming Demuxer, zero-copy indexes, mmap FileSource,
                           container detail parsers (MP4 / MKV / TS / FLV / AVI)
+mux/                      container writers (MP4 / MKV / IVF), Muxer facade,
+                          buffered FileSink, zero-copy Track / Sample views
 capi/                     C public API (compiled into bs_capi)
 cli/                      bs_cli: JSON / HTML report exporter
 tools/                    generators, validators, bench, reference tooling
@@ -349,3 +408,5 @@ docs/architecture.md      this document
 - **Spec-native POC** — the presentation-order signal comes from the spec
   algorithms, not from external tools; the derivation is exercised by
   `poc_test.cpp` and by the reference-based validation.
+- **Symmetric layers** — `mux/` mirrors `demux/` data views, handles,
+  sinks/sources and naming so input/output code reads the same way.

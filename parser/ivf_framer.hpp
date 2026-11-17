@@ -24,6 +24,12 @@ namespace bs {
  *     frame_size bytes of frame data
  *
  * The yielded frame spans reference the input buffer.
+ *
+ * IvfFramer needs no "_nothrow" split wrapper: it only reads fixed-size
+ * 12-byte frame headers and bounds-checks each one with
+ * "pos_ + 12 > data_.size()" before using a frame size. It contains no
+ * throwing operations, so malformed/truncated input simply yields no
+ * frames rather than throwing.
  */
 class IvfFramer {
    public:
