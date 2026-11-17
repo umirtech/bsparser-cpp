@@ -319,6 +319,8 @@ bitstream/            bit readers (map-based + zero-alloc sequential)
 utils/                parser-local ObjectPool + zero-copy MotionBufferPool
 parser/               framing, NAL dispatch, VPS/SPS/PPS/slice/SEI parsers
 syntax/               immutable parsed models
+demux/                streaming Demuxer, zero-copy indexes, container readers
+mux/                  container writers (MP4 / MKV / IVF), Muxer facade, FileSink
 capi/                 C public API (stable ABI, compiled into bs_capi)
 cli/                  bs_cli: JSON / HTML report exporter
 tools/                dev tools (bench, sample downloader, …)
