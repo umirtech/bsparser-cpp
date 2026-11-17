@@ -199,8 +199,9 @@ inline void append_ilst_item(
     append_box_bytes(ilst, box_with_type(type, make_data_box(safe)));
 }
 
-/* Build the full 'udta' box for one Metadata (file-level or per-track). */
-inline Mp4Bytes make_mp4_udta(const Metadata& m) {
+/* Build the full 'udta' box for one Metadata (file-level or per-track).
+ * file_level adds the muxer-owned ©too encoder item. */
+inline Mp4Bytes make_mp4_udta(const Metadata& m, bool file_level = false) {
     /* hdlr (FullBox): version/flags, pre_defined, 'mdir', reserved[3], name. */
     Mp4Bytes hdlr_payload;
     put_zeros(hdlr_payload, 4u); // version + flags
@@ -236,10 +237,14 @@ inline Mp4Bytes make_mp4_udta(const Metadata& m) {
     static constexpr std::uint8_t kArtist[4] = {0xA9u, 'A', 'R', 'T'};
     static constexpr std::uint8_t kComment[4] = {0xA9u, 'c', 'm', 't'};
     static constexpr std::uint8_t kCopyright[4] = {0xA9u, 'c', 'p', 'y'};
+    static constexpr std::uint8_t kEncoder[4] = {0xA9u, 't', 'o', 'o'};
     append_ilst_item(ilst, kName, m.title);
     append_ilst_item(ilst, kArtist, m.artist);
     append_ilst_item(ilst, kComment, m.comment);
     append_ilst_item(ilst, kCopyright, m.copyright);
+    if (file_level) {
+        append_ilst_item(ilst, kEncoder, encoder_signature());
+    }
 
     std::uint32_t index = 1u; // 1-based into the keys box
     for (const auto& kv : m.custom) {
@@ -814,10 +819,9 @@ inline bool write_mp4(
             append_box_bytes(body, box("trak", trak));
         }
 
-        /* File-level udta goes after all trak boxes. */
-        if (mp4_metadata_has_tags(metadata)) {
-            append_box_bytes(body, make_mp4_udta(metadata));
-        }
+        /* File-level udta goes after all trak boxes.  Always emitted: the
+         * muxer-owned ©too encoder tag must be present even with no user tags. */
+        append_box_bytes(body, make_mp4_udta(metadata, true));
 
         return box("moov", body);
     };

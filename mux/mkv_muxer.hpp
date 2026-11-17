@@ -264,11 +264,11 @@ inline std::vector<std::uint8_t> mkv_make_info(const Metadata& metadata) {
     mkv_push_element(info, kMkvTimecodeScale, tmp);
 
     tmp.clear();
-    mkv_push_string(tmp, "bsparser");
+    mkv_push_string(tmp, encoder_signature());
     mkv_push_element(info, kMkvMuxingApp, tmp);
 
     tmp.clear();
-    mkv_push_string(tmp, "bsparser");
+    mkv_push_string(tmp, encoder_signature());
     mkv_push_element(info, kMkvWritingApp, tmp);
 
     const std::string title = sanitize_metadata_string(metadata.title);
@@ -326,6 +326,7 @@ inline std::vector<std::uint8_t> mkv_make_tags(const Metadata& metadata) {
     add_tag("ARTIST", metadata.artist);
     add_tag("COMMENT", metadata.comment);
     add_tag("COPYRIGHT", metadata.copyright);
+    add_tag("ENCODER", encoder_signature());
     for (const auto& kv : metadata.custom) {
         add_tag(kv.first, kv.second);
     }

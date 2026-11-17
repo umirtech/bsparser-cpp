@@ -119,16 +119,40 @@ class MuxerImpl {
             }
         }
 
+        /*
+         * The encoder tag is owned by the muxer.  Drop any caller-supplied
+         * tag that tries to impersonate it before invoking the writers.
+         */
+        Metadata final_metadata = metadata_;
+        final_metadata.custom.erase(
+            std::remove_if(
+                final_metadata.custom.begin(), final_metadata.custom.end(),
+                [](const auto& kv) { return is_reserved_encoder_key(kv.first); }
+            ),
+            final_metadata.custom.end()
+        );
+
+        std::vector<TrackConfig> final_tracks = tracks_;
+        for (auto& cfg : final_tracks) {
+            cfg.metadata.custom.erase(
+                std::remove_if(
+                    cfg.metadata.custom.begin(), cfg.metadata.custom.end(),
+                    [](const auto& kv) { return is_reserved_encoder_key(kv.first); }
+                ),
+                cfg.metadata.custom.end()
+            );
+        }
+
         bool written = false;
         switch (container_) {
             case Container::Mp4:
-                written = write_mp4(sink_, metadata_, tracks_, samples_);
+                written = write_mp4(sink_, final_metadata, final_tracks, samples_);
                 break;
             case Container::Mkv:
-                written = write_mkv(sink_, metadata_, tracks_, samples_);
+                written = write_mkv(sink_, final_metadata, final_tracks, samples_);
                 break;
             case Container::Ivf:
-                written = write_ivf(sink_, tracks_, samples_);
+                written = write_ivf(sink_, final_tracks, samples_);
                 break;
             default:
                 return false;

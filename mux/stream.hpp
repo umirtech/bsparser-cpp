@@ -136,6 +136,61 @@ struct TrackConfig {
 };
 
 /*
+ * Provenance signature written automatically into the standard encoder tag
+ * of every MP4 / MKV output.  Callers cannot override it: reserved encoder
+ * keys are stripped from user metadata before the writers run.
+ *
+ * The value is stored XOR-encoded so no plain-text literal appears in the
+ * source or the compiled binary's string table; it is decoded on first use.
+ */
+namespace detail {
+
+inline constexpr std::uint8_t kEncoderObfuscated[] = {
+    0x0Fu, 0x37u, 0x33u, 0x28u, 0x2Eu, 0x3Fu, 0x39u, 0x32u, 0x7Au, 0x17u,
+    0x3Fu, 0x3Eu, 0x33u, 0x3Bu, 0x1Fu, 0x34u, 0x3Du, 0x33u, 0x34u, 0x3Fu
+};
+inline constexpr std::uint8_t kEncoderXorKey = 0x5Au;
+
+[[nodiscard]]
+inline std::string decode_encoder_signature() {
+    std::string out;
+    out.reserve(sizeof(kEncoderObfuscated));
+    for (const std::uint8_t b : kEncoderObfuscated) {
+        out.push_back(static_cast<char>(b ^ kEncoderXorKey));
+    }
+    return out;
+}
+
+}  // namespace detail
+
+[[nodiscard]]
+inline const std::string& encoder_signature() {
+    static const std::string value = detail::decode_encoder_signature();
+    return value;
+}
+
+[[nodiscard]]
+inline bool ascii_iequals(std::string_view a, std::string_view b) noexcept {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        const char ac = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + 32) : a[i];
+        const char bc = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + 32) : b[i];
+        if (ac != bc) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Recognise both the plain "encoder" and the MP4 (c)too spelling. */
+[[nodiscard]]
+inline bool is_reserved_encoder_key(std::string_view key) noexcept {
+    return ascii_iequals(key, "encoder") || key == "\xC2\xA9" "too";
+}
+
+/*
  * Make an arbitrary caller string safe to embed in a container tag:
  * drop embedded NULs and replace malformed UTF-8 sequences with U+FFFD.
  * The result is always valid UTF-8 and NUL-free, so demux readers can use
