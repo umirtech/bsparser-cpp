@@ -1101,6 +1101,22 @@ foreach(fixture IN ITEMS
 endforeach()
 
 add_executable(
+    bs_mux_wav_test
+    tests/mux_wav_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_wav_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_mux_wav_test
+    COMMAND bs_mux_wav_test
+)
+
+add_executable(
     bs_mux_robustness_test
     tests/mux_robustness_test.cpp
 )

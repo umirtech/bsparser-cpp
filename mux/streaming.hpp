@@ -8,6 +8,7 @@
 #include "mux/mkv_muxer.hpp"
 #include "mux/mp4_muxer.hpp"
 #include "mux/stream.hpp"
+#include "mux/wav_muxer.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -153,6 +154,9 @@ class MuxerImpl {
                 break;
             case Container::Ivf:
                 written = write_ivf(sink_, final_tracks, samples_);
+                break;
+            case Container::Wav:
+                written = write_wav(sink_, final_tracks, samples_);
                 break;
             default:
                 return false;

@@ -26,7 +26,25 @@ namespace mux {
  * write.  to_demux()/from_demux() convert between the two enums so
  * a muxed buffer can be fed straight back through Demuxer::init().
  */
-enum class Container : std::uint8_t { Unknown, Mp4, Mkv, Ivf };
+enum class Container : std::uint8_t { Unknown, Mp4, Mkv, Ivf, Wav };
+
+/* PCM integer encodings supported by the WAV writer. */
+enum class AudioCodec : std::uint8_t { Pcm8, Pcm16, Pcm24, Pcm32 };
+
+[[nodiscard]]
+inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
+    switch (codec) {
+        case AudioCodec::Pcm8:
+            return 8u;
+        case AudioCodec::Pcm16:
+            return 16u;
+        case AudioCodec::Pcm24:
+            return 24u;
+        case AudioCodec::Pcm32:
+            return 32u;
+    }
+    return 16u;
+}
 
 /*
  * Write-side mirror of demux::ContainerMetadata.  Same field layout so a
@@ -63,6 +81,8 @@ inline demux::Container to_demux(Container c) noexcept {
             return demux::Container::Mkv;
         case Container::Ivf:
             return demux::Container::Ivf;
+        case Container::Wav:
+            return demux::Container::Unknown; // demux has no WAV reader
         default:
             return demux::Container::Unknown;
     }
@@ -101,6 +121,9 @@ inline Container container_from_extension(std::string_view path) {
     if (ext == ".ivf") {
         return Container::Ivf;
     }
+    if (ext == ".wav") {
+        return Container::Wav;
+    }
     return Container::Unknown;
 }
 
@@ -131,6 +154,11 @@ struct TrackConfig {
     bool is_subtitle = false;
 
     unsigned length_size = 4;
+
+    /* Audio configuration (used by the WAV writer). */
+    AudioCodec audio_codec = AudioCodec::Pcm16;
+    std::uint32_t sample_rate = 44100;
+    std::uint16_t channels = 2;
 
     Metadata metadata; /* per-track tags (MP4 trak/udta, MKV TrackEntry) */
 };
@@ -300,6 +328,8 @@ inline bool container_supports_codec(Container container, Codec codec) noexcept 
         case Container::Mp4:
         case Container::Mkv:
             return true;
+        case Container::Wav:
+            return true; // audio container: codec lives in AudioCodec, not Codec
         default:
             return false;
     }
