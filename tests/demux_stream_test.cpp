@@ -81,6 +81,9 @@ std::size_t parse_sample(
             (void)bs::parse(state, sample.data, sample.framing, h);
             return g_parse_units - before;
         }
+
+        default:
+            break;
     }
 
     return g_parse_units - before;

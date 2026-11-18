@@ -201,8 +201,26 @@ inline const char* mkv_audio_codec_id(AudioCodec codec) noexcept {
         case AudioCodec::Pcm24:
         case AudioCodec::Pcm32:
             return "A_PCM/INT/LIT";
+        case AudioCodec::PcmFloat32:
+        case AudioCodec::PcmFloat64:
+            return "A_PCM/FLOAT/IEEE";
+        case AudioCodec::Mp3:
+            return "A_MPEG/L3";
+        case AudioCodec::Opus:
+            return "A_OPUS";
+        case AudioCodec::Vorbis:
+            return "A_VORBIS";
+        case AudioCodec::Ac3:
+            return "A_AC3";
+        case AudioCodec::Ec3:
+            return "A_EAC3";
+        case AudioCodec::Dts:
+            return "A_DTS";
+        case AudioCodec::Flac:
+            return "A_FLAC";
+        default:
+            return "A_PCM/INT/LIT";
     }
-    return "A_PCM/INT/LIT";
 }
 
 /* True only for tracks whose samples need Annex-B framing in MKV. */

@@ -1407,6 +1407,11 @@ long bs_parse(
                 }
                 break;
             }
+
+            default:
+                set_error("bs_parse: codec is not supported by the parser");
+                result = -1;
+                break;
         }
 
         g_handlers = nullptr;
@@ -1527,6 +1532,10 @@ BsReport* bs_parse_report(
                 }
                 break;
             }
+
+            default:
+                set_error("bs_parse_report: codec is not supported by the parser");
+                break;
         }
 
         g_handlers = nullptr;

@@ -80,6 +80,9 @@ void parse_sample(
             (void)bs::parse(state, sample.data, sample.framing, h);
             break;
         }
+
+        default:
+            break;
     }
 }
 
@@ -97,6 +100,9 @@ const char* codec_name(bs::Codec codec) {
             return "vp9";
         case bs::Codec::Vp8:
             return "vp8";
+
+        default:
+            break;
     }
 
     return "?";
@@ -133,7 +139,7 @@ int main(int argc, char** argv) {
     }
 
     const char* want = argv[2];
-    const char* got = codec_name(video->codec);
+    const char* got = ::codec_name(video->codec);
 
     if (std::strcmp(want, got) != 0) {
         std::cerr << "codec mismatch: expected " << want << " got " << got << "\n";

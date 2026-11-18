@@ -33,6 +33,13 @@ struct ContainerMetadata {
     std::int64_t creation_time = 0;
 
     std::vector<std::pair<std::string, std::string>> custom;
+
+    /* Chapters: (start timestamp in track/movie units, title). */
+    struct Chapter {
+        std::int64_t time = 0;
+        std::string title;
+    };
+    std::vector<Chapter> chapters;
 };
 
 /*
@@ -42,27 +49,13 @@ struct ContainerMetadata {
  */
 enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv, Ogg, Ps };
 
-/*
- * Audio codec identifiers.  Kept separate from the video-only bs::Codec so
- * an audio track can be described without abusing a video codec value.
- */
-enum class AudioCodec : std::uint8_t {
-    Unknown,
-    Pcm8, Pcm16, Pcm24, Pcm32, PcmFloat32, PcmFloat64,
-    Aac, Mp3, Opus, Vorbis, Ac3, Ec3, Dts, Flac, Alac
-};
+/* Unified codec IDs: demux uses the same bs::Codec values as the parser
+ * and the muxer.  This alias keeps source compatibility. */
+using AudioCodec = Codec;
 
 [[nodiscard]]
 inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
-    switch (codec) {
-        case AudioCodec::Pcm8:  return 8u;
-        case AudioCodec::Pcm16: return 16u;
-        case AudioCodec::Pcm24: return 24u;
-        case AudioCodec::Pcm32: return 32u;
-        case AudioCodec::PcmFloat32: return 32u;
-        case AudioCodec::PcmFloat64: return 64u;
-        default: return 0u; // compressed: no fixed PCM bit depth
-    }
+    return codec_bits_per_sample(codec);
 }
 
 /*

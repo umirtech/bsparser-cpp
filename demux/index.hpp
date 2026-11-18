@@ -51,7 +51,111 @@ inline Codec codec_from_fourcc(const std::string& f) {
     if (f == "av01" || f == "AV01" || f == "av1c") return Codec::Av1;
     if (f == "vp09" || f == "VP09" || f == "vp9 ") return Codec::Vp9;
     if (f == "vp08" || f == "VP08" || f == "vp8 ") return Codec::Vp8;
-    return Codec::Hevc;
+    /* Additional video codecs the parser cannot decode but the demuxer
+     * can still identify and expose to callers. */
+    if (f == "mp4v" || f == "MP4V" || f == "divx" || f == "DIVX" || f == "XVID") return Codec::Mpeg4Visual;
+    if (f == "mp1v" || f == "mpeg" ) return Codec::Mpeg1Video;
+    if (f == "mp2v" || f == "mpeg2") return Codec::Mpeg2Video;
+    if (f == "s263" || f == "h263") return Codec::H263;
+    if (f == "theora") return Codec::Theora;
+    if (f == "apch" || f == "apcn" || f == "apco" || f == "apcs") return Codec::ProRes;
+    if (f == "AVdn" || f == "dnxhd") return Codec::DnvHd;
+    if (f == "wmv3" || f == "WVC1") return Codec::Vc1;
+    if (f == "avs2") return Codec::Avs2;
+    /* Audio. */
+    if (f == "mp4a") return Codec::Aac;
+    if (f == ".mp3") return Codec::Mp3;
+    if (f == "Opus" || f == "opus") return Codec::Opus;
+    if (f == "fLaC") return Codec::Flac;
+    if (f == "ac-3") return Codec::Ac3;
+    if (f == "ec-3") return Codec::Ec3;
+    if (f == "dtsc" || f == "dtse" || f == "dtsl") return Codec::Dts;
+    if (f == "sowt" || f == "twos") return Codec::Pcm16;
+    if (f == "in24" || f == "in32") return Codec::Pcm32;
+    if (f == "fl32" || f == "fl64") return Codec::PcmFloat32;
+    /* Subtitle. */
+    if (f == "tx3g") return Codec::Tx3g;
+    return Codec::Unknown;
+}
+
+/*
+ * AVI records the codec in the stream header's fccHandler.  Its vocabulary
+ * differs from ISO-BMFF (e.g. "h264" rather than "avc1", "WMV3" rather
+ * than "wmv3"), so map the AVI spellings explicitly and fall back to the
+ * generic fourcc table for everything else.  Unrecognised fourccs stay
+ * Codec::Unknown — the caller still stores the raw fourcc in codec_name.
+ */
+inline Codec avi_codec_from_fourcc(const std::string& f) {
+    if (f == "H264" || f == "h264" || f == "X264" || f == "x264" ||
+        f == "avc1" || f == "AVC1" || f == "avc3") return Codec::Avc;
+    if (f == "HEVC" || f == "hevc" || f == "hvc1" || f == "hev1" ||
+        f == "HVC1") return Codec::Hevc;
+    if (f == "VVC" || f == "vvc" || f == "vvc1" || f == "vvi1") return Codec::Vvc;
+    if (f == "VP80" || f == "vp80" || f == "VP08" || f == "vp08") return Codec::Vp8;
+    if (f == "VP90" || f == "vp90" || f == "VP09" || f == "vp09") return Codec::Vp9;
+    if (f == "AV01" || f == "av01" || f == "AV1 ") return Codec::Av1;
+
+    if (f == "XVID" || f == "xvid" || f == "DIVX" || f == "divx" ||
+        f == "MP4V" || f == "mp4v" || f == "DX50" || f == "dx50" ||
+        f == "FMP4") return Codec::Mpeg4Visual;
+    if (f == "MPG1" || f == "mpg1" || f == "MPEG" || f == "mpeg" ||
+        f == "mp1v") return Codec::Mpeg1Video;
+    if (f == "MPG2" || f == "mpg2" || f == "MPEG2" || f == "mpeg2" ||
+        f == "mp2v") return Codec::Mpeg2Video;
+    if (f == "H263" || f == "h263" || f == "S263" || f == "s263" ||
+        f == "I263") return Codec::H263;
+    if (f == "WMV3" || f == "wmv3" || f == "WVC1") return Codec::Vc1;
+    if (f == "APCH" || f == "apch" || f == "APCN" || f == "apcn" ||
+        f == "APCO" || f == "apco" || f == "APCS" || f == "apcs") return Codec::ProRes;
+    if (f == "AVdn" || f == "AVDN" || f == "dnxhd" || f == "DNXH") return Codec::DnvHd;
+    if (f == "AVS2" || f == "avs2") return Codec::Avs2;
+    if (f == "THEO" || f == "theora") return Codec::Theora;
+
+    /* Audio fourccs that can appear in an AVI 'auds' stream. */
+    if (f == "mp4a" || f == "MP4A") return Codec::Aac;
+    if (f == ".mp3" || f == "MP3 " || f == "mp3 ") return Codec::Mp3;
+    if (f == "Opus" || f == "opus") return Codec::Opus;
+    if (f == "fLaC") return Codec::Flac;
+    if (f == "ac-3" || f == "AC-3") return Codec::Ac3;
+    if (f == "ec-3" || f == "EC-3") return Codec::Ec3;
+    if (f == "dtsc" || f == "dtse" || f == "dtsl") return Codec::Dts;
+    if (f == "sowt" || f == "twos") return Codec::Pcm16;
+    if (f == "in24") return Codec::Pcm24;
+    if (f == "in32") return Codec::Pcm32;
+    if (f == "fl32" || f == "fl64") {
+        return f == "fl64" ? Codec::PcmFloat64 : Codec::PcmFloat32;
+    }
+    return Codec::Unknown;
+}
+
+/* A fourcc made only of NULs / blanks carries no identity. */
+inline bool fourcc_is_blank(const std::string& f) {
+    if (f.empty()) return true;
+    for (char c : f) {
+        if (c != '\0' && c != ' ') return false;
+    }
+    return true;
+}
+
+/* True when every byte is a visible ASCII character. */
+inline bool fourcc_is_printable(const std::string& f) {
+    for (char c : f) {
+        const auto u = static_cast<unsigned char>(c);
+        if (u < 0x20u || u > 0x7Eu) return false;
+    }
+    return true;
+}
+
+/* Render an arbitrary byte signature as a short printable identifier. */
+inline std::string printable_signature(std::span<const std::uint8_t> d, std::size_t max_len = 16u) {
+    std::string s;
+    const std::size_t n = std::min(d.size(), max_len);
+    s.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const std::uint8_t c = d[i];
+        s.push_back(c >= 0x20u && c <= 0x7Eu ? static_cast<char>(c) : '?');
+    }
+    return s;
 }
 
 inline NalFramingMode framing_for_codec(Codec codec) {
@@ -330,6 +434,8 @@ struct ParsedTrack {
     std::size_t stss = 0;
     bool video = false;
     bool audio = false;
+    bool subtitle = false;
+    std::string subtitle_codec;
     std::uint32_t timescale = 0;
 };
 
@@ -392,6 +498,7 @@ inline void parse_moov_tracks(
 
             pt.video = (handler == "vide");
             pt.audio = (handler == "soun");
+            pt.subtitle = (handler == "text" || handler == "subt" || handler == "sbtl");
 
             if (pt.video && pt.entry.found) {
                 pt.view.is_video = true;
@@ -436,12 +543,19 @@ inline void parse_moov_tracks(
                         );
                     }
                 }
+            } else if (pt.subtitle) {
+                pt.view.is_subtitle = true;
+                pt.view.framing = NalFramingMode::RawFrame;
+                pt.subtitle_codec = "tx3g";
+                pt.view.subtitle_codec = pt.subtitle_codec;
+                pt.view.codec = Codec::Tx3g;
+                pt.view.codec_name = "tx3g";
             }
         }
 
-        // Skip non-media tracks (hint, text metadata, timed metadata, etc.)
-        // that have neither a usable video nor audio sample entry.
-        if (pt.video || pt.audio) {
+        // Skip non-media tracks (hint, metadata, etc.) that are not video,
+        // audio or subtitle.
+        if (pt.video || pt.audio || pt.subtitle) {
             out.push_back(std::move(pt));
         }
 
@@ -1075,9 +1189,9 @@ inline bool build_mp4(FileSource& src, IndexBuildResult& out) {
             }
 
             mp4_index::build_sample_table(data, tracks[i], out.samples[i]);
-        } else if (tracks[i].audio) {
-            // Audio samples use the same stsz/stco/stts tables; no parameter
-            // sets are prepended and framing stays RawFrame.
+        } else if (tracks[i].audio || tracks[i].subtitle) {
+            // Audio and subtitle samples use the same stsz/stco/stts tables;
+            // no parameter sets are prepended and framing stays RawFrame.
             mp4_index::build_sample_table(data, tracks[i], out.samples[i]);
         }
     }
@@ -1170,6 +1284,12 @@ inline constexpr std::uint64_t kInfo = 0x1549A966ull;
 inline constexpr std::uint64_t kTitle = 0x7BA9ull;
 inline constexpr std::uint64_t kDateUTC = 0x4461ull;
 inline constexpr std::uint64_t kTimecodeScale = 0x2AD7B1ull;
+inline constexpr std::uint64_t kChapters = 0x1043A770ull;
+inline constexpr std::uint64_t kEditionEntry = 0x45B9ull;
+inline constexpr std::uint64_t kChapterAtom = 0xB6ull;
+inline constexpr std::uint64_t kChapterTimeStart = 0x91ull;
+inline constexpr std::uint64_t kChapterDisplay = 0x80ull;
+inline constexpr std::uint64_t kChapterString = 0x85ull;
 inline constexpr std::uint64_t kTags = 0x1254C367ull;
 inline constexpr std::uint64_t kTag = 0x7373ull;
 inline constexpr std::uint64_t kSimpleTag = 0x67C8ull;
@@ -1233,6 +1353,49 @@ inline void parse_info(std::span<const std::uint8_t> d, ContainerMetadata& out) 
                 ns = (ns << 8) | payload[i];
             }
             out.creation_time = static_cast<std::int64_t>(ns / 1000000000ull);
+        }
+    }
+}
+
+/* Parse a Matroska Chapters element, appending to out.chapters. */
+inline void parse_chapters(std::span<const std::uint8_t> d, ContainerMetadata& out) {
+    std::size_t p = 0;
+    std::uint64_t id = 0;
+    std::span<const std::uint8_t> payload;
+    while (p < d.size()) {
+        if (!next_ebml(d, p, id, payload)) break;
+        if (id != kEditionEntry) continue;
+        std::size_t e = 0;
+        std::uint64_t eid = 0;
+        std::span<const std::uint8_t> edition;
+        while (e < payload.size()) {
+            if (!next_ebml(payload, e, eid, edition)) break;
+            if (eid != kChapterAtom) continue;
+            ContainerMetadata::Chapter chapter;
+            std::size_t a = 0;
+            std::uint64_t aid = 0;
+            std::span<const std::uint8_t> field;
+            while (a < edition.size()) {
+                if (!next_ebml(edition, a, aid, field)) break;
+                if (aid == kChapterTimeStart) {
+                    std::uint64_t t = 0;
+                    for (std::size_t i = 0; i < field.size() && i < 8; ++i) {
+                        t = (t << 8) | field[i];
+                    }
+                    chapter.time = static_cast<std::int64_t>(t);
+                } else if (aid == kChapterDisplay && chapter.title.empty()) {
+                    std::size_t c = 0;
+                    std::uint64_t cid = 0;
+                    std::span<const std::uint8_t> cf;
+                    while (c < field.size()) {
+                        if (!next_ebml(field, c, cid, cf)) break;
+                        if (cid == kChapterString) chapter.title = as_text(cf);
+                    }
+                }
+            }
+            if (chapter.time != 0 || !chapter.title.empty()) {
+                out.chapters.push_back(chapter);
+            }
         }
     }
 }
@@ -1461,6 +1624,8 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                 timecode_scale_ns = mkv_index::parse_timecode_scale(element);
             } else if (id == mkv_index::kTags) {
                 mkv_index::parse_tags(element, out.metadata);
+            } else if (id == mkv_index::kChapters) {
+                mkv_index::parse_chapters(element, out.metadata);
             }
 
             if (id == mkv::detail::kTracks) {
@@ -1969,6 +2134,7 @@ inline bool build_ts(FileSource& src, IndexBuildResult& out) {
                     v.framing = NalFramingMode::AnnexB;
                     break;
             }
+            v.codec_name = codec_name(v.codec);
         }
 
         out.tracks[s] = v;
@@ -2112,12 +2278,31 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
         }
     }
 
-    enum class Kind { None, Avc, Hevc, Av1, Vp8, Vp9 };
+    enum class Kind { None, Avc, Hevc, Av1, Vp8, Vp9, H263, Screen };
     Kind kind = Kind::None;
     bool have_params = false;
 
     std::vector<SampleEntry> samples;
     std::vector<std::uint8_t> param_sets;
+
+    /* Audio is collected independently; it becomes a second track. */
+    struct AudioInfo {
+        Codec codec = Codec::Unknown;
+        std::string codec_name;
+        std::uint32_t sample_rate = 0;
+        std::uint16_t channels = 0;
+        std::uint16_t bits_per_sample = 0;
+        std::vector<std::uint8_t> config;
+        bool found = false;
+    };
+    AudioInfo audio;
+    std::vector<SampleEntry> audio_samples;
+
+    static constexpr std::uint32_t kFlvRates[4] = {5500u, 11025u, 22050u, 44100u};
+    static constexpr std::uint32_t kAacRates[13] = {
+        96000u, 88200u, 64000u, 48000u, 44100u, 32000u, 24000u,
+        22050u, 16000u, 12000u, 11025u, 8000u, 7350u
+    };
 
     while (pos + 11 <= data.size()) {
         const std::uint8_t tag_type = data[pos];
@@ -2128,6 +2313,12 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
         }
 
         const auto tag = data.subspan(pos + 11, tag_size);
+        const std::int64_t ts = static_cast<std::int64_t>(
+            (static_cast<std::uint32_t>(data[pos + 4]) << 16) |
+            (static_cast<std::uint32_t>(data[pos + 5]) << 8) |
+            static_cast<std::uint32_t>(data[pos + 6]) |
+            (static_cast<std::uint32_t>(data[pos + 7]) << 24)
+        );
 
         if (tag_type == 9 && tag_size >= 1) {
             const std::uint8_t codec_id = tag[0] & 0x0Fu;
@@ -2157,13 +2348,6 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
                     kind = codec_id == 7 ? Kind::Avc
                                          : (codec_id == 12 ? Kind::Hevc : Kind::Av1);
 
-                    std::int64_t ts = static_cast<std::int64_t>(
-                        (static_cast<std::uint32_t>(data[pos + 4]) << 16) |
-                        (static_cast<std::uint32_t>(data[pos + 5]) << 8) |
-                        static_cast<std::uint32_t>(data[pos + 6]) |
-                        (static_cast<std::uint32_t>(data[pos + 7]) << 24)
-                    );
-
                     SampleEntry e;
                     e.offset = static_cast<std::size_t>(body.data() - data.data());
                     e.size = body.size();
@@ -2178,13 +2362,20 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
             } else if (codec_id == 10 || codec_id == 11) {
                 kind = codec_id == 10 ? Kind::Vp8 : Kind::Vp9;
 
-                std::int64_t ts = static_cast<std::int64_t>(
-                    (static_cast<std::uint32_t>(data[pos + 4]) << 16) |
-                    (static_cast<std::uint32_t>(data[pos + 5]) << 8) |
-                    static_cast<std::uint32_t>(data[pos + 6]) |
-                    (static_cast<std::uint32_t>(data[pos + 7]) << 24)
-                );
+                const auto body = tag.subspan(1);
 
+                SampleEntry e;
+                e.offset = static_cast<std::size_t>(body.data() - data.data());
+                e.size = body.size();
+                e.pts = ts;
+                e.dts = ts;
+                e.duration = 0;
+                e.is_key = samples.empty();
+                e.framing = NalFramingMode::RawFrame;
+                samples.push_back(e);
+            } else if (codec_id == 2 || codec_id == 3) {
+                /* 2 = H.263, 3 = Screen video (not parser-supported). */
+                kind = codec_id == 2 ? Kind::H263 : Kind::Screen;
                 const auto body = tag.subspan(1);
 
                 SampleEntry e;
@@ -2197,79 +2388,180 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
                 e.framing = NalFramingMode::RawFrame;
                 samples.push_back(e);
             }
+        } else if (tag_type == 8 && tag_size >= 1) {
+            const std::uint8_t format = static_cast<std::uint8_t>(tag[0] >> 4);
+            const std::uint8_t rate_idx = static_cast<std::uint8_t>((tag[0] >> 2) & 0x03u);
+
+            if (!audio.found) {
+                audio.found = true;
+                switch (format) {
+                    case 0:
+                    case 3:
+                        audio.codec = Codec::Pcm16;
+                        audio.codec_name = "pcm_s16";
+                        break;
+                    case 2:
+                    case 14:
+                        audio.codec = Codec::Mp3;
+                        audio.codec_name = ".mp3";
+                        break;
+                    case 10:
+                        audio.codec = Codec::Aac;
+                        audio.codec_name = "mp4a";
+                        break;
+                    default:
+                        audio.codec = Codec::Unknown;
+                        audio.codec_name = "audio";
+                        break;
+                }
+                audio.sample_rate = kFlvRates[rate_idx];
+                audio.channels = (tag[0] & 0x01u) != 0u ? 2u : 1u;
+                audio.bits_per_sample = (tag[0] & 0x02u) != 0u ? 16u : 8u;
+                if (audio.codec == Codec::Pcm16) audio.bits_per_sample = 16u;
+            }
+
+            const bool aac_sequence_header =
+                (format == 10 && tag.size() >= 2 && tag[1] == 0);
+
+            if (aac_sequence_header) {
+                /* AAC AudioSpecificConfig: object type (5) + freq index (4)
+                 * + channel config (4). */
+                const auto asc = tag.subspan(2);
+                if (asc.size() >= 2) {
+                    const unsigned freq_idx =
+                        (static_cast<unsigned>(asc[0] & 0x07u) << 1) |
+                        static_cast<unsigned>(asc[1] >> 7);
+                    if (freq_idx < 13u) {
+                        audio.sample_rate = kAacRates[freq_idx];
+                    }
+                    audio.channels = static_cast<std::uint16_t>((asc[1] >> 3) & 0x0Fu);
+                    audio.config.assign(asc.begin(), asc.end());
+                }
+            } else {
+                const std::size_t audio_off = (format == 10 && tag.size() >= 2) ? 2u : 1u;
+                if (tag.size() > audio_off) {
+                    SampleEntry e;
+                    e.offset = static_cast<std::size_t>(tag.data() - data.data()) + audio_off;
+                    e.size = tag.size() - audio_off;
+                    e.pts = ts;
+                    e.dts = ts;
+                    e.duration = 0;
+                    e.is_key = true;
+                    e.framing = NalFramingMode::RawFrame;
+                    audio_samples.push_back(e);
+                }
+            }
         }
 
         pos += 11 + tag_size + 4;
     }
 
-    if (samples.empty() && !have_params) {
+    const bool have_video = kind != Kind::None && (!samples.empty() || have_params);
+    const bool have_audio = audio.found && !audio_samples.empty();
+
+    if (!have_video && !have_audio) {
         return false;
     }
 
-    if (kind == Kind::None) {
-        return false;
+    const std::size_t track_count = (have_video ? 1u : 0u) + (have_audio ? 1u : 0u);
+    out.tracks.resize(track_count);
+    out.samples.resize(track_count);
+    out.param_sets.resize(track_count);
+
+    std::size_t vi = 0;
+
+    if (have_video) {
+        TrackView v;
+        v.id = static_cast<std::uint32_t>(vi + 1);
+        v.is_video = true;
+        v.timescale = 1000;
+        v.mmap_backed = src.mmap_backed();
+
+        switch (kind) {
+            case Kind::Avc:
+                v.codec = Codec::Avc;
+                v.framing = NalFramingMode::LengthPrefixed;
+                v.length_size = 4;
+                v.codec_name = "avc1";
+                break;
+            case Kind::Hevc:
+                v.codec = Codec::Hevc;
+                v.framing = NalFramingMode::LengthPrefixed;
+                v.length_size = 4;
+                v.codec_name = "hvc1";
+                break;
+            case Kind::Av1:
+                v.codec = Codec::Av1;
+                v.framing = NalFramingMode::Obu;
+                v.codec_name = "av01";
+                break;
+            case Kind::Vp8:
+                v.codec = Codec::Vp8;
+                v.framing = NalFramingMode::RawFrame;
+                v.codec_name = "vp08";
+                break;
+            case Kind::Vp9:
+                v.codec = Codec::Vp9;
+                v.framing = NalFramingMode::RawFrame;
+                v.codec_name = "vp09";
+                break;
+            case Kind::H263:
+                v.codec = Codec::H263;
+                v.framing = NalFramingMode::RawFrame;
+                v.codec_name = "h263";
+                break;
+            case Kind::Screen:
+                v.codec = Codec::Unknown;
+                v.framing = NalFramingMode::RawFrame;
+                v.codec_name = "screen video";
+                break;
+            default:
+                break;
+        }
+
+        out.tracks[vi] = v;
+        out.param_sets[vi] = std::move(param_sets);
+
+        if (!out.param_sets[vi].empty()) {
+            SampleEntry e;
+            e.is_param_set = true;
+            e.offset = 0;
+            e.size = out.param_sets[vi].size();
+            e.framing = NalFramingMode::AnnexB;
+            e.is_key = true;
+            out.samples[vi].push_back(e);
+        }
+
+        for (auto& e : samples) {
+            out.samples[vi].push_back(std::move(e));
+        }
+        out.tracks[vi].sample_count = out.samples[vi].size();
+        ++vi;
     }
 
-    out.tracks.resize(1);
-    out.samples.resize(1);
-    out.param_sets.resize(1);
+    if (have_audio) {
+        TrackView a;
+        a.id = static_cast<std::uint32_t>(vi + 1);
+        a.is_audio = true;
+        a.codec = audio.codec;
+        a.audio_codec = audio.codec;
+        a.codec_name = audio.codec_name;
+        a.framing = NalFramingMode::RawFrame;
+        a.sample_rate = audio.sample_rate;
+        a.channels = audio.channels;
+        a.bits_per_sample = audio.bits_per_sample != 0u
+                                ? audio.bits_per_sample
+                                : static_cast<std::uint16_t>(audio_bits_per_sample(audio.codec));
+        a.audio_config = audio.config;
+        a.timescale = 1000;
+        a.mmap_backed = src.mmap_backed();
 
-    TrackView v;
-    v.id = 1;
-    v.is_video = true;
-    v.timescale = 1000;
-    v.mmap_backed = src.mmap_backed();
-
-    switch (kind) {
-        case Kind::Avc:
-            v.codec = Codec::Avc;
-            v.framing = NalFramingMode::LengthPrefixed;
-            v.length_size = 4;
-            v.codec_name = "avc1";
-            break;
-        case Kind::Hevc:
-            v.codec = Codec::Hevc;
-            v.framing = NalFramingMode::LengthPrefixed;
-            v.length_size = 4;
-            v.codec_name = "hvc1";
-            break;
-        case Kind::Av1:
-            v.codec = Codec::Av1;
-            v.framing = NalFramingMode::Obu;
-            v.codec_name = "av01";
-            break;
-        case Kind::Vp8:
-            v.codec = Codec::Vp8;
-            v.framing = NalFramingMode::RawFrame;
-            v.codec_name = "vp08";
-            break;
-        case Kind::Vp9:
-            v.codec = Codec::Vp9;
-            v.framing = NalFramingMode::RawFrame;
-            v.codec_name = "vp09";
-            break;
-        default:
-            return false;
+        out.tracks[vi] = a;
+        for (auto& e : audio_samples) {
+            out.samples[vi].push_back(std::move(e));
+        }
+        out.tracks[vi].sample_count = out.samples[vi].size();
     }
-
-    out.tracks[0] = v;
-    out.param_sets[0] = std::move(param_sets);
-
-    if (!out.param_sets[0].empty()) {
-        SampleEntry e;
-        e.is_param_set = true;
-        e.offset = 0;
-        e.size = out.param_sets[0].size();
-        e.framing = NalFramingMode::AnnexB;
-        e.is_key = true;
-        out.samples[0].push_back(e);
-    }
-
-    for (auto& e : samples) {
-        out.samples[0].push_back(std::move(e));
-    }
-
-    out.tracks[0].sample_count = out.samples[0].size();
 
     return true;
 }
@@ -2285,12 +2577,22 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
         return false;
     }
 
-    std::string codec_fourcc;
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
+    /* One entry per strl chunk (video or audio), in header order. */
+    struct Stream {
+        bool is_video = false;
+        bool is_audio = false;
+        std::string fourcc;
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        std::uint32_t sample_rate = 0;
+        std::uint16_t channels = 0;
+        std::uint16_t bits_per_sample = 0;
+        std::uint16_t format_tag = 0;
+    };
+
+    std::vector<Stream> streams;
     std::size_t pos = 12;
     std::size_t movi_pos = data.size();
-    bool have_video_stream = false;
 
     while (pos + 8 <= data.size()) {
         const Chunk c = chunk_at(data, pos);
@@ -2310,8 +2612,8 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
 
                     if (item.is_list && item.data + 4 <= item.end &&
                         is_fourcc(data, item.data, "strl")) {
+                        Stream s;
                         std::size_t q = item.data + 4;
-                        bool in_video_strl = false;
 
                         while (q + 8 <= item.end) {
                             const Chunk sub = chunk_at(data, q);
@@ -2320,22 +2622,43 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
                             }
 
                             if (is_fourcc(data, q, "strh") && sub.data + 12 <= sub.end) {
-                                if (is_fourcc(data, sub.data, "vids")) {
-                                    have_video_stream = true;
-                                    in_video_strl = true;
-                                    codec_fourcc = std::string(
+                                const bool vids = is_fourcc(data, sub.data, "vids");
+                                const bool auds = is_fourcc(data, sub.data, "auds");
+                                if (vids || auds) {
+                                    s.is_video = vids;
+                                    s.is_audio = auds;
+                                    s.fourcc = std::string(
                                         reinterpret_cast<const char*>(data.data() + sub.data + 4), 4
                                     );
                                 }
                             }
 
-                            if (in_video_strl && is_fourcc(data, q, "strf") &&
-                                sub.data + 20 <= sub.end) {
-                                width = read_u32(data, sub.data + 4);
-                                height = read_u32(data, sub.data + 8);
+                            if (is_fourcc(data, q, "strf")) {
+                                if (s.is_video && sub.data + 20 <= sub.end) {
+                                    /* BITMAPINFOHEADER: width @+4, height @+8. */
+                                    s.width = read_u32(data, sub.data + 4);
+                                    s.height = read_u32(data, sub.data + 8);
+                                } else if (s.is_audio && sub.data + 16 <= sub.end) {
+                                    /* WAVEFORMATEX: tag @+0, channels @+2,
+                                     * samples/sec @+4, bits/sample @+14. */
+                                    s.format_tag = static_cast<std::uint16_t>(
+                                        data[sub.data] | (data[sub.data + 1] << 8)
+                                    );
+                                    s.channels = static_cast<std::uint16_t>(
+                                        data[sub.data + 2] | (data[sub.data + 3] << 8)
+                                    );
+                                    s.sample_rate = read_u32(data, sub.data + 4);
+                                    s.bits_per_sample = static_cast<std::uint16_t>(
+                                        data[sub.data + 14] | (data[sub.data + 15] << 8)
+                                    );
+                                }
                             }
 
                             q = sub.end;
+                        }
+
+                        if (s.is_video || s.is_audio) {
+                            streams.push_back(std::move(s));
                         }
                     }
 
@@ -2355,52 +2678,98 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
         pos = c.end;
     }
 
-    if (!have_video_stream || codec_fourcc.empty() || movi_pos == data.size()) {
+    if (streams.empty() || movi_pos == data.size()) {
         return false;
     }
 
-    const bool is_h26x = codec_fourcc == "H264" || codec_fourcc == "X264" ||
-                         codec_fourcc == "h264" || codec_fourcc == "HEVC" ||
-                         codec_fourcc == "hvc1" || codec_fourcc == "VVC" || codec_fourcc == "vvc1";
-    const bool is_vp = codec_fourcc == "VP80" || codec_fourcc == "VP90";
-    const bool is_av1 = codec_fourcc == "AV01";
+    const auto audio_codec_from_wave = [](const Stream& s) -> Codec {
+        const Codec from_fourcc = avi_codec_from_fourcc(s.fourcc);
+        if (from_fourcc != Codec::Unknown && is_audio_codec(from_fourcc)) {
+            return from_fourcc;
+        }
+        switch (s.format_tag) {
+            case 0x0001: /* WAVE_FORMAT_PCM */
+                return s.bits_per_sample == 8u  ? Codec::Pcm8
+                     : s.bits_per_sample == 24u ? Codec::Pcm24
+                     : s.bits_per_sample == 32u ? Codec::Pcm32
+                                                : Codec::Pcm16;
+            case 0x0003: return Codec::PcmFloat32;
+            case 0x0055: return Codec::Mp3;
+            case 0x00FE:
+            case 0x00FF: return Codec::Aac;
+            case 0x2000: return Codec::Ac3;
+            case 0x2001: return Codec::Dts;
+            default: break;
+        }
+        return Codec::Unknown;
+    };
 
-    if (!is_h26x && !is_vp && !is_av1) {
-        return false;
+    out.tracks.resize(streams.size());
+    out.samples.resize(streams.size());
+    out.param_sets.resize(streams.size());
+
+    /* Video tracks whose samples may be NAL-formatted (Annex-B / length). */
+    std::vector<bool> annexb_capable(streams.size(), false);
+
+    for (std::size_t i = 0; i < streams.size(); ++i) {
+        const Stream& s = streams[i];
+        TrackView& v = out.tracks[i];
+        v.id = static_cast<std::uint32_t>(i + 1);
+        v.timescale = 1000;
+        v.mmap_backed = src.mmap_backed();
+
+        if (s.is_audio) {
+            const Codec ac = audio_codec_from_wave(s);
+            v.is_audio = true;
+            v.framing = NalFramingMode::RawFrame;
+            v.codec = ac;
+            v.audio_codec = ac;
+            v.sample_rate = s.sample_rate;
+            v.channels = s.channels;
+            v.bits_per_sample = s.bits_per_sample != 0u
+                                    ? s.bits_per_sample
+                                    : static_cast<std::uint16_t>(audio_bits_per_sample(ac));
+            v.codec_name = (!fourcc_is_blank(s.fourcc) && fourcc_is_printable(s.fourcc))
+                               ? s.fourcc
+                               : std::string(codec_name(ac));
+        } else {
+            v.is_video = true;
+            v.width = s.width;
+            v.height = s.height;
+            v.codec = avi_codec_from_fourcc(s.fourcc);
+            v.codec_name = fourcc_is_blank(s.fourcc) ? std::string(codec_name(v.codec)) : s.fourcc;
+            v.length_size = 4;
+
+            if (v.codec == Codec::Av1) {
+                v.framing = NalFramingMode::Obu;
+            } else if (v.codec == Codec::Vp8 || v.codec == Codec::Vp9) {
+                v.framing = NalFramingMode::RawFrame;
+            } else if (v.codec == Codec::Avc || v.codec == Codec::Hevc ||
+                       v.codec == Codec::Vvc || v.codec == Codec::Unknown) {
+                v.framing = NalFramingMode::AnnexB;
+                annexb_capable[i] = true;
+            } else {
+                /* MPEG-4 Visual, H.263, ProRes, DNxHD, VC-1, ... store
+                 * complete frames; no NAL start codes to look for. */
+                v.framing = NalFramingMode::RawFrame;
+            }
+        }
     }
 
-    out.tracks.resize(1);
-    out.samples.resize(1);
-    out.param_sets.resize(1);
-
-    TrackView v;
-    v.id = 1;
-    v.is_video = true;
-    v.codec_name = codec_fourcc;
-    v.width = width;
-    v.height = height;
-    v.timescale = 1000;
-    v.mmap_backed = src.mmap_backed();
-
-    if (is_h26x) {
-        v.codec = (codec_fourcc == "HEVC" || codec_fourcc == "hvc1")
-                      ? Codec::Hevc
-                      : (codec_fourcc == "VVC" || codec_fourcc == "vvc1" ? Codec::Vvc
-                                                                         : Codec::Avc);
-        v.framing = NalFramingMode::AnnexB;
-        v.length_size = 4;
-    } else if (is_vp) {
-        v.codec = codec_fourcc == "VP90" ? Codec::Vp9 : Codec::Vp8;
-        v.framing = NalFramingMode::RawFrame;
-    } else {
-        v.codec = Codec::Av1;
-        v.framing = NalFramingMode::Obu;
-    }
-
-    out.tracks[0] = v;
+    /* Prefer the chunk's stream id, but never misroute it to the wrong kind. */
+    const auto select_stream = [&](bool want_video, std::size_t hint) -> std::size_t {
+        if (hint < streams.size() && (want_video ? streams[hint].is_video
+                                                 : streams[hint].is_audio)) {
+            return hint;
+        }
+        for (std::size_t k = 0; k < streams.size(); ++k) {
+            if (want_video ? streams[k].is_video : streams[k].is_audio) return k;
+        }
+        return streams.size();
+    };
 
     std::size_t p2 = movi_pos;
-    std::size_t index = 0;
+    std::vector<std::size_t> counters(streams.size(), 0);
 
     while (p2 + 8 <= data.size()) {
         const Chunk c = chunk_at(data, p2);
@@ -2408,44 +2777,80 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
             break;
         }
 
-        const bool is_video = is_fourcc(data, p2, "00dc") || is_fourcc(data, p2, "00db") ||
-                              is_fourcc(data, p2, "00dw");
-
-        const std::size_t video_size = (c.end > c.data) ? (c.end - c.data) : 0u;
-
-        if (is_video && video_size > 0) {
-            const auto frame = data.subspan(c.data, video_size);
-
-            SampleEntry e;
-            e.offset = c.data;
-            e.size = video_size;
-            e.pts = static_cast<std::int64_t>(index) * 1000;
-            e.dts = e.pts;
-            e.duration = 1000;
-            e.is_key = true;
-
-            if (is_h26x) {
-                const bool starts_annex_b = frame.size() >= 4 && frame[0] == 0x00 &&
-                                            frame[1] == 0x00 &&
-                                            (frame[2] == 0x01 || (frame[2] == 0x00 && frame[3] == 0x01));
-                e.framing = starts_annex_b ? NalFramingMode::AnnexB
-                                           : NalFramingMode::LengthPrefixed;
-            } else if (is_vp) {
-                e.framing = NalFramingMode::RawFrame;
-            } else {
-                e.framing = NalFramingMode::Obu;
+        if (c.is_list) {
+            /* A 'rec ' list nests ordinary media chunks inside movi. */
+            if (c.data + 4 <= c.end && is_fourcc(data, c.data, "rec ")) {
+                p2 = c.data + 4;
+                continue;
             }
+            p2 = c.end;
+            continue;
+        }
 
-            out.samples[0].push_back(e);
-            ++index;
+        const char g2 = c.fourcc[2];
+        const char g3 = c.fourcc[3];
+        const bool is_video_chunk = (g2 == 'd') && (g3 == 'c' || g3 == 'b' || g3 == 'w');
+        const bool is_audio_chunk = (g2 == 'w') && (g3 == 'b');
+
+        if ((is_video_chunk || is_audio_chunk) && c.size > 0 &&
+            c.data <= data.size() && c.end >= c.data && c.end - c.data >= c.size) {
+            std::size_t hint = streams.size();
+            if (c.fourcc[0] >= '0' && c.fourcc[0] <= '9' &&
+                c.fourcc[1] >= '0' && c.fourcc[1] <= '9') {
+                hint = static_cast<std::size_t>((c.fourcc[0] - '0') * 10 +
+                                                (c.fourcc[1] - '0'));
+            }
+            const std::size_t si = select_stream(is_video_chunk, hint);
+
+            if (si < streams.size()) {
+                const auto frame = data.subspan(c.data, c.size);
+
+                SampleEntry e;
+                e.offset = c.data;
+                e.size = c.size;
+                e.pts = static_cast<std::int64_t>(counters[si]) * 1000;
+                e.dts = e.pts;
+                e.duration = 1000;
+                e.is_key = true;
+
+                if (is_audio_chunk) {
+                    e.framing = NalFramingMode::RawFrame;
+                } else {
+                    const Codec codec = out.tracks[si].codec;
+                    if (codec == Codec::Av1) {
+                        e.framing = NalFramingMode::Obu;
+                    } else if (annexb_capable[si]) {
+                        const bool starts_annex_b =
+                            frame.size() >= 4 && frame[0] == 0x00 && frame[1] == 0x00 &&
+                            (frame[2] == 0x01 || (frame[2] == 0x00 && frame[3] == 0x01));
+                        e.framing = starts_annex_b
+                                        ? NalFramingMode::AnnexB
+                                        : (codec == Codec::Unknown ? NalFramingMode::RawFrame
+                                                                   : NalFramingMode::LengthPrefixed);
+                    } else {
+                        e.framing = NalFramingMode::RawFrame;
+                    }
+                }
+
+                out.samples[si].push_back(e);
+                ++counters[si];
+            }
         }
 
         p2 = c.end;
     }
 
-    out.tracks[0].sample_count = out.samples[0].size();
+    for (std::size_t i = 0; i < out.tracks.size(); ++i) {
+        out.tracks[i].sample_count = out.samples[i].size();
+    }
 
-    return !out.samples[0].empty();
+    /* A header-only AVI (or stray audio chunks) is not a usable index. */
+    for (const auto& t : out.tracks) {
+        if (t.is_video && t.sample_count > 0) {
+            return true;
+        }
+    }
+    return false;
 }
 inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
     const auto data = src.data();
@@ -2454,7 +2859,14 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
         return false;
     }
 
-    const bool vp9 = data[8] == 'V' && data[9] == 'P' && data[10] == '9' && data[11] == '0';
+    const std::string fourcc(
+        reinterpret_cast<const char*>(data.data() + 8), 4
+    );
+
+    Codec codec = Codec::Unknown;
+    if (fourcc == "VP90" || fourcc == "VP09") codec = Codec::Vp9;
+    else if (fourcc == "VP80" || fourcc == "VP08") codec = Codec::Vp8;
+    else if (fourcc == "AV01" || fourcc == "av01") codec = Codec::Av1;
 
     const std::uint16_t width = static_cast<std::uint16_t>(data[12] | (data[13] << 8));
     const std::uint16_t height = static_cast<std::uint16_t>(data[14] | (data[15] << 8));
@@ -2466,9 +2878,9 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
     TrackView v;
     v.id = 1;
     v.is_video = true;
-    v.codec = vp9 ? Codec::Vp9 : Codec::Vp8;
-    v.framing = NalFramingMode::RawFrame;
-    v.codec_name = vp9 ? "VP90" : "VP80";
+    v.codec = codec;
+    v.framing = codec == Codec::Av1 ? NalFramingMode::Obu : NalFramingMode::RawFrame;
+    v.codec_name = fourcc_is_blank(fourcc) ? std::string(codec_name(codec)) : fourcc;
     v.width = width;
     v.height = height;
     v.timescale = 1000;
@@ -2502,7 +2914,7 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
         e.dts = e.pts;
         e.duration = 0;
         e.is_key = index == 0;
-        e.framing = NalFramingMode::RawFrame;
+        e.framing = out.tracks[0].framing;
         out.samples[0].push_back(e);
 
         pos = offset + size;
@@ -2523,9 +2935,21 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
 
     struct StreamInfo {
         std::uint32_t serial = 0;
-        Codec codec = Codec::Vp8;
+        Codec codec = Codec::Unknown;
+        std::string codec_name;
         bool is_video = false;
-        bool found = false;
+        bool is_audio = false;
+        std::uint32_t sample_rate = 0;
+        std::uint16_t channels = 0;
+        std::uint16_t bits_per_sample = 0;
+    };
+
+    const auto read_le32 = [](std::span<const std::uint8_t> d, std::size_t p) -> std::uint32_t {
+        if (p + 4 > d.size()) return 0;
+        return static_cast<std::uint32_t>(d[p]) |
+               (static_cast<std::uint32_t>(d[p + 1]) << 8) |
+               (static_cast<std::uint32_t>(d[p + 2]) << 16) |
+               (static_cast<std::uint32_t>(d[p + 3]) << 24);
     };
 
     std::vector<StreamInfo> streams;
@@ -2563,27 +2987,86 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         const auto page_data = data.subspan(data_off, total);
 
         if (bos) {
-            StreamInfo info;
-            info.serial = serial;
-            info.is_video = true;
-            info.found = true;
-
-            if (page_data.size() >= 5 && std::memcmp(page_data.data(), "OVP80", 5) == 0) {
-                info.codec = Codec::Vp8;
-            } else if (page_data.size() >= 5 && std::memcmp(page_data.data(), "OVP90", 5) == 0) {
-                info.codec = Codec::Vp9;
-            } else if (page_data.size() >= 4 &&
-                       std::memcmp(page_data.data(), "\x81\x41\x56\x30", 4) == 0) {
-                info.codec = Codec::Av1;
-            } else if (page_data.size() >= 4 && page_data[0] == 0x01 && page_data[1] == 'H') {
-                info.codec = Codec::Hevc;
-            } else if (page_data.size() >= 2 && page_data[0] == 0x01 && page_data[1] == 0x42) {
-                info.codec = Codec::Avc;
-            } else {
-                info.codec = Codec::Vp8;
+            bool duplicate = false;
+            for (const auto& s : streams) {
+                if (s.serial == serial) {
+                    duplicate = true;
+                    break;
+                }
             }
 
-            streams.push_back(info);
+            if (!duplicate) {
+                StreamInfo info;
+                info.serial = serial;
+                const auto* sig = page_data.data();
+                const std::size_t n = page_data.size();
+
+                if (n >= 5 && std::memcmp(sig, "OVP80", 5) == 0) {
+                    info.codec = Codec::Vp8;
+                    info.is_video = true;
+                } else if (n >= 5 && std::memcmp(sig, "OVP90", 5) == 0) {
+                    info.codec = Codec::Vp9;
+                    info.is_video = true;
+                } else if (n >= 4 && std::memcmp(sig, "\x81\x41\x56\x30", 4) == 0) {
+                    info.codec = Codec::Av1;
+                    info.is_video = true;
+                } else if (n >= 4 && sig[0] == 0x01 && sig[1] == 'H') {
+                    info.codec = Codec::Hevc;
+                    info.is_video = true;
+                } else if (n >= 2 && sig[0] == 0x01 && sig[1] == 0x42) {
+                    info.codec = Codec::Avc;
+                    info.is_video = true;
+                } else if (n >= 7 && std::memcmp(sig, "\x80theora", 7) == 0) {
+                    info.codec = Codec::Theora;
+                    info.is_video = true;
+                } else if (n >= 7 && std::memcmp(sig, "\x01vorbis", 7) == 0) {
+                    info.codec = Codec::Vorbis;
+                    info.is_audio = true;
+                    /* Vorbis identification header: channels @11, rate @12. */
+                    if (n >= 16) {
+                        info.channels = static_cast<std::uint16_t>(sig[11]);
+                        info.sample_rate = read_le32(page_data, 12);
+                    }
+                } else if (n >= 8 && std::memcmp(sig, "OpusHead", 8) == 0) {
+                    info.codec = Codec::Opus;
+                    info.is_audio = true;
+                    if (n >= 16) {
+                        /* Per the identification header layout the channel
+                         * count sits at byte 11; fall back to the standard
+                         * OpusHead position (byte 9) when it is unset. */
+                        info.channels = static_cast<std::uint16_t>(sig[11]);
+                        if (info.channels == 0u) {
+                            info.channels = static_cast<std::uint16_t>(sig[9]);
+                        }
+                        info.sample_rate = read_le32(page_data, 12);
+                    }
+                } else if (n >= 4 && std::memcmp(sig, "fLaC", 4) == 0) {
+                    info.codec = Codec::Flac;
+                    info.is_audio = true;
+                    if (n >= 14) {
+                        /* STREAMINFO: 20-bit rate, 3-bit channels-1,
+                         * 5-bit bits-per-sample-1. */
+                        info.sample_rate = (static_cast<std::uint32_t>(sig[10]) << 12) |
+                                           (static_cast<std::uint32_t>(sig[11]) << 4) |
+                                           (static_cast<std::uint32_t>(sig[12]) >> 4);
+                        info.channels = static_cast<std::uint16_t>(((sig[12] >> 1) & 0x07u) + 1u);
+                        info.bits_per_sample = static_cast<std::uint16_t>(
+                            (((sig[12] & 0x01u) << 4) | (sig[13] >> 4)) + 1u
+                        );
+                    }
+                } else {
+                    /* Unknown codec: keep the raw signature as the identity. */
+                    info.codec = Codec::Unknown;
+                    info.is_video = true;
+                    info.codec_name = printable_signature(page_data);
+                    if (info.codec_name.empty()) info.codec_name = "unknown";
+                }
+
+                if (info.codec != Codec::Unknown) {
+                    info.codec_name = codec_name(info.codec);
+                }
+                streams.push_back(std::move(info));
+            }
         }
 
         pos = data_off + total;
@@ -2593,27 +3076,47 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         return false;
     }
 
-    // Use the first detected video stream.
-    const StreamInfo video = streams.front();
+    out.tracks.resize(streams.size());
+    out.samples.resize(streams.size());
+    out.param_sets.resize(streams.size());
 
-    out.tracks.resize(1);
-    out.samples.resize(1);
-    out.param_sets.resize(1);
+    for (std::size_t i = 0; i < streams.size(); ++i) {
+        const StreamInfo& s = streams[i];
+        TrackView& v = out.tracks[i];
+        v.id = s.serial;
+        v.codec = s.codec;
+        v.codec_name = s.codec_name;
+        v.is_video = s.is_video;
+        v.is_audio = s.is_audio;
+        v.timescale = 1000;
+        v.mmap_backed = src.mmap_backed();
 
-    TrackView v;
-    v.id = video.serial;
-    v.is_video = true;
-    v.codec = video.codec;
-    v.framing = (video.codec == Codec::Vp8 || video.codec == Codec::Vp9)
-                    ? NalFramingMode::RawFrame
-                    : (video.codec == Codec::Av1 ? NalFramingMode::Obu
-                                                 : NalFramingMode::AnnexB);
-    v.timescale = 1000;
-    v.mmap_backed = src.mmap_backed();
-    out.tracks[0] = v;
+        if (s.is_audio) {
+            v.framing = NalFramingMode::RawFrame;
+            v.audio_codec = s.codec;
+            v.sample_rate = s.sample_rate;
+            v.channels = s.channels;
+            v.bits_per_sample = s.bits_per_sample;
+        } else if (s.codec == Codec::Vp8 || s.codec == Codec::Vp9 ||
+                   s.codec == Codec::Theora || s.codec == Codec::Unknown) {
+            v.framing = NalFramingMode::RawFrame;
+        } else if (s.codec == Codec::Av1) {
+            v.framing = NalFramingMode::Obu;
+        } else {
+            /* Ogg AVC / HEVC packets carry Annex-B NAL units. */
+            v.framing = NalFramingMode::AnnexB;
+        }
+    }
 
+    const auto find_stream = [&](std::uint32_t serial) -> std::size_t {
+        for (std::size_t i = 0; i < streams.size(); ++i) {
+            if (streams[i].serial == serial) return i;
+        }
+        return streams.size();
+    };
+
+    std::vector<std::size_t> counters(streams.size(), 0);
     std::size_t p2 = 0;
-    std::size_t index = 0;
 
     while (p2 + 27 <= data.size()) {
         if (data[p2] != 0x4F || data[p2 + 1] != 0x67 || data[p2 + 2] != 0x67 ||
@@ -2642,27 +3145,69 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         }
 
         const bool bos = (data[p2 + 5] & 0x02u) != 0;
+        const std::size_t si = find_stream(serial);
 
-        if (serial == video.serial && !bos && total > 0) {
+        if (si < streams.size() && !bos && total > 0) {
             SampleEntry e;
             e.offset = data_off;
             e.size = total;
-            e.pts = static_cast<std::int64_t>(index) * 1000;
+            e.pts = static_cast<std::int64_t>(counters[si]) * 1000;
             e.dts = e.pts;
             e.duration = 1000;
-            e.is_key = index == 0;
-            e.framing = out.tracks[0].framing;
-            out.samples[0].push_back(e);
-            ++index;
+            e.is_key = counters[si] == 0;
+            e.framing = out.tracks[si].framing;
+            out.samples[si].push_back(e);
+            ++counters[si];
         }
 
         p2 = data_off + total;
     }
 
-    out.tracks[0].sample_count = out.samples[0].size();
+    bool have_samples = false;
+    for (std::size_t i = 0; i < out.tracks.size(); ++i) {
+        out.tracks[i].sample_count = out.samples[i].size();
+        if (!out.samples[i].empty()) have_samples = true;
+    }
 
-    return !out.samples[0].empty();
+    return have_samples;
 }
+/*
+ * MPEG-PS carries an elementary stream inside PES packets.  Look for the
+ * start code and identify the codec from its parameter-set / sequence
+ * header NAL.  Unrecognised streams stay Codec::Unknown rather than being
+ * mislabelled as AVC.
+ */
+inline Codec ps_codec_from_payload(std::span<const std::uint8_t> p) {
+    std::size_t i = 0;
+    for (; i + 3 < p.size() && i < 8; ++i) {
+        if (p[i] == 0x00 && p[i + 1] == 0x00 && p[i + 2] == 0x01) break;
+    }
+    if (i + 3 >= p.size() || i >= 8) return Codec::Unknown;
+
+    const std::uint8_t first = p[i + 3];
+
+    /* MPEG-1/2 Video sequence header. */
+    if (first == 0xB3) return Codec::Mpeg2Video;
+
+    if (i + 5 < p.size() && first == 0x00) {
+        /* VVC: 2-byte NAL header, nal_unit_type in bits 7:3 of byte 2. */
+        const std::uint8_t type = static_cast<std::uint8_t>((p[i + 4] >> 3) & 0x1Fu);
+        if (type >= 12u && type <= 20u) return Codec::Vvc;
+    }
+
+    if (i + 4 < p.size()) {
+        /* HEVC: type = first >> 1 (VPS=32, SPS=33, PPS=34). */
+        const std::uint8_t hevc_type = static_cast<std::uint8_t>(first >> 1);
+        if (hevc_type == 32u || hevc_type == 33u || hevc_type == 34u) return Codec::Hevc;
+    }
+
+    /* AVC: single-byte NAL header, type in the low 5 bits. */
+    const std::uint8_t avc_type = static_cast<std::uint8_t>(first & 0x1Fu);
+    if (avc_type == 5u || avc_type == 7u || avc_type == 8u) return Codec::Avc;
+
+    return Codec::Unknown;
+}
+
 inline bool build_ps(FileSource& src, IndexBuildResult& out) {
     const auto data = src.data();
 
@@ -2671,7 +3216,7 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
     }
 
     std::size_t pos = 0;
-    Codec codec = Codec::Avc;
+    Codec codec = Codec::Unknown;
     bool found_codec = false;
     std::vector<SampleEntry> samples;
 
@@ -2727,16 +3272,12 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
                 if (payload_off < pes_end) {
                     const auto payload = data.subspan(payload_off, pes_end - payload_off);
 
-                    if (!found_codec && payload.size() >= 5) {
-                        if (payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01) {
-                            const std::uint8_t nal_type = payload[4] & 0x1F;
-                            if (nal_type == 7) {
-                                codec = Codec::Avc;
-                            } else if ((payload[4] >> 1) == 32) {
-                                codec = Codec::Hevc;
-                            }
+                    if (!found_codec && payload.size() >= 4) {
+                        const Codec detected = ps_codec_from_payload(payload);
+                        if (detected != Codec::Unknown) {
+                            codec = detected;
+                            found_codec = true;
                         }
-                        found_codec = true;
                     }
 
                     SampleEntry e;
@@ -2780,7 +3321,8 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
     TrackView v;
     v.id = 1;
     v.is_video = true;
-    v.codec = codec;
+    v.codec = found_codec ? codec : Codec::Unknown;
+    v.codec_name = codec_name(v.codec);
     v.framing = NalFramingMode::AnnexB;
     v.timescale = 90000;
     v.mmap_backed = src.mmap_backed();

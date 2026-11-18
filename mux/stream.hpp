@@ -28,8 +28,9 @@ namespace mux {
  */
 enum class Container : std::uint8_t { Unknown, Mp4, Mkv, Ivf, Wav };
 
-/* PCM integer encodings supported by the WAV writer. */
-enum class AudioCodec : std::uint8_t { Pcm8, Pcm16, Pcm24, Pcm32, Aac };
+/* Unified codec IDs: the muxer uses the same bs::Codec values as the
+ * demuxer and parser.  This alias keeps source compatibility. */
+using AudioCodec = Codec;
 
 /* Optional progress / error reporting for a mux session. */
 struct MuxerOptions {
@@ -44,19 +45,8 @@ struct MuxerOptions {
 
 [[nodiscard]]
 inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
-    switch (codec) {
-        case AudioCodec::Pcm8:
-            return 8u;
-        case AudioCodec::Pcm16:
-            return 16u;
-        case AudioCodec::Pcm24:
-            return 24u;
-        case AudioCodec::Pcm32:
-            return 32u;
-        case AudioCodec::Aac:
-            return 16u;
-    }
-    return 16u;
+    const unsigned bits = codec_bits_per_sample(codec);
+    return bits != 0u ? bits : 16u;
 }
 
 /*
@@ -394,8 +384,9 @@ inline const char* mp4_fourcc(Codec codec) noexcept {
             return "vp09";
         case Codec::Vp8:
             return "vp08";
+        default:
+            return "hvc1";
     }
-    return "hvc1";
 }
 
 /* Matroska CodecID string for a codec. */
@@ -414,8 +405,9 @@ inline const char* mkv_codec_id(Codec codec) noexcept {
             return "V_VP9";
         case Codec::Vp8:
             return "V_VP8";
+        default:
+            return "V_MPEGH/ISO/HEVC";
     }
-    return "V_MPEGH/ISO/HEVC";
 }
 
 /* IVF fourcc for a codec (VP8 / VP9 only). */

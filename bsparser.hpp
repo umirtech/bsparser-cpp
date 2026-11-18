@@ -107,7 +107,111 @@ namespace bs {
  * bs::parse (the handler type already disambiguates the codec; the enum keeps
  * the selection explicit and lets the library validate it).
  */
-enum class Codec : std::uint8_t { Hevc, Avc, Vvc, Av1, Vp9, Vp8 };
+/*
+ * Codec identifiers shared by the parser, demuxer, muxer and C API.
+ * Parser-supported video codecs keep their original values; all other
+ * values let the demuxer/muxer name a codec without lying about it.
+ */
+enum class Codec : std::uint16_t {
+    Unknown = 0,
+
+    /* Video (the six the bitstream parser understands). */
+    Hevc = 1,
+    Avc = 2,
+    Vvc = 3,
+    Av1 = 4,
+    Vp9 = 5,
+    Vp8 = 6,
+
+    /* Video (container-only; syntax not parsed by this library). */
+    Mpeg1Video, Mpeg2Video, Mpeg4Visual, H263, Theora,
+    ProRes, DnvHd, Vc1, Avs2,
+
+    /* Audio: PCM integer and float. */
+    Pcm8, Pcm16, Pcm24, Pcm32, PcmFloat32, PcmFloat64,
+
+    /* Audio: compressed. */
+    Aac, Mp3, Opus, Vorbis, Ac3, Ec3, Dts, Flac, Alac,
+
+    /* Subtitle / text. */
+    Subrip, Webvtt, Tx3g, Pgs, DvbSub,
+};
+
+[[nodiscard]]
+inline constexpr bool is_video_codec(Codec c) noexcept {
+    return c >= Codec::Hevc && c <= Codec::Avs2;
+}
+
+[[nodiscard]]
+inline constexpr bool is_audio_codec(Codec c) noexcept {
+    return c >= Codec::Pcm8 && c <= Codec::Alac;
+}
+
+[[nodiscard]]
+inline constexpr bool is_subtitle_codec(Codec c) noexcept {
+    return c >= Codec::Subrip && c <= Codec::DvbSub;
+}
+
+[[nodiscard]]
+inline constexpr bool is_parser_supported(Codec c) noexcept {
+    return c >= Codec::Hevc && c <= Codec::Vp8;
+}
+
+/* Fixed PCM bit depth, or 0 for compressed codecs. */
+[[nodiscard]]
+inline constexpr unsigned codec_bits_per_sample(Codec c) noexcept {
+    switch (c) {
+        case Codec::Pcm8:  return 8u;
+        case Codec::Pcm16: return 16u;
+        case Codec::Pcm24: return 24u;
+        case Codec::Pcm32: return 32u;
+        case Codec::PcmFloat32: return 32u;
+        case Codec::PcmFloat64: return 64u;
+        default: return 0u;
+    }
+}
+
+[[nodiscard]]
+inline const char* codec_name(Codec c) noexcept {
+    switch (c) {
+        case Codec::Hevc: return "hevc";
+        case Codec::Avc: return "avc";
+        case Codec::Vvc: return "vvc";
+        case Codec::Av1: return "av1";
+        case Codec::Vp9: return "vp9";
+        case Codec::Vp8: return "vp8";
+        case Codec::Mpeg1Video: return "mpeg1video";
+        case Codec::Mpeg2Video: return "mpeg2video";
+        case Codec::Mpeg4Visual: return "mpeg4";
+        case Codec::H263: return "h263";
+        case Codec::Theora: return "theora";
+        case Codec::ProRes: return "prores";
+        case Codec::DnvHd: return "dnxhd";
+        case Codec::Vc1: return "vc1";
+        case Codec::Avs2: return "avs2";
+        case Codec::Pcm8: return "pcm_s8";
+        case Codec::Pcm16: return "pcm_s16";
+        case Codec::Pcm24: return "pcm_s24";
+        case Codec::Pcm32: return "pcm_s32";
+        case Codec::PcmFloat32: return "pcm_f32";
+        case Codec::PcmFloat64: return "pcm_f64";
+        case Codec::Aac: return "aac";
+        case Codec::Mp3: return "mp3";
+        case Codec::Opus: return "opus";
+        case Codec::Vorbis: return "vorbis";
+        case Codec::Ac3: return "ac3";
+        case Codec::Ec3: return "eac3";
+        case Codec::Dts: return "dts";
+        case Codec::Flac: return "flac";
+        case Codec::Alac: return "alac";
+        case Codec::Subrip: return "subrip";
+        case Codec::Webvtt: return "webvtt";
+        case Codec::Tx3g: return "tx3g";
+        case Codec::Pgs: return "pgs";
+        case Codec::DvbSub: return "dvb_subtitle";
+        default: return "unknown";
+    }
+}
 
 /*
  * ===========================================================================
@@ -223,6 +327,7 @@ class StateImpl {
             case Codec::Av1:
             case Codec::Vp9:
             case Codec::Vp8:
+            default: /* container-only codecs have no parser state */
                 break;
         }
     }
@@ -260,6 +365,7 @@ class StateImpl {
             case Codec::Av1:
             case Codec::Vp9:
             case Codec::Vp8:
+            default:
                 break;
         }
     }

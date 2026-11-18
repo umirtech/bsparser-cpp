@@ -428,8 +428,9 @@ inline Mp4Bytes make_minimal_codec_config(Codec codec, const std::vector<Sample>
             Mp4Bytes cfg(8u, std::uint8_t{0});
             return box("vpcC", cfg);
         }
+        default:
+            return box("vpcC", Mp4Bytes(8u, std::uint8_t{0}));
     }
-    return box("vpcC", Mp4Bytes(8u, std::uint8_t{0}));
 }
 
 /* VisualSampleEntry with the codec-config box as a direct child. */
