@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 #!/usr/bin/env python3
-"""Compare bsparser's report fields against pre-generated reference files.
+"""Compare bsparser's report fields against committed reference files.
 
 For each input file:
   1. Run bs_cli --json to get bsparser's parsed fields.
-  2. Load the expected results from a reference file (JSON) produced once by
-     `--generate`.
+  2. Load the expected results from the committed JSON reference file.
   3. Compare the parameter-set and slice fields that both expose.
 
 The reference files hold the expected values; the comparison itself never
@@ -25,7 +24,8 @@ import sys
 BS_CLI = os.path.join("build", "bs_cli" + (".exe" if os.name == "nt" else ""))
 MAX_SLICES = 40
 
-# ---------------------------------------------------------------------------
+
+def reference_path(path):
     return os.path.join(
         os.path.dirname(os.path.abspath(path)),
         "reference",
@@ -33,6 +33,7 @@ MAX_SLICES = 40
     )
 
 
+def load_reference(path):
     ref_file = reference_path(path)
     if not os.path.isfile(ref_file):
         return None
@@ -40,6 +41,8 @@ MAX_SLICES = 40
         return json.load(f)
 
 
+# ---------------------------------------------------------------------------
+# bsparser report parsing
 # ---------------------------------------------------------------------------
 
 
