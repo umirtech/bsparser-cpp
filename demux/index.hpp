@@ -1751,6 +1751,8 @@ using ts::detail::read_pid;
 struct TsStream {
     std::uint16_t pid = 0;
     std::uint8_t stream_type = 0;
+    bool is_video = true;
+    AudioCodec audio_codec = AudioCodec::Unknown;
 };
 
 inline std::vector<TsStream> collect_streams(std::span<const std::uint8_t> data) {
@@ -1811,22 +1813,45 @@ inline std::vector<TsStream> collect_streams(std::span<const std::uint8_t> data)
                 const std::uint16_t elementary_pid =
                     static_cast<std::uint16_t>(((payload[p + 1] & 0x1Fu) << 8) | payload[p + 2]);
 
-                if (stream_type == 0x1Bu || stream_type == 0x24u || stream_type == 0x33u ||
-                    stream_type == 0x06u) {
-                    bool exists = false;
-                    for (const auto& s : out) {
-                        if (s.pid == elementary_pid) {
-                            exists = true;
-                            break;
-                        }
-                    }
-                    if (!exists) {
-                        out.push_back({elementary_pid, stream_type});
-                    }
-                }
-
                 const std::uint16_t es_info_length =
                     static_cast<std::uint16_t>(((payload[p + 3] & 0x0Fu) << 8) | payload[p + 4]);
+                TsStream stream;
+                stream.pid = elementary_pid;
+                stream.stream_type = stream_type;
+                if (stream_type == 0x1Bu || stream_type == 0x24u || stream_type == 0x33u) {
+                    stream.is_video = true;
+                } else if (stream_type == 0x0Fu) {
+                    stream.is_video = false;
+                    stream.audio_codec = AudioCodec::Aac;
+                } else if (stream_type == 0x03u || stream_type == 0x04u) {
+                    stream.is_video = false;
+                    stream.audio_codec = AudioCodec::Mp3;
+                } else if (stream_type == 0x81u) {
+                    stream.is_video = false;
+                    stream.audio_codec = AudioCodec::Ac3;
+                } else if (stream_type == 0x06u) {
+                    // Private data: often AC-3/E-AC-3 or AV1; keep as video
+                    // only when a registration descriptor says AV1.  Treated
+                    // as audio otherwise (the common broadcast case).
+                    stream.is_video = false;
+                    stream.audio_codec = AudioCodec::Ac3;
+                } else {
+                    // Ignore other stream types (teletext, subtitles, data).
+                    p += 5 + es_info_length;
+                    continue;
+                }
+
+                bool exists = false;
+                for (const auto& s : out) {
+                    if (s.pid == elementary_pid) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    out.push_back(stream);
+                }
+
                 p += 5 + es_info_length;
             }
         }
@@ -1834,6 +1859,7 @@ inline std::vector<TsStream> collect_streams(std::span<const std::uint8_t> data)
 
     return out;
 }
+
 
 inline bool parse_pes_pts(std::span<const std::uint8_t> payload, std::int64_t& pts) {
     if (payload.size() < 14) {
@@ -1881,31 +1907,43 @@ inline bool build_ts(FileSource& src, IndexBuildResult& out) {
     for (std::size_t s = 0; s < streams.size(); ++s) {
         TrackView v;
         v.id = streams[s].pid;
-        v.is_video = true;
+        v.is_video = streams[s].is_video;
+        v.is_audio = !streams[s].is_video;
         v.timescale = 90000;
         v.mmap_backed = src.mmap_backed();
 
-        switch (streams[s].stream_type) {
-            case 0x1B:
-                v.codec = Codec::Avc;
-                v.framing = NalFramingMode::AnnexB;
-                break;
-            case 0x24:
-                v.codec = Codec::Hevc;
-                v.framing = NalFramingMode::AnnexB;
-                break;
-            case 0x33:
-                v.codec = Codec::Vvc;
-                v.framing = NalFramingMode::AnnexB;
-                break;
-            case 0x06:
-                v.codec = Codec::Av1;
-                v.framing = NalFramingMode::Obu;
-                break;
-            default:
-                v.codec = Codec::Avc;
-                v.framing = NalFramingMode::AnnexB;
-                break;
+        if (v.is_audio) {
+            v.audio_codec = streams[s].audio_codec;
+            v.framing = NalFramingMode::RawFrame;
+            switch (v.audio_codec) {
+                case AudioCodec::Aac: v.codec_name = "mp4a"; break;
+                case AudioCodec::Mp3: v.codec_name = ".mp3"; break;
+                case AudioCodec::Ac3: v.codec_name = "ac-3"; break;
+                default: v.codec_name = "audio"; break;
+            }
+        } else {
+            switch (streams[s].stream_type) {
+                case 0x1B:
+                    v.codec = Codec::Avc;
+                    v.framing = NalFramingMode::AnnexB;
+                    break;
+                case 0x24:
+                    v.codec = Codec::Hevc;
+                    v.framing = NalFramingMode::AnnexB;
+                    break;
+                case 0x33:
+                    v.codec = Codec::Vvc;
+                    v.framing = NalFramingMode::AnnexB;
+                    break;
+                case 0x06:
+                    v.codec = Codec::Av1;
+                    v.framing = NalFramingMode::Obu;
+                    break;
+                default:
+                    v.codec = Codec::Avc;
+                    v.framing = NalFramingMode::AnnexB;
+                    break;
+            }
         }
 
         out.tracks[s] = v;
