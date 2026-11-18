@@ -56,38 +56,71 @@ class DemuxerImpl {
          * never throw into the caller (no exceptions cross this API).
          */
         try {
+            bool ok = false;
             switch (container_) {
                 case Container::Mp4:
-                    return build_mp4(source_, index_);
-
+                    ok = build_mp4(source_, index_);
+                    break;
                 case Container::Mkv:
-                    return build_mkv(source_, index_);
-
+                    ok = build_mkv(source_, index_);
+                    break;
                 case Container::MpegTs:
-                    return build_ts(source_, index_);
-
+                    ok = build_ts(source_, index_);
+                    break;
                 case Container::Flv:
-                    return build_flv(source_, index_);
-
+                    ok = build_flv(source_, index_);
+                    break;
                 case Container::Avi:
-                    return build_avi(source_, index_);
-
+                    ok = build_avi(source_, index_);
+                    break;
                 case Container::Ivf:
-                    return build_ivf(source_, index_);
-
+                    ok = build_ivf(source_, index_);
+                    break;
                 case Container::Ogg:
-                    return build_ogg(source_, index_);
-
+                    ok = build_ogg(source_, index_);
+                    break;
                 case Container::Ps:
-                    return build_ps(source_, index_);
-
+                    ok = build_ps(source_, index_);
+                    break;
                 default:
                     return false;
             }
+            if (ok) {
+                fill_missing_durations();
+            }
+            return ok;
         } catch (...) {
             index_ = IndexBuildResult{};
             container_ = Container::Unknown;
             return false;
+        }
+    }
+
+    /* Some containers carry no per-sample duration (TS/FLV/MKV/IVF/PS).
+     * Derive it from consecutive PTS deltas in the same track so callers
+     * see a meaningful value; the last sample keeps its predecessor's. */
+    void fill_missing_durations() {
+        for (std::size_t t = 0; t < index_.samples.size(); ++t) {
+            auto& samples = index_.samples[t];
+            bool any_missing = false;
+            for (const auto& s : samples) {
+                if (s.duration == 0) {
+                    any_missing = true;
+                    break;
+                }
+            }
+            if (!any_missing || samples.size() < 2) {
+                continue;
+            }
+            for (std::size_t i = 0; i + 1 < samples.size(); ++i) {
+                if (samples[i].duration == 0) {
+                    const std::int64_t d = samples[i + 1].pts - samples[i].pts;
+                    samples[i].duration = d > 0 ? d : 0;
+                }
+            }
+            if (samples.back().duration == 0 && samples.size() >= 2) {
+                samples.back().duration = samples[samples.size() - 2].duration;
+            }
         }
     }
 

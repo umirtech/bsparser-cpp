@@ -1169,6 +1169,7 @@ using mkv::detail::VideoTrack;
 inline constexpr std::uint64_t kInfo = 0x1549A966ull;
 inline constexpr std::uint64_t kTitle = 0x7BA9ull;
 inline constexpr std::uint64_t kDateUTC = 0x4461ull;
+inline constexpr std::uint64_t kTimecodeScale = 0x2AD7B1ull;
 inline constexpr std::uint64_t kTags = 0x1254C367ull;
 inline constexpr std::uint64_t kTag = 0x7373ull;
 inline constexpr std::uint64_t kSimpleTag = 0x67C8ull;
@@ -1234,6 +1235,28 @@ inline void parse_info(std::span<const std::uint8_t> d, ContainerMetadata& out) 
             out.creation_time = static_cast<std::int64_t>(ns / 1000000000ull);
         }
     }
+}
+
+/* Matroska TimecodeScale in nanoseconds (default 1 ms). */
+inline std::uint64_t parse_timecode_scale(std::span<const std::uint8_t> d) {
+    std::size_t p = 0;
+    std::uint64_t id = 0;
+    std::span<const std::uint8_t> payload;
+    while (p < d.size()) {
+        if (!next_ebml(d, p, id, payload)) {
+            break;
+        }
+        if (id == kTimecodeScale) {
+            std::uint64_t value = 0;
+            for (std::size_t i = 0; i < payload.size() && i < 8; ++i) {
+                value = (value << 8) | payload[i];
+            }
+            if (value != 0u && value <= 1000000000ull) {
+                return value;
+            }
+        }
+    }
+    return 1000000u; // default 1 ms
 }
 
 inline void parse_tags(std::span<const std::uint8_t> d, ContainerMetadata& out) {
@@ -1367,6 +1390,7 @@ inline std::vector<std::uint8_t> extract_mkv_param_sets(const VideoTrack& track)
 
 inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
     const auto data = src.data();
+    std::uint64_t timecode_scale_ns = 1000000u; // default 1 ms
 
     if (data.size() < 4 || data[0] != 0x1A || data[1] != 0x45 || data[2] != 0xDF ||
         data[3] != 0xA3) {
@@ -1434,6 +1458,7 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
 
             if (id == mkv_index::kInfo) {
                 mkv_index::parse_info(element, out.metadata);
+                timecode_scale_ns = mkv_index::parse_timecode_scale(element);
             } else if (id == mkv_index::kTags) {
                 mkv_index::parse_tags(element, out.metadata);
             }
@@ -1489,7 +1514,7 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
         v.codec_name = t.codec_id;
         v.width = static_cast<std::uint32_t>(t.width);
         v.height = static_cast<std::uint32_t>(t.height);
-        v.timescale = 1000;
+        v.timescale = static_cast<std::uint32_t>(1000000000ull / timecode_scale_ns);
         v.mmap_backed = src.mmap_backed();
 
         if (t.track_type == 2u) {
