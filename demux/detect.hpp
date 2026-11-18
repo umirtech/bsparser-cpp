@@ -29,7 +29,10 @@ inline Container sniff(std::span<const std::uint8_t> data) {
     }
 
     if (data.size() >= 12 && std::memcmp(data.data(), "RIFF", 4) == 0) {
-        if (std::memcmp(data.data() + 8, "AVI ", 4) == 0) {
+        const bool avi = std::memcmp(data.data() + 8, "AVI ", 4) == 0 ||
+                         (data[8] == 'A' && data[9] == 'V' && data[10] == 'I' &&
+                          (data[11] == 0x19 || data[11] == 0x18));
+        if (avi) {
             return Container::Avi;
         }
         if (std::memcmp(data.data() + 8, "WAVE", 4) == 0) {

@@ -2597,7 +2597,13 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
 
     const auto data = src.data();
 
-    if (data.size() < 12 || !is_fourcc(data, 0, "RIFF") || !is_fourcc(data, 8, "AVI ")) {
+    if (data.size() < 12 || !is_fourcc(data, 0, "RIFF")) {
+        return false;
+    }
+    const bool avi_tag = is_fourcc(data, 8, "AVI ") ||
+                         (data[8] == 'A' && data[9] == 'V' && data[10] == 'I' &&
+                          (data[11] == 0x19 || data[11] == 0x18));
+    if (!avi_tag) {
         return false;
     }
 
@@ -2659,9 +2665,17 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
 
                             if (is_fourcc(data, q, "strf")) {
                                 if (s.is_video && sub.data + 20 <= sub.end) {
-                                    /* BITMAPINFOHEADER: width @+4, height @+8. */
+                                    /* BITMAPINFOHEADER: width @+4, height @+8,
+                                     * biCompression @+16.  Some AVI writers
+                                     * leave the strh fourcc blank; use this. */
                                     s.width = read_u32(data, sub.data + 4);
                                     s.height = read_u32(data, sub.data + 8);
+                                    if (fourcc_is_blank(s.fourcc) && sub.data + 20 <= sub.end) {
+                                        s.fourcc = std::string(
+                                            reinterpret_cast<const char*>(data.data() + sub.data + 16),
+                                            4
+                                        );
+                                    }
                                 } else if (s.is_audio && sub.data + 16 <= sub.end) {
                                     /* WAVEFORMATEX: tag @+0, channels @+2,
                                      * samples/sec @+4, bits/sample @+14. */
