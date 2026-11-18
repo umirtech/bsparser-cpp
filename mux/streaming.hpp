@@ -129,7 +129,7 @@ class MuxerImpl {
                 break;
             }
             case Container::Mkv:
-                segment_data_offset_ = detail::start_mkv_stream(
+                mkv_state_ = detail::start_mkv_stream(
                     sink_, metadata_, tracks_
                 );
                 break;
@@ -265,11 +265,9 @@ class MuxerImpl {
                     p.clear();
                 }
                 detail::append_mkv_stream_sample(
-                    sink_, tracks_[index], static_cast<std::uint32_t>(index), out
+                    sink_, tracks_[index], static_cast<std::uint32_t>(index), out,
+                    mkv_state_
                 );
-                if (out.is_key) {
-                    stream_keyframes_.push_back(out);
-                }
                 break;
             }
             case Container::Ivf:
@@ -344,8 +342,7 @@ class MuxerImpl {
                 break;
             case Container::Mkv:
                 written = detail::finish_mkv_stream(
-                    sink_, final_metadata, final_tracks,
-                    segment_data_offset_, stream_keyframes_
+                    sink_, final_metadata, final_tracks, mkv_state_
                 );
                 break;
             case Container::Ivf:
@@ -396,12 +393,11 @@ class MuxerImpl {
     std::vector<std::vector<SampleRecord>> stream_records_{};
     std::vector<Mp4Bytes> pending_param_sets_{};
     std::vector<ChunkRecord> chunks_{};
-    std::vector<Sample> stream_keyframes_{};
     std::vector<std::vector<std::uint8_t>> pending_mkv_param_{};
     std::uint32_t stream_frame_count_ = 0;
     std::uint64_t stream_data_bytes_ = 0;
     std::uint32_t block_align_ = 0;
-    std::uint64_t segment_data_offset_ = 0;
+    detail::MkvStreamState mkv_state_{};
     std::size_t mdat_header_offset_ = 0;
     std::size_t reserve_offset_ = 0;
     bool stream_started_ = false;

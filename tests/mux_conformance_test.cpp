@@ -9,9 +9,12 @@
  *   - IVF: framerate/timescale timebase
  */
 #include <mux/muxer.hpp>
+#include <demux/demuxer.hpp>
+#include <bsparser.hpp>
 
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -205,6 +208,136 @@ void test_ivf_timebase() {
     (void)std::filesystem::remove(path, ec);
 }
 
+/* Phase 1 regressions. */
+
+void test_mp4_codec_config_honored() {
+    const std::string path = "/tmp/opencode/conf_codec_config.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
+    auto v = m.add_track([] {
+        bs::mux::TrackConfig c; c.id = 1; c.codec = bs::Codec::Avc;
+        c.width = 64; c.height = 64;
+        // Distinctive avcC payload that must survive into stsd.
+        c.codec_config = {1u, 0x64u, 0u, 0x1Fu, 0xFFu, 0xE1u, 0u, 4u,
+                          0x67u, 0x64u, 0u, 0x1Fu, 0u, 1u, 0x68u};
+        return c;
+    }());
+    const std::vector<std::uint8_t> nal{0,0,0,1,0x67,0x64,0,0x1f,0,0,1,0x65,0x88,0x84};
+    for (int i = 0; i < 3; ++i) {
+        v.add_sample(nal, i * 1000, i * 1000, 1000, true, bs::NalFramingMode::AnnexB);
+    }
+    CHECK(m.finalize());
+    const auto d = read_file(path);
+    bool found = false;
+    for (std::size_t i = 0; i + 12 < d.size(); ++i) {
+        if (d[i] == 'a' && d[i+1] == 'v' && d[i+2] == 'c' && d[i+3] == 'C' &&
+            d[i+4] == 1u && d[i+5] == 0x64u && d[i+6] == 0u && d[i+7] == 0x1Fu) {
+            found = true;
+            break;
+        }
+    }
+    CHECK(found);
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_mp4_mdhd_timebase() {
+    const std::string path = "/tmp/opencode/conf_mdhd.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
+    auto v = m.add_track([] {
+        bs::mux::TrackConfig c; c.id = 1; c.codec = bs::Codec::Avc;
+        c.width = 64; c.height = 64; c.timescale = 90000; return c;
+    }());
+    const std::vector<std::uint8_t> nal{0,0,0,1,0x67,0x42,0,0x1e,0,0,1,0x65,0x88,0x84};
+    // 10 samples * 9000 ticks = 90000 ticks = 1 second in the track clock.
+    for (int i = 0; i < 10; ++i) {
+        v.add_sample(nal, i * 9000, i * 9000, 9000, true, bs::NalFramingMode::AnnexB);
+    }
+    CHECK(m.finalize());
+    const auto d = read_file(path);
+    const auto be32 = [&](std::size_t at) {
+        return (static_cast<std::uint32_t>(d[at]) << 24) |
+               (static_cast<std::uint32_t>(d[at+1]) << 16) |
+               (static_cast<std::uint32_t>(d[at+2]) << 8) |
+               static_cast<std::uint32_t>(d[at+3]);
+    };
+    bool checked = false;
+    for (std::size_t i = 0; i + 32 < d.size(); ++i) {
+        if (d[i+4] == 'm' && d[i+5] == 'd' && d[i+6] == 'h' && d[i+7] == 'd') {
+            // FullBox payload: version+flags(4), creation(4), modification(4),
+            // timescale(4), duration(4).
+            CHECK(be32(i + 20) == 90000u); // timescale
+            CHECK(be32(i + 24) == 90000u); // duration in track timescale
+            checked = true;
+            break;
+        }
+    }
+    CHECK(checked);
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_mkv_multi_cluster_timestamps() {
+    const std::string path = "/tmp/opencode/conf_multi.mkv";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
+    auto v = m.add_track([] {
+        bs::mux::TrackConfig c; c.id = 1; c.codec = bs::Codec::Avc;
+        c.width = 64; c.height = 64; return c;
+    }());
+    const std::vector<std::uint8_t> nal{0,0,0,1,0x67,0x42,0,0x1e,0,0,1,0x65,0x88,0x84};
+    // 40 s apart exceeds the int16 relative-timestamp range, so the writer
+    // must open new Clusters instead of clamping every sample to one time.
+    for (int i = 0; i < 3; ++i) {
+        const std::int64_t pts = static_cast<std::int64_t>(i) * 40000;
+        v.add_sample(nal, pts, pts, 40, true, bs::NalFramingMode::AnnexB);
+    }
+    CHECK(m.finalize());
+
+    auto demux = bs::demux::Demuxer::init(path);
+    CHECK(demux.ok());
+    if (demux.ok()) {
+        std::vector<std::int64_t> pts;
+        for (auto& tr : demux.tracks()) {
+            while (tr.hasNext()) {
+                auto s = tr.next();
+                if (!s) break;
+                pts.push_back(s.pts);
+            }
+        }
+        CHECK(pts.size() >= 3u);
+        if (!pts.empty()) {
+            // The demuxer may prepend a parameter-set pseudo-sample at pts 0;
+            // the last three real samples must retain their distinct times.
+            CHECK(pts.back() >= 70000); // not clamped to int16 max (32767)
+            bool has_40000 = false, has_80000 = false;
+            for (const auto p : pts) {
+                if (p == 40000) has_40000 = true;
+                if (p == 80000) has_80000 = true;
+            }
+            CHECK(has_40000);
+            CHECK(has_80000);
+        }
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_struct_report_rejects_wrong_codec() {
+    // A VVC (or moved-from) state must not reach the AVC dispatch path with
+    // a null parameter-set manager.
+    auto state = bs::create_state(bs::Codec::Vvc);
+    bs::StructReport report;
+    bool threw = false;
+    try {
+        (void)bs::parse(*state, {}, bs::NalFramingMode::AnnexB, report);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    CHECK(threw);
+}
+
 }  // namespace
 
 int main() {
@@ -213,6 +346,10 @@ int main() {
     test_mkv_codec_private_and_lacing();
     test_wav_padding_and_extensible();
     test_ivf_timebase();
+    test_mp4_codec_config_honored();
+    test_mp4_mdhd_timebase();
+    test_mkv_multi_cluster_timestamps();
+    test_struct_report_rejects_wrong_codec();
     if (g_failures != 0) {
         std::cerr << g_failures << " failure(s)\n";
         return 1;

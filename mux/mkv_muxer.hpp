@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace bs {
@@ -789,24 +790,67 @@ inline std::vector<std::uint8_t> mkv_make_cues(
  * stays bounded), and the file structure is closed at finish.
  *
  * The Segment carries the 8-byte unknown-size vint, so its size never
- * needs patching.  The single Cluster, however, is written with a fixed
- * 8-byte size slot that is back-patched in finish_mkv_stream() once the
- * number of payload bytes is known.
+ * needs patching.  Each Cluster is written with a fixed 8-byte size slot
+ * that is back-patched when the Cluster is closed.  A new Cluster is
+ * opened whenever a sample's timestamp would fall outside the signed
+ * 16-bit relative-timestamp range of the current Cluster (about +/-32 s),
+ * so long streams no longer clamp all their samples onto one timestamp.
  */
 
-/* Start a streamed file: EBML header, Segment (unknown size), Info and
- * Tracks, followed by the one Cluster's ID + fixed size slot + Timecode.
- * Returns the absolute file offset of the start of the Segment's data
- * (right after the Segment ID and size vint); CueClusterPosition is
- * expressed relative to that base. */
-inline std::uint64_t start_mkv_stream(FileSink& sink,
-                                      const Metadata& metadata,
-                                      const std::vector<TrackConfig>& tracks) {
-    // EBML header.
-    const std::vector<std::uint8_t> header = mkv_make_ebml_header();
-    sink.write(header);
+/* Per-stream state.  Memory stays bounded: one cue point per Cluster, not
+ * per sample. */
+struct MkvStreamState {
+    std::uint64_t segment_data_offset = 0;  // CueClusterPosition base
+    std::uint64_t cluster_timecode = 0;     // current Cluster Timecode, ms
+    std::uint64_t cluster_header_offset = 0;   // absolute offset of Cluster ID
+    std::uint64_t cluster_payload_offset = 0;  // absolute offset of Cluster payload
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> cue_points; // (time, position)
+};
 
-    // Segment ID + 8-byte unknown-size vint: 0x01 FF FF FF FF FF FF FF.
+/* Close the currently open Cluster by patching its size slot. */
+inline void mkv_close_cluster(FileSink& sink, const MkvStreamState& state) {
+    const std::uint64_t cluster_size =
+        static_cast<std::uint64_t>(sink.size()) - state.cluster_payload_offset;
+    std::vector<std::uint8_t> patch;
+    patch.reserve(8u);
+    patch.push_back(0x01u); // 8-byte vint marker
+    mkv_push_uint(patch, cluster_size, 7u);
+    (void)sink.patch(static_cast<std::size_t>(state.cluster_header_offset + 4u), patch);
+}
+
+/* Open a new Cluster at `timecode_ms` and record a seek point for it. */
+inline void mkv_open_cluster(FileSink& sink, MkvStreamState& state,
+                             std::uint64_t timecode_ms) {
+    std::vector<std::uint8_t> cluster_header;
+    mkv_push_id(cluster_header, kMkvCluster);
+    cluster_header.push_back(0x01u);
+    for (unsigned i = 0; i < 7u; ++i) {
+        cluster_header.push_back(0xFFu);
+    }
+    std::vector<std::uint8_t> timecode;
+    mkv_push_min_uint(timecode, timecode_ms);
+    mkv_push_element(cluster_header, kMkvTimecode, timecode);
+
+    state.cluster_header_offset = static_cast<std::uint64_t>(sink.size());
+    state.cluster_payload_offset = state.cluster_header_offset + 4u + 8u;
+    state.cluster_timecode = timecode_ms;
+    sink.write(cluster_header);
+
+    state.cue_points.emplace_back(
+        timecode_ms, state.cluster_header_offset - state.segment_data_offset
+    );
+}
+
+/* Start a streamed file: EBML header, Segment (unknown size), Info, Tracks
+ * and the first Cluster at Timecode 0. */
+inline MkvStreamState start_mkv_stream(FileSink& sink,
+                                       const Metadata& metadata,
+                                       const std::vector<TrackConfig>& tracks) {
+    MkvStreamState state;
+
+    sink.write(mkv_make_ebml_header());
+
+    // Segment ID + 8-byte unknown-size vint.
     std::vector<std::uint8_t> segment_header;
     mkv_push_id(segment_header, kMkvSegment);
     segment_header.push_back(0x01u);
@@ -815,43 +859,39 @@ inline std::uint64_t start_mkv_stream(FileSink& sink,
     }
     sink.write(segment_header);
 
-    // First byte of the Segment's payload -- the CueClusterPosition base.
-    const std::uint64_t segment_data_offset = static_cast<std::uint64_t>(sink.size());
+    state.segment_data_offset = static_cast<std::uint64_t>(sink.size());
 
-    const std::vector<std::uint8_t> info = mkv_make_info(metadata);
-    sink.write(info);
+    sink.write(mkv_make_info(metadata));
     // No samples are available yet, so CodecPrivate can only come from a
     // caller-supplied TrackConfig::codec_config.  H.26x streaming callers
     // should fill it in (avcC / hvcC / vvcC) before starting the stream.
-    const std::vector<std::uint8_t> tracks_element = mkv_make_tracks(tracks);
-    sink.write(tracks_element);
+    sink.write(mkv_make_tracks(tracks));
 
-    // One Cluster: ID + fixed 8-byte size slot (unknown-size placeholder,
-    // patched at finish) + the mandatory Timecode = 0 child.  Using the
-    // 8-byte slot keeps the patch in place regardless of the final length.
-    std::vector<std::uint8_t> cluster_header;
-    mkv_push_id(cluster_header, kMkvCluster);
-    cluster_header.push_back(0x01u);
-    for (unsigned i = 0; i < 7u; ++i) {
-        cluster_header.push_back(0xFFu);
-    }
-    std::vector<std::uint8_t> timecode;
-    timecode.push_back(0u);
-    mkv_push_element(cluster_header, kMkvTimecode, timecode);
-    sink.write(cluster_header);
-
-    return segment_data_offset;
+    mkv_open_cluster(sink, state, 0u);
+    return state;
 }
 
-/* Append one already-framed sample as a SimpleBlock inside the single
- * Cluster. */
+/* Append one already-framed sample as a SimpleBlock, rolling over to a new
+ * Cluster when the relative timestamp would overflow int16. */
 inline void append_mkv_stream_sample(FileSink& sink,
                                      const TrackConfig& track,
                                      std::uint32_t track_index,
-                                     const Sample& sample) {
+                                     const Sample& sample,
+                                     MkvStreamState& state) {
     if (sample.data.empty()) {
         return;
     }
+
+    const std::int64_t pts = static_cast<std::int64_t>(sample.pts);
+    std::int64_t rel = pts - static_cast<std::int64_t>(state.cluster_timecode);
+    if (rel < -32768LL || rel > 32767LL) {
+        mkv_close_cluster(sink, state);
+        mkv_open_cluster(sink, state, static_cast<std::uint64_t>(std::max<std::int64_t>(pts, 0)));
+        rel = pts - static_cast<std::int64_t>(state.cluster_timecode);
+    }
+    const std::int16_t timestamp = static_cast<std::int16_t>(
+        std::clamp<std::int64_t>(rel, -32768LL, 32767LL)
+    );
 
     const std::uint64_t number =
         mkv_track_number(track, static_cast<std::size_t>(track_index));
@@ -860,19 +900,7 @@ inline void append_mkv_stream_sample(FileSink& sink,
 
     // Vint track number, 2-byte signed relative timestamp, flags.
     mkv_push_vint(block, number);
-
-    const std::int64_t rel = sample.pts;  // cluster timecode is 0
-    const std::int64_t lo = static_cast<std::int64_t>(
-        std::numeric_limits<std::int16_t>::min()
-    );
-    const std::int64_t hi = static_cast<std::int64_t>(
-        std::numeric_limits<std::int16_t>::max()
-    );
-    const std::int16_t timestamp = static_cast<std::int16_t>(
-        std::clamp(rel, lo, hi)
-    );
     mkv_push_uint(block, static_cast<std::uint16_t>(timestamp), 2u);
-
     block.push_back(sample.is_key ? 0x80u : 0x00u);
 
     // H.26x frames must reach build_mkv() as Annex-B; other payloads are
@@ -890,39 +918,14 @@ inline void append_mkv_stream_sample(FileSink& sink,
     sink.write(element);
 }
 
-/* Finish a stream: back-patch the Cluster size, append Tags and Cues,
- * then return success.  The Segment uses an unknown-size vint, so it
- * needs no size patch. */
+/* Finish a stream: close the last Cluster, append Tags and Cues, then
+ * return success.  The Segment uses an unknown-size vint, so its size
+ * needs no patch. */
 inline bool finish_mkv_stream(FileSink& sink,
                               const Metadata& metadata,
-                              const std::vector<TrackConfig>& tracks,
-                              std::uint64_t segment_data_offset,
-                              const std::vector<Sample>& keyframe_samples) {
-    // Recompute the sizes of Info + Tracks to locate the Cluster header;
-    // the same metadata/tracks were used by start_mkv_stream().  Use the
-    // same (sample-less) Tracks overload so the size matches exactly.
-    const std::vector<std::uint8_t> info = mkv_make_info(metadata);
-    const std::vector<std::uint8_t> tracks_element = mkv_make_tracks(tracks);
-    const std::uint64_t cluster_header_offset =
-        segment_data_offset + static_cast<std::uint64_t>(info.size())
-        + static_cast<std::uint64_t>(tracks_element.size());
-
-    // Cluster ID is 4 bytes; the 8-byte size slot follows it; the payload
-    // (Timecode + SimpleBlocks) starts after both.
-    const std::size_t size_slot_offset =
-        static_cast<std::size_t>(cluster_header_offset) + 4u;
-    const std::uint64_t cluster_payload_offset = cluster_header_offset + 4u + 8u;
-    const std::uint64_t cluster_size =
-        static_cast<std::uint64_t>(sink.size()) - cluster_payload_offset;
-
-    // Fixed 8-byte vint: marker 0x01 followed by 7 big-endian value bytes.
-    std::vector<std::uint8_t> patch;
-    patch.reserve(8u);
-    patch.push_back(0x01u);
-    mkv_push_uint(patch, cluster_size, 7u);
-    if (!sink.patch(size_slot_offset, patch)) {
-        return false;
-    }
+                              const std::vector<TrackConfig>& /*tracks*/,
+                              const MkvStreamState& state) {
+    mkv_close_cluster(sink, state);
 
     // Tags (segment-level) before the seek index.
     const std::vector<std::uint8_t> tags = mkv_make_tags(metadata);
@@ -930,16 +933,31 @@ inline bool finish_mkv_stream(FileSink& sink,
         sink.write(tags);
     }
 
-    // Cues: CueClusterPosition is relative to the start of Segment data.
-    const std::uint64_t clusters_base_offset =
-        cluster_header_offset - segment_data_offset;
-    const std::vector<std::uint8_t> cues =
-        mkv_make_cues(keyframe_samples, clusters_base_offset);
-    if (!cues.empty()) {
+    // Cues: one point per Cluster.  CueClusterPosition is relative to the
+    // start of the Segment's data.
+    std::vector<std::uint8_t> cues_payload;
+    for (const auto& point : state.cue_points) {
+        std::vector<std::uint8_t> positions;
+        std::vector<std::uint8_t> tmp;
+        mkv_push_min_uint(tmp, 1u); // CueTrack (primary/video track)
+        mkv_push_element(positions, kMkvCueTrack, tmp);
+        tmp.clear();
+        mkv_push_min_uint(tmp, point.second);
+        mkv_push_element(positions, kMkvCueClusterPosition, tmp);
+
+        std::vector<std::uint8_t> cue_point;
+        tmp.clear();
+        mkv_push_min_uint(tmp, point.first);
+        mkv_push_element(cue_point, kMkvCueTime, tmp);
+        mkv_push_element(cue_point, kMkvCueTrackPositions, positions);
+        mkv_push_element(cues_payload, kMkvCuePoint, cue_point);
+    }
+    if (!cues_payload.empty()) {
+        std::vector<std::uint8_t> cues;
+        mkv_push_element(cues, kMkvCues, cues_payload);
         sink.write(cues);
     }
 
-    // The Segment's unknown-size vint needs no back-patch here.
     return true;
 }
 

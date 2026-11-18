@@ -51,68 +51,32 @@ inline constexpr std::uint8_t kDefault8x8Inter[64] = {
 };
 
 /*
- * AVC scaling_list() (7.3.2.1.1.1).
+ * AVC scaling_list() (ISO/IEC 14496-10 7.3.2.1.1.1 / 7.3.2.2).
  *
- * The list is decoded differentially from the previous matrix
- * (or a default matrix), matching the H.264 semantics.
+ * There is NO "use default" flag inside scaling_list().  The caller has
+ * already read seq_scaling_list_present_flag[i] /
+ * pic_scaling_list_present_flag[i]; when it is 0 the default matrix applies
+ * (and nothing is parsed here).  Reading an extra bit here shifted every
+ * subsequent syntax element on high-profile streams.
  */
 inline void parse_scaling_list(
     RbspBitstreamReader& reader,
     std::uint8_t size_of_scaling_list,
-    std::uint8_t matrix_id,
+    std::uint8_t /*matrix_id*/,
     std::uint8_t* list_out
 ) {
-    bool use_default = false;
-
-    if (matrix_id < 6) {
-        const auto& default_matrix = (matrix_id < 3) ? kDefault4x4Intra : kDefault4x4Inter;
-
-        use_default = reader.read_bit();
-
-        if (use_default) {
-            for (unsigned j = 0; j < 16; ++j) {
-                list_out[j] = default_matrix[j];
-            }
-            return;
-        }
-
-    } else {
-        /*
-         * matrix_id 6 (intra 8x8) / 7 (inter 8x8).
-         *
-         * Predicted from the previously parsed 8x8 matrix
-         * when scaling_list_pred_matrix_id_delta != 0.
-         * This parser processes matrices in order, so the
-         * previous 8x8 matrix is the one at index
-         * (matrix_id - 1).
-         */
-        const auto& default_matrix = (matrix_id == 6) ? kDefault8x8Intra : kDefault8x8Inter;
-
-        use_default = reader.read_bit();
-
-        if (use_default) {
-            for (unsigned j = 0; j < 64; ++j) {
-                list_out[j] = default_matrix[j];
-            }
-            return;
-        }
-    }
-
-    /*
-     * Differential coding from nextCoef.
-     */
-    std::int32_t next_coef = 8;
+    std::int32_t last_scale = 8;
+    std::int32_t next_scale = 8;
 
     for (unsigned j = 0; j < size_of_scaling_list; ++j) {
-        std::int32_t delta_scale = 0;
-
-        if (next_coef != 0) {
-            delta_scale = read_se_bounded(reader, "delta_scale", 255);
+        if (next_scale != 0) {
+            const std::int32_t delta_scale = read_se_bounded(reader, "delta_scale", 255);
+            next_scale = (last_scale + delta_scale + 256) % 256;
         }
-
-        next_coef = (next_coef + delta_scale + 256) % 256;
-
-        list_out[j] = static_cast<std::uint8_t>(next_coef);
+        list_out[j] = static_cast<std::uint8_t>(
+            (j == 0 && next_scale == 0) ? last_scale : next_scale
+        );
+        last_scale = list_out[j];
     }
 }
 

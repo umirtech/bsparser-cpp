@@ -782,11 +782,15 @@ inline void build_sample_table(
     if (pt.ctts != data.size()) {
         Box b = box_at(data, pt.ctts);
         if (b.data + 8 <= b.end) {
+            const std::uint8_t version = data[b.data];
             const std::uint32_t count = read_u32(data, b.data + 4);
             std::size_t p = b.data + 8;
             for (std::uint32_t i = 0; i < count && p + 8 <= b.end; ++i) {
                 const std::uint32_t c = read_u32(data, p);
-                const std::int32_t off = static_cast<std::int32_t>(read_u32(data, p + 4));
+                // ISO-BMFF 8.6.6: version 0 = unsigned offset, version 1 = signed.
+                const std::int64_t off = version == 1u
+                    ? static_cast<std::int64_t>(static_cast<std::int32_t>(read_u32(data, p + 4)))
+                    : static_cast<std::int64_t>(read_u32(data, p + 4));
                 p += 8;
                 for (std::uint32_t k = 0; k < c; ++k) {
                     if (ctts_off.size() >= max_timing_entries) {
@@ -1745,15 +1749,17 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
             v.is_video = true;
             v.codec = Codec::Hevc;
             v.framing = NalFramingMode::LengthPrefixed;
-            v.length_size = t.codec_private.size() > 18
-                                ? static_cast<unsigned>(t.codec_private[18] & 3u) + 1u
+            // hvcC: lengthSizeMinusOne is the low 2 bits of byte 21.
+            v.length_size = t.codec_private.size() > 21u
+                                ? static_cast<unsigned>(t.codec_private[21] & 3u) + 1u
                                 : 4u;
         } else if (t.codec_id == "V_VVC") {
             v.is_video = true;
             v.codec = Codec::Vvc;
             v.framing = NalFramingMode::LengthPrefixed;
-            v.length_size = t.codec_private.size() > 14
-                                ? static_cast<unsigned>(t.codec_private[14] & 3u) + 1u
+            // vvcC: byte 1 = reserved(5)|lsm1(2)|ptl_present_flag(1).
+            v.length_size = t.codec_private.size() > 1u
+                                ? static_cast<unsigned>((t.codec_private[1] >> 1) & 3u) + 1u
                                 : 4u;
         } else if (t.codec_id == "V_AV1") {
             v.is_video = true;

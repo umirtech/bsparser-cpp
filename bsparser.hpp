@@ -1051,7 +1051,14 @@ class State {
      */
     [[nodiscard]]
     Codec codec() const noexcept {
-        return impl_->codec();
+        return impl_ ? impl_->codec() : Codec::Unknown;
+    }
+
+    /* False for a moved-from State.  The parse overloads reject invalid
+     * states instead of dereferencing a null parameter-set manager. */
+    [[nodiscard]]
+    bool valid() const noexcept {
+        return impl_ != nullptr;
     }
 
     /*
@@ -1061,7 +1068,9 @@ class State {
      * with (or shadow) those of the new one.
      */
     void clear() noexcept {
-        impl_->clear();
+        if (impl_) {
+            impl_->clear();
+        }
     }
 
     /*
@@ -1311,10 +1320,17 @@ inline std::size_t parse(
     StructReport& report,
     unsigned length_size = 4
 ) {
+    const Codec codec = state.codec();
+    // Without this guard a VVC/AV1/VPx (or moved-from) state reached the
+    // AVC dispatch path with a null avc::ParameterSetManager and crashed.
+    if (!state.valid() || (codec != Codec::Hevc && codec != Codec::Avc)) {
+        throw BsNalParseError("bs::parse: state is not an AVC/HEVC state");
+    }
+
     switch (mode) {
         case NalFramingMode::AnnexB: {
             AnnexBNalIterator framer{data};
-            if (state.codec() == Codec::Hevc) {
+            if (codec == Codec::Hevc) {
                 return detail::dispatch_state_hevc(
                     *state.impl_, framer, BsNalHandlers{}, HevcParsedHandlers{}, &report
                 );
@@ -1326,7 +1342,7 @@ inline std::size_t parse(
 
         case NalFramingMode::LengthPrefixed: {
             LengthPrefixedNalIterator framer{data, length_size};
-            if (state.codec() == Codec::Hevc) {
+            if (codec == Codec::Hevc) {
                 return detail::dispatch_state_hevc(
                     *state.impl_, framer, BsNalHandlers{}, HevcParsedHandlers{}, &report
                 );
@@ -1340,7 +1356,7 @@ inline std::size_t parse(
             break;
     }
 
-    if (state.codec() == Codec::Hevc) {
+    if (codec == Codec::Hevc) {
         throw BsNalParseError("bs::parse: unsupported framing mode");
     }
     throw avc::NalParseError("bs::parse: unsupported framing mode");

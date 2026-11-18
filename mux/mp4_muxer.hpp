@@ -399,16 +399,30 @@ inline Mp4Bytes make_avcc(const std::vector<Sample>& /*samples*/) {
 }
 
 /*
- * hvcC / vvcC: a minimal placeholder configuration.  numOfArrays stays
- * zero so extract_param_sets() yields nothing; the demuxer still indexes
- * every frame.  Byte 18 (hvc1) / byte 14 (vvc1) are set so this demuxer's
- * length-size probe resolves directly to 4-byte NAL lengths.
+ * hvcC / vvcC: minimal placeholder configurations with spec-correct
+ * lengthSizeMinusOne offsets.  numOfArrays stays zero so no phantom
+ * parameter-set samples are synthesized; callers should supply a real
+ * TrackConfig::codec_config for interop.
+ *
+ * HEVC (ISO/IEC 14496-15 8.3.3.1): lengthSizeMinusOne is the low 2 bits
+ * of byte 21, numOfArrays is byte 22 (23-byte record).
+ * VVC  (ISO/IEC 14496-15 11.2.4): byte 1 = reserved(5) | lsm1(2) |
+ * ptl_present_flag(1); with ptl_present_flag = 0 numOfArrays is byte 2.
  */
 inline Mp4Bytes make_minimal_hvc_config(bool is_vvc) {
-    Mp4Bytes cfg(23u, std::uint8_t{0});
-    cfg[0] = 1u; // configurationVersion
-    cfg[is_vvc ? 14u : 18u] = 0x03u; // lengthSizeMinusOne as read by this demuxer
-    return box(is_vvc ? "vvcC" : "hvcC", cfg);
+    Mp4Bytes cfg;
+    if (is_vvc) {
+        cfg.assign(3u, std::uint8_t{0});
+        cfg[0] = 1u;
+        cfg[1] = static_cast<std::uint8_t>(0xF8u | (3u << 1u)); // lsm1=3, ptl=0
+        cfg[2] = 0u; // numOfArrays
+        return box("vvcC", cfg);
+    }
+    cfg.assign(23u, std::uint8_t{0});
+    cfg[0] = 1u;  // configurationVersion
+    cfg[21] = 3u; // lengthSizeMinusOne (low 2 bits) = 3 -> 4-byte NAL lengths
+    cfg[22] = 0u; // numOfArrays
+    return box("hvcC", cfg);
 }
 
 inline Mp4Bytes make_minimal_codec_config(Codec codec, const std::vector<Sample>& samples) {
@@ -605,9 +619,10 @@ inline Mp4Bytes make_ctts(const std::vector<std::int64_t>& offsets) {
     put_zeros(b, 3u);     // flags
     be32(b, static_cast<std::uint32_t>(offsets.size()));
     for (const auto v : offsets) {
-        const std::uint32_t u = static_cast<std::uint32_t>(v);
-        be32(b, u);
+        // ISO-BMFF 8.6.6: sample_count THEN sample_offset.
         be32(b, 1u);      // sample_count per entry
+        const std::uint32_t u = static_cast<std::uint32_t>(v);
+        be32(b, u);       // signed offset (version 1)
     }
     return box("ctts", b);
 }
@@ -779,12 +794,39 @@ inline Mp4Bytes make_stsd(
     return box("stsd", b);
 }
 
-/* Audio-aware stsd.  Video tracks keep the exact make_stsd() path above. */
+/* Audio-aware stsd.  For video tracks, honor a caller-supplied codec_config
+ * (a real avcC/hvcC/vvcC/av1C/vpcC box from the demuxer/encoder) so the file
+ * carries genuine parameter sets instead of an empty placeholder.  Fall back
+ * to the minimal synthesized config only when none was supplied. */
 inline Mp4Bytes make_stsd_for_track(
     const TrackConfig& cfg, const std::vector<Sample>& samples = {}
 ) {
     if (!cfg.is_audio || cfg.is_video) {
-        return make_stsd(cfg.codec, cfg.width, cfg.height, samples);
+        Mp4Bytes b;
+        put_zeros(b, 4u); // version + flags (FullBox)
+        be32(b, 1u); // entry_count
+        Mp4Bytes config;
+        if (cfg.codec_config.empty()) {
+            config = make_minimal_codec_config(cfg.codec, samples);
+        } else {
+            // TrackConfig::codec_config holds a raw decoder-configuration
+            // record (the same bytes Matroska stores in CodecPrivate), so
+            // wrap it in the ISO-BMFF box the sample entry expects.
+            const char* cfg_fourcc = "vpcC";
+            switch (cfg.codec) {
+                case Codec::Avc:  cfg_fourcc = "avcC"; break;
+                case Codec::Hevc: cfg_fourcc = "hvcC"; break;
+                case Codec::Vvc:  cfg_fourcc = "vvcC"; break;
+                case Codec::Av1:  cfg_fourcc = "av1C"; break;
+                default: break;
+            }
+            config = box(cfg_fourcc, cfg.codec_config);
+        }
+        const Mp4Bytes entry = visual_sample_entry(
+            mp4_fourcc(cfg.codec), cfg.width, cfg.height, config
+        );
+        b.insert(b.end(), entry.begin(), entry.end());
+        return box("stsd", b);
     }
 
     Mp4Bytes b;
@@ -922,7 +964,8 @@ inline bool finish_mp4_stream(
     std::vector<std::uint32_t> track_ids(n, 0u);
     std::uint32_t max_track_id = 0u;
     std::uint64_t movie_duration_ms = 0u;
-    std::vector<std::uint32_t> track_duration_ms(n, 0u);
+    std::vector<std::uint32_t> track_duration_ms(n, 0u);  // movie timescale (1000)
+    std::vector<std::uint32_t> track_duration(n, 0u);     // per-track timescale
 
     for (std::size_t i = 0u; i < n; ++i) {
         const TrackConfig& cfg = tracks[i];
@@ -953,6 +996,9 @@ inline bool finish_mp4_stream(
         if (!has_non_key) {
             sync[i].clear();
         }
+        // mdhd.duration is in the track timescale; tkhd/mvhd are in the
+        // movie timescale (1000).  Keep both instead of reusing the ms value.
+        track_duration[i] = static_cast<std::uint32_t>(std::min<std::uint64_t>(total, 0xFFFFFFFFu));
         const std::uint64_t ms = total != 0u ? (total * 1000u + timescales[i] / 2u) / timescales[i] : 0u;
         track_duration_ms[i] = static_cast<std::uint32_t>(std::min<std::uint64_t>(ms, 0xFFFFFFFFu));
         movie_duration_ms = std::max(movie_duration_ms, ms);
@@ -1052,8 +1098,8 @@ inline bool finish_mp4_stream(
                 cp[0] = 1u;
                 be32(cp, static_cast<std::uint32_t>(ctts[i].size()));
                 for (const auto v : ctts[i]) {
-                    be32(cp, static_cast<std::uint32_t>(v));
-                    be32(cp, 1u);
+                    be32(cp, 1u); // sample_count
+                    be32(cp, static_cast<std::uint32_t>(v)); // signed offset
                 }
                 append_box_bytes(stbl, box("ctts", cp));
             }
@@ -1085,7 +1131,7 @@ inline bool finish_mp4_stream(
                           cfg.is_audio && !cfg.is_video, identity, mp4_time(metadata.creation_time))
             );
             Mp4Bytes mdia;
-            append_box_bytes(mdia, make_mdhd(timescales[i], track_duration_ms[i],
+            append_box_bytes(mdia, make_mdhd(timescales[i], track_duration[i],
                                              mp4_time(metadata.creation_time), cfg.language));
             append_box_bytes(mdia, make_hdlr(cfg.is_audio && !cfg.is_video));
             Mp4Bytes minf;
