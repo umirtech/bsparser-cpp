@@ -73,6 +73,7 @@ using mp4::detail::is_fourcc;
 using mp4::detail::read_u32;
 using mp4::detail::read_u64;
 using mp4::detail::VideoEntry;
+using mp4::detail::AudioEntry;
 
 /*
  * -----------------------------------------------------------
@@ -319,6 +320,7 @@ inline std::uint32_t read_mdhd_timescale(std::span<const std::uint8_t> data, Box
 struct ParsedTrack {
     TrackView view;
     VideoEntry entry;
+    AudioEntry audio_entry;
     std::size_t stsz = 0;
     std::size_t stsc = 0;
     std::size_t stco = 0;
@@ -376,6 +378,7 @@ inline void parse_moov_tracks(
                         find_child(data, stbl_box.data, stbl_box.end, "stsd");
                     if (stsd != data.size()) {
                         pt.entry = mp4::detail::parse_stsd(data, stsd);
+                        pt.audio_entry = mp4::detail::parse_stsd_audio(data, stsd);
                     }
                     pt.stsz = find_child(data, stbl_box.data, stbl_box.end, "stsz");
                     pt.stsc = find_child(data, stbl_box.data, stbl_box.end, "stsc");
@@ -416,12 +419,31 @@ inline void parse_moov_tracks(
                 }
             } else if (pt.audio) {
                 pt.view.is_audio = true;
-                pt.view.codec = Codec::Hevc;
-                pt.view.framing = NalFramingMode::AnnexB;
+                pt.view.framing = NalFramingMode::RawFrame;
+                if (pt.audio_entry.found) {
+                    pt.view.audio_codec = pt.audio_entry.codec;
+                    pt.view.codec_name = pt.audio_entry.fourcc;
+                    pt.view.sample_rate = pt.audio_entry.sample_rate;
+                    pt.view.channels = pt.audio_entry.channels;
+                    pt.view.bits_per_sample = pt.audio_entry.bits_per_sample;
+                    if (pt.audio_entry.config_size != 0u &&
+                        pt.audio_entry.config_offset <= data.size() &&
+                        pt.audio_entry.config_size <= data.size() - pt.audio_entry.config_offset) {
+                        pt.view.audio_config.assign(
+                            data.begin() + static_cast<std::ptrdiff_t>(pt.audio_entry.config_offset),
+                            data.begin() + static_cast<std::ptrdiff_t>(
+                                pt.audio_entry.config_offset + pt.audio_entry.config_size)
+                        );
+                    }
+                }
             }
         }
 
-        out.push_back(std::move(pt));
+        // Skip non-media tracks (hint, text metadata, timed metadata, etc.)
+        // that have neither a usable video nor audio sample entry.
+        if (pt.video || pt.audio) {
+            out.push_back(std::move(pt));
+        }
 
         trak = find_child(data, trak_box.end, moov_box.end, "trak");
     }
@@ -900,7 +922,8 @@ inline void build_fragment_samples(
                         }
 
                         for (auto& pt : tracks) {
-                            if (pt.view.id == track_id && pt.view.is_video) {
+                            if (pt.view.id == track_id &&
+                                (pt.view.is_video || pt.view.is_audio)) {
                                 SampleEntry e;
                                 e.offset = static_cast<std::size_t>(offset);
                                 e.size = size;
@@ -1051,6 +1074,10 @@ inline bool build_mp4(FileSource& src, IndexBuildResult& out) {
                 out.samples[i].push_back(e);
             }
 
+            mp4_index::build_sample_table(data, tracks[i], out.samples[i]);
+        } else if (tracks[i].audio) {
+            // Audio samples use the same stsz/stco/stts tables; no parameter
+            // sets are prepended and framing stays RawFrame.
             mp4_index::build_sample_table(data, tracks[i], out.samples[i]);
         }
     }

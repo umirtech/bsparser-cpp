@@ -199,6 +199,86 @@ inline VideoEntry parse_stsd(std::span<const std::uint8_t> d, std::size_t stsd_p
     return e;
 }
 
+struct AudioEntry {
+    bool found = false;
+    std::string fourcc;
+    AudioCodec codec = AudioCodec::Unknown;
+    std::uint32_t sample_rate = 0;
+    std::uint16_t channels = 0;
+    std::uint16_t bits_per_sample = 0;
+    std::size_t config_offset = 0;
+    std::size_t config_size = 0;
+};
+
+/* Parse stsd, locate the first audio sample entry. */
+inline AudioEntry parse_stsd_audio(std::span<const std::uint8_t> d, std::size_t stsd_pos) {
+    Box stsd = box_at(d, stsd_pos);
+    AudioEntry e;
+    if (stsd.data + 8 > stsd.end) {
+        return e;
+    }
+    const std::uint32_t entry_count = read_u32(d, stsd.data + 4);
+    std::size_t p = stsd.data + 8;
+    for (std::uint32_t i = 0; i < entry_count && p + 8 <= stsd.end; ++i) {
+        Box entry = box_at(d, p);
+        if (entry.end <= p) {
+            break;
+        }
+        const std::string type(reinterpret_cast<const char*>(d.data() + p + 4), 4);
+
+        AudioCodec codec = AudioCodec::Unknown;
+        if (type == "mp4a") codec = AudioCodec::Aac;
+        else if (type == "sowt" || type == "twos" || type == "lpcm" || type == "in24" ||
+                 type == "in32" || type == "fl32" || type == "fl64") {
+            codec = AudioCodec::Pcm16;
+        } else if (type == ".mp3") codec = AudioCodec::Mp3;
+        else if (type == "Opus" || type == "opus") codec = AudioCodec::Opus;
+        else if (type == "fLaC") codec = AudioCodec::Flac;
+        else if (type == "ac-3") codec = AudioCodec::Ac3;
+        else if (type == "ec-3") codec = AudioCodec::Ec3;
+        else if (type == "dtsc" || type == "dtse" || type == "dtsl") codec = AudioCodec::Dts;
+
+        if (codec != AudioCodec::Unknown) {
+            e.found = true;
+            e.fourcc = type;
+            e.codec = codec;
+            /*
+             * AudioSampleEntry layout (offsets within the entry):
+             *   0-7   size + format
+             *   8-13  reserved (6)
+             *   14-15 data_reference_index
+             *   16-23 reserved (version/revision/vendor)
+             *   24-25 channelcount
+             *   26-27 samplesize
+             *   28-29 pre_defined
+             *   30-31 reserved
+             *   32-35 samplerate (16.16 fixed point)
+             */
+            if (p + 36 <= entry.end) {
+                e.channels = static_cast<std::uint16_t>(read_u32(d, p + 24) >> 16);
+                const std::uint16_t sample_size =
+                    static_cast<std::uint16_t>(read_u32(d, p + 26) >> 16);
+                e.bits_per_sample = sample_size != 0u ? sample_size
+                                                      : audio_bits_per_sample(codec);
+                const std::uint32_t rate = read_u32(d, p + 32);
+                e.sample_rate = rate >> 16u;
+            }
+            /* Locate codec config (esds for AAC, etc.). */
+            for (std::size_t q = p + 8; q + 8 <= entry.end; ++q) {
+                if (is_fourcc(d, q + 4, "esds")) {
+                    Box cfg = box_at(d, q);
+                    e.config_offset = cfg.data;
+                    e.config_size = cfg.end - cfg.data;
+                    break;
+                }
+            }
+            return e;
+        }
+        p = entry.end;
+    }
+    return e;
+}
+
 }  // namespace detail
 
 /*

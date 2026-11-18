@@ -43,6 +43,29 @@ struct ContainerMetadata {
 enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv, Ogg, Ps };
 
 /*
+ * Audio codec identifiers.  Kept separate from the video-only bs::Codec so
+ * an audio track can be described without abusing a video codec value.
+ */
+enum class AudioCodec : std::uint8_t {
+    Unknown,
+    Pcm8, Pcm16, Pcm24, Pcm32, PcmFloat32, PcmFloat64,
+    Aac, Mp3, Opus, Vorbis, Ac3, Ec3, Dts, Flac, Alac
+};
+
+[[nodiscard]]
+inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
+    switch (codec) {
+        case AudioCodec::Pcm8:  return 8u;
+        case AudioCodec::Pcm16: return 16u;
+        case AudioCodec::Pcm24: return 24u;
+        case AudioCodec::Pcm32: return 32u;
+        case AudioCodec::PcmFloat32: return 32u;
+        case AudioCodec::PcmFloat64: return 64u;
+        default: return 0u; // compressed: no fixed PCM bit depth
+    }
+}
+
+/*
  * -----------------------------------------------------------
  * Zero-copy track / sample views
  * -----------------------------------------------------------
@@ -72,6 +95,16 @@ struct TrackView {
     bool is_video = false;
     bool is_audio = false;
     bool is_subtitle = false;
+
+    /* Audio configuration (meaningful when is_audio is true). */
+    AudioCodec audio_codec = AudioCodec::Unknown;
+    std::uint32_t sample_rate = 0;
+    std::uint16_t channels = 0;
+    std::uint16_t bits_per_sample = 0;
+    std::vector<std::uint8_t> audio_config; /* e.g. AAC AudioSpecificConfig */
+
+    /* Subtitle/text identification (meaningful when is_subtitle is true). */
+    std::string subtitle_codec; /* e.g. "tx3g", "WebVTT", "S_TEXT/UTF8" */
 
     std::size_t sample_count = 0;
     unsigned length_size = 4; /* for LengthPrefixed framing */
