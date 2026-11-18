@@ -4,15 +4,22 @@
 /*
  * WAV muxer tests: verify the RIFF/WAVE header, fmt and data chunks,
  * validation of audio parameters, and extension-based container selection.
+ *
+ * The muxer is streaming-only: output is written to a temporary file path and
+ * read back from disk for inspection.
  */
 #include <mux/muxer.hpp>
 
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -26,6 +33,11 @@ int g_failures = 0;
             ++g_failures;                                                    \
         }                                                                    \
     } while (0)
+
+std::vector<std::uint8_t> read_file(const std::string& p) {
+    std::ifstream f(p, std::ios::binary);
+    return {std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+}
 
 std::uint16_t rd16(const std::uint8_t* p) {
     return static_cast<std::uint16_t>(p[0] | (p[1] << 8u));
@@ -41,7 +53,10 @@ bool tag(std::span<const std::uint8_t> d, std::size_t at, std::string_view t) {
 }
 
 void test_basic() {
-    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Wav);
+    const std::string path = "/tmp/opencode/mux_wav_basic.wav";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
     CHECK(muxer.ok());
 
     bs::mux::TrackConfig cfg;
@@ -58,9 +73,10 @@ void test_basic() {
     track.add_sample(pcm, 0, 0, 0, true, bs::NalFramingMode::RawFrame);
     CHECK(muxer.finalize());
 
-    const auto d = muxer.data();
+    const auto d = read_file(path);
     CHECK(d.size() == 60u); // 44-byte header + 16 bytes of samples
     if (d.size() < 44u) {
+        (void)std::filesystem::remove(path, ec);
         return;
     }
 
@@ -80,6 +96,7 @@ void test_basic() {
     CHECK(tag(d, 36, "data"));
     CHECK(rd32(d.data() + 40) == 16u);
     CHECK(std::memcmp(d.data() + 44, pcm.data(), pcm.size()) == 0);
+    (void)std::filesystem::remove(path, ec);
 }
 
 void test_formats() {
@@ -94,8 +111,13 @@ void test_formats() {
         {bs::mux::AudioCodec::Pcm24, 24u, 3u},
         {bs::mux::AudioCodec::Pcm32, 32u, 4u},
     };
+    int idx = 0;
     for (const auto& c : cases) {
-        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav);
+        const std::string path = "/tmp/opencode/mux_wav_fmt_" +
+                                 std::to_string(idx++) + ".wav";
+        std::error_code ec;
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
         bs::mux::TrackConfig cfg;
         cfg.audio_codec = c.codec;
         cfg.sample_rate = 8000;
@@ -104,52 +126,82 @@ void test_formats() {
         const std::vector<std::uint8_t> pcm(c.align * 2u, 0x11);
         t.add_sample(pcm, 0, 0, 0, true, bs::NalFramingMode::RawFrame);
         CHECK(m.finalize());
-        const auto d = m.data();
+        const auto d = read_file(path);
         CHECK(d.size() >= 44u);
         if (d.size() >= 44u) {
             CHECK(rd16(d.data() + 34) == c.bits);
             CHECK(rd16(d.data() + 32) == c.align);
             CHECK(rd32(d.data() + 4) == 36u + c.align * 2u);
         }
+        (void)std::filesystem::remove(path, ec);
     }
 }
 
 void test_validation() {
+    std::error_code ec;
+    int idx = 0;
+    const auto make_path = [&idx]() {
+        return "/tmp/opencode/mux_wav_val_" + std::to_string(idx++) + ".wav";
+    };
     {
-        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav);
+        const std::string path = make_path();
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
         bs::mux::TrackConfig cfg;
         cfg.sample_rate = 0;
         m.add_track(cfg);
         CHECK(!m.finalize());
+        (void)std::filesystem::remove(path, ec);
     }
     {
-        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav);
+        const std::string path = make_path();
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
         bs::mux::TrackConfig cfg;
         cfg.channels = 0;
         m.add_track(cfg);
         CHECK(!m.finalize());
+        (void)std::filesystem::remove(path, ec);
     }
     {
-        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav);
+        const std::string path = make_path();
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
         bs::mux::TrackConfig cfg;
         cfg.audio_codec = bs::mux::AudioCodec::Pcm16;
         cfg.channels = 2;
         auto t = m.add_track(cfg);
         const std::vector<std::uint8_t> odd{0x01, 0x02, 0x03}; // not a multiple of 4
         t.add_sample(odd, 0, 0, 0, true, bs::NalFramingMode::RawFrame);
-        CHECK(!m.finalize());
+        // The streaming writer rejects a sample that is not a whole number of
+        // frames by dropping it, so the finalized file has an empty data
+        // chunk: the malformed payload must not reach the output.
+        CHECK(m.finalize());
+        const auto d = read_file(path);
+        CHECK(d.size() == 44u);
+        if (d.size() >= 44u) {
+            CHECK(rd32(d.data() + 40) == 0u);
+        }
+        (void)std::filesystem::remove(path, ec);
     }
     {
-        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav);
+        const std::string path = make_path();
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
         CHECK(!m.finalize()); // no tracks
+        (void)std::filesystem::remove(path, ec);
     }
 }
 
 void test_extension_and_conversion() {
-    auto m = bs::mux::Muxer::open("out.wav");
+    const std::string path = "/tmp/opencode/mux_wav_ext.wav";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::open(path);
     CHECK(m.ok());
     CHECK(m.container() == bs::mux::Container::Wav);
     CHECK(bs::mux::to_demux(bs::mux::Container::Wav) == bs::demux::Container::Unknown);
+    (void)std::filesystem::remove(path, ec);
 }
 
 } // namespace

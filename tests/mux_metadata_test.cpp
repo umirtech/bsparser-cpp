@@ -4,16 +4,24 @@
 /*
  * Metadata round-trip test: write file-level and per-track tags through the
  * mux/ layer into MP4 / MKV and read them back through demux::Demuxer.
+ *
+ * The muxer is streaming-only: it writes to a path/fd sink instead of
+ * retaining an in-memory buffer. Each test therefore muxes into a unique
+ * temporary file and reads the bytes back for inspection.
  */
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
 
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -32,6 +40,46 @@ const char* container_name(bs::mux::Container c) noexcept {
     return c == bs::mux::Container::Mp4 ? "mp4" : "mkv";
 }
 
+/* Unique temp path per invocation so tests never collide. */
+std::string temp_path(const std::string& prefix, bs::mux::Container container) {
+    static int counter = 0;
+    const char* ext = "bin";
+    switch (container) {
+        case bs::mux::Container::Mp4:
+            ext = "mp4";
+            break;
+        case bs::mux::Container::Mkv:
+            ext = "mkv";
+            break;
+        case bs::mux::Container::Ivf:
+            ext = "ivf";
+            break;
+        default:
+            break;
+    }
+    return "/tmp/opencode/" + prefix + "_" + std::to_string(counter++) + "." + ext;
+}
+
+/* Remove the temp file on every exit path, including early returns. */
+struct TempFile {
+    std::string path;
+
+    explicit TempFile(std::string p) : path(std::move(p)) {}
+    ~TempFile() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+    TempFile(const TempFile&) = delete;
+    TempFile& operator=(const TempFile&) = delete;
+};
+
+std::vector<std::uint8_t> read_file_bytes(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::vector<std::uint8_t>(
+        std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()
+    );
+}
+
 bs::mux::Metadata make_file_metadata() {
     bs::mux::Metadata m;
     m.title = "Round Trip";
@@ -46,8 +94,10 @@ bs::mux::Metadata make_file_metadata() {
 
 void test_container(bs::mux::Container container) {
     const bs::mux::Metadata file_meta = make_file_metadata();
+    TempFile tmp(temp_path("mux_meta", container));
 
-    auto muxer = bs::mux::Muxer::create(container);
+    auto muxer = bs::mux::Muxer::create(container, tmp.path);
+    CHECK(muxer.ok());
     muxer.set_metadata(file_meta);
 
     bs::mux::TrackConfig cfg;
@@ -72,7 +122,7 @@ void test_container(bs::mux::Container container) {
         return;
     }
 
-    auto demuxer = bs::demux::Demuxer::init(muxer.data());
+    auto demuxer = bs::demux::Demuxer::init(tmp.path);
     CHECK(demuxer.ok());
     if (!demuxer.ok()) {
         return;
@@ -116,13 +166,14 @@ void test_container(bs::mux::Container container) {
 }
 
 void test_empty_metadata() {
-    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4);
+    TempFile tmp(temp_path("mux_meta_empty", bs::mux::Container::Mp4));
+    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4, tmp.path);
     bs::mux::TrackConfig cfg;
     cfg.codec = bs::Codec::Hevc;
     muxer.add_track(cfg);
     CHECK(muxer.finalize());
 
-    auto demuxer = bs::demux::Demuxer::init(muxer.data());
+    auto demuxer = bs::demux::Demuxer::init(tmp.path);
     CHECK(demuxer.ok());
     if (demuxer.ok()) {
         CHECK(demuxer.metadata().title.empty());
@@ -144,7 +195,8 @@ bool contains(std::span<const std::uint8_t> bytes, std::string_view needle) {
 }
 
 void test_auto_encoder_tag(bs::mux::Container container) {
-    auto muxer = bs::mux::Muxer::create(container);
+    TempFile tmp(temp_path("mux_meta_tag", container));
+    auto muxer = bs::mux::Muxer::create(container, tmp.path);
 
     bs::mux::Metadata meta;
     meta.title = "Tagged";
@@ -170,7 +222,8 @@ void test_auto_encoder_tag(bs::mux::Container container) {
     }
 
     CHECK(muxer.finalize());
-    const auto out = muxer.data();
+    const std::vector<std::uint8_t> bytes = read_file_bytes(tmp.path);
+    const std::span<const std::uint8_t> out(bytes);
 
     if (container == bs::mux::Container::Ivf) {
         // IVF has no metadata fields: neither the signature nor a spoof survives.
@@ -184,7 +237,7 @@ void test_auto_encoder_tag(bs::mux::Container container) {
     CHECK(!contains(out, "TRACK-SPOOF"));
 
     // Demuxer is unchanged: it reports whatever the file actually contains.
-    auto demuxer = bs::demux::Demuxer::init(out);
+    auto demuxer = bs::demux::Demuxer::init(tmp.path);
     CHECK(demuxer.ok());
     if (demuxer.ok()) {
         bool found = false;

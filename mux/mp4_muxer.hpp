@@ -28,11 +28,10 @@ namespace detail {
  * Minimal ISO-BMFF (MP4) writer
  * -----------------------------------------------------------
  *
- * Everything is assembled in local byte buffers and emitted in one
- * pass: ftyp, moov, mdat.  The chunk offsets in stco are absolute
- * file offsets, so the moov box is built once with placeholder
- * offsets to learn its size, then rebuilt with the real offsets
- * before anything is handed to the sink.
+ * Files are written in streaming fashion: ftyp and a fixed mdat header
+ * are emitted first, framed samples are appended as they arrive, and a
+ * moov built from the recorded sample/chunk tables is appended (or
+ * patched into a reserved region) at finish time.
  *
  * Only the boxes the demuxer actually reads are emitted; the goal
  * is a faithful round-trip through demux::build_mp4(), not a fully
@@ -744,18 +743,6 @@ inline Mp4Bytes make_stts(const std::vector<std::uint32_t>& durations) {
     return box("stts", b);
 }
 
-inline Mp4Bytes make_stsc(std::size_t sample_count) {
-    Mp4Bytes b;
-    put_zeros(b, 4u); // version + flags (FullBox)
-    be32(b, sample_count == 0u ? 0u : 1u);
-    if (sample_count != 0u) {
-        be32(b, 1u); // first_chunk
-        be32(b, static_cast<std::uint32_t>(sample_count)); // samples_per_chunk
-        be32(b, 1u); // sample_description_index
-    }
-    return box("stsc", b);
-}
-
 inline Mp4Bytes make_stsz(const std::vector<std::uint32_t>& sizes) {
     Mp4Bytes b;
     put_zeros(b, 4u); // version + flags (FullBox)
@@ -765,27 +752,6 @@ inline Mp4Bytes make_stsz(const std::vector<std::uint32_t>& sizes) {
         be32(b, s);
     }
     return box("stsz", b);
-}
-
-inline Mp4Bytes make_stco(std::uint32_t sample_count, std::uint32_t offset) {
-    Mp4Bytes b;
-    put_zeros(b, 4u); // version + flags (FullBox)
-    be32(b, sample_count == 0u ? 0u : 1u);
-    if (sample_count != 0u) {
-        be32(b, offset);
-    }
-    return box("stco", b);
-}
-
-/* co64: same as stco but with 64-bit chunk offsets (FullBox). */
-inline Mp4Bytes make_co64(std::uint32_t sample_count, std::uint64_t offset) {
-    Mp4Bytes b;
-    put_zeros(b, 4u); // version + flags (FullBox)
-    be32(b, sample_count == 0u ? 0u : 1u);
-    if (sample_count != 0u) {
-        be64(b, offset);
-    }
-    return box("co64", b);
 }
 
 /* stss: sync (key) sample table (FullBox). Sample numbers are 1-based. */
@@ -854,28 +820,6 @@ inline Mp4Bytes make_ftyp() {
                : static_cast<std::int64_t>(d);
 }
 
-/* Per-sample durations from consecutive PTS differences. */
-inline std::vector<std::uint32_t> sample_durations(const std::vector<Sample>& samples) {
-    const std::size_t n = samples.size();
-    std::vector<std::uint32_t> out(n, 1000u);
-    if (n == 0u) {
-        return out;
-    }
-
-    for (std::size_t i = 0u; i + 1u < n; ++i) {
-        std::int64_t d = sample_delta(samples[i].pts, samples[i + 1u].pts);
-        if (d <= 0) {
-            d = samples[i].duration > 0 ? samples[i].duration : 1000;
-        }
-        out[i] = clamp_duration(d);
-    }
-
-    std::int64_t last = samples[n - 1u].duration > 0 ? samples[n - 1u].duration
-                                                     : static_cast<std::int64_t>(out[n - 1u]);
-    out[n - 1u] = clamp_duration(last);
-    return out;
-}
-
 [[nodiscard]] inline bool needs_annexb_conversion(
     Codec codec, const Sample& sample, const TrackConfig& config
 ) noexcept {
@@ -894,259 +838,6 @@ inline std::vector<std::uint32_t> sample_durations(const std::vector<Sample>& sa
         return true;
     }
     return sample.framing == NalFramingMode::AnnexB || config.framing == NalFramingMode::AnnexB;
-}
-
-/*
- * Write a progressive MP4 containing the supplied tracks/samples.
- * Returns false when there is neither a video nor an audio track to write.
- *
- * `metadata` carries file-level tags / creation time; each TrackConfig may
- * additionally carry per-track tags in its own `metadata` field.
- */
-inline bool write_mp4(
-    FileSink& sink, const Metadata& metadata,
-    const std::vector<TrackConfig>& tracks,
-    const std::vector<std::vector<Sample>>& samples
-) {
-    if (tracks.empty()) {
-        return false;
-    }
-
-    bool has_video = false;
-    bool has_audio = false;
-    for (const auto& t : tracks) {
-        if (t.is_video) {
-            has_video = true;
-        }
-        if (t.is_audio && !t.is_video) {
-            has_audio = true;
-        }
-    }
-    if (!has_video && !has_audio) {
-        return false;
-    }
-
-    const std::size_t n = tracks.size();
-
-    static const std::vector<Sample> kEmptySamples;
-    std::vector<const std::vector<Sample>*> per_track(n, &kEmptySamples);
-    for (std::size_t i = 0u; i < n; ++i) {
-        if (i < samples.size()) {
-            per_track[i] = &samples[i];
-        }
-    }
-
-    /* 1. Framed sample payloads and their sizes (as stored in mdat). */
-    std::vector<Mp4Bytes> payloads(n);
-    std::vector<std::vector<std::uint32_t>> sizes(n);
-    std::vector<std::vector<std::uint32_t>> durations(n);
-    std::vector<std::uint32_t> timescales(n, 1000u);
-    std::vector<std::uint32_t> track_ids(n, 0u);
-    std::uint32_t max_track_id = 0u;
-
-    for (std::size_t i = 0u; i < n; ++i) {
-        const TrackConfig& cfg = tracks[i];
-        const std::vector<Sample>& ss = *per_track[i];
-
-        timescales[i] = mp4_track_timescale(cfg);
-        track_ids[i] = cfg.id != 0u ? cfg.id : static_cast<std::uint32_t>(i + 1u);
-        max_track_id = std::max(max_track_id, track_ids[i]);
-        durations[i] = sample_durations(ss);
-        sizes[i].reserve(ss.size());
-
-        for (const auto& s : ss) {
-            Mp4Bytes framed = needs_annexb_conversion(cfg.codec, s, cfg)
-                                  ? annexb_to_length_prefixed(s.data)
-                                  : Mp4Bytes(s.data.begin(), s.data.end());
-
-            /* stsz records individual sample sizes as 32-bit values. */
-            if (framed.size() > 0xFFFFFFFFull) {
-                return false;
-            }
-            sizes[i].push_back(static_cast<std::uint32_t>(framed.size()));
-            payloads[i].insert(payloads[i].end(), framed.begin(), framed.end());
-        }
-    }
-
-    /* 1b. mdat sizing. Large payloads use a 64-bit extended box header and
-     * co64 chunk offsets. moov is built twice, so fix the stco/co64 decision
-     * up front from a conservative upper bound on the data offset; that keeps
-     * moov's size identical across both builds even for >4 GiB files. */
-    std::uint64_t mdat_payload_size = 0u;
-    for (const auto& p : payloads) {
-        mdat_payload_size += p.size();
-    }
-    const std::size_t mdat_header_size = box_size_bytes(mdat_payload_size);
-
-    const Mp4Bytes ftyp = make_ftyp();
-
-    const std::uint64_t kMoovUpperBound = 1u << 20; // generous bound on moov's size
-    std::uint64_t offset_upper =
-        static_cast<std::uint64_t>(ftyp.size()) + kMoovUpperBound + mdat_header_size;
-    std::vector<bool> use_co64(n, false);
-    for (std::size_t i = 0u; i < n; ++i) {
-        use_co64[i] = offset_upper > 0xFFFFFFFFull;
-        offset_upper += payloads[i].size();
-    }
-
-    /* 2. Movie duration (movie timescale = 1000). */
-    std::uint64_t movie_duration = 0u;
-    std::vector<std::uint32_t> track_duration_ms(n, 0u);
-    for (std::size_t i = 0u; i < n; ++i) {
-        std::uint64_t total = 0u;
-        for (const std::uint32_t d : durations[i]) {
-            total += d;
-        }
-        const std::uint64_t ms = (total * 1000u + timescales[i] / 2u) / timescales[i];
-        track_duration_ms[i] = static_cast<std::uint32_t>(std::min<std::uint64_t>(ms, 0xFFFFFFFFull));
-        movie_duration = std::max(movie_duration, ms);
-    }
-    const std::uint32_t mvhd_duration =
-        static_cast<std::uint32_t>(std::min<std::uint64_t>(movie_duration, 0xFFFFFFFFull));
-
-    Mp4Bytes identity;
-    be32(identity, 0x00010000u); be32(identity, 0u);          be32(identity, 0u);
-    be32(identity, 0u);          be32(identity, 0x00010000u); be32(identity, 0u);
-    be32(identity, 0u);          be32(identity, 0u);          be32(identity, 0x40000000u);
-
-    /* moov depends on chunk offsets, which depend on moov's own size. */
-    std::vector<std::uint64_t> chunk_offsets(n, 0u);
-
-    const std::uint32_t creation_time = mp4_time(metadata.creation_time);
-
-    auto build_moov = [&]() {
-        Mp4Bytes body = make_mvhd(mvhd_duration, max_track_id + 1u, identity, creation_time);
-
-        for (std::size_t i = 0u; i < n; ++i) {
-            const TrackConfig& cfg = tracks[i];
-            const std::vector<Sample>& ss = *per_track[i];
-            const std::uint32_t sample_count = static_cast<std::uint32_t>(sizes[i].size());
-
-            Mp4Bytes stbl;
-            append_box_bytes(stbl, make_stsd_for_track(cfg, ss));
-            append_box_bytes(stbl, make_stts(durations[i]));
-            // ctts: PTS-DTS offsets (B-frames / reordering).
-            {
-                std::vector<std::int64_t> offsets;
-                offsets.reserve(ss.size());
-                for (const auto& s : ss) {
-                    offsets.push_back(static_cast<std::int64_t>(std::clamp<std::int64_t>(
-                        s.pts - s.dts, -0x80000000LL, 0x7FFFFFFFLL)));
-                }
-                const Mp4Bytes ctts = make_ctts(offsets);
-                if (!ctts.empty()) {
-                    append_box_bytes(stbl, ctts);
-                }
-            }
-            append_box_bytes(stbl, make_stsc(sample_count));
-            append_box_bytes(stbl, make_stsz(sizes[i]));
-
-            /* stss: only when at least one sample is non-key, so all-key
-             * streams keep the compact "no stss means all sync" form. */
-            bool has_non_key = false;
-            std::vector<std::uint32_t> sync;
-            sync.reserve(ss.size());
-            for (std::size_t j = 0u; j < ss.size(); ++j) {
-                if (ss[j].is_key) {
-                    sync.push_back(static_cast<std::uint32_t>(j + 1u));
-                } else {
-                    has_non_key = true;
-                }
-            }
-            if (has_non_key && !sync.empty()) {
-                append_box_bytes(stbl, make_stss(sync));
-            }
-
-            if (use_co64[i]) {
-                append_box_bytes(stbl, make_co64(sample_count, chunk_offsets[i]));
-            } else {
-                append_box_bytes(
-                    stbl, make_stco(sample_count, static_cast<std::uint32_t>(chunk_offsets[i]))
-                );
-            }
-
-            Mp4Bytes minf;
-            if (cfg.is_audio && !cfg.is_video) {
-                append_box_bytes(minf, make_smhd());
-            } else {
-                append_box_bytes(minf, make_vmhd());
-            }
-            append_box_bytes(minf, make_dinf());
-            append_box_bytes(minf, box("stbl", stbl));
-
-            Mp4Bytes mdia;
-            append_box_bytes(
-                mdia, make_mdhd(timescales[i], track_duration_ms[i], creation_time, cfg.language)
-            );
-            append_box_bytes(mdia, make_hdlr(cfg.is_audio && !cfg.is_video));
-            append_box_bytes(mdia, box("minf", minf));
-
-            Mp4Bytes trak;
-            append_box_bytes(
-                trak,
-                make_tkhd(
-                    track_ids[i], track_duration_ms[i], cfg.width, cfg.height,
-                    cfg.is_audio && !cfg.is_video, identity, creation_time
-                )
-            );
-            append_box_bytes(trak, box("mdia", mdia));
-            if (mp4_metadata_has_tags(cfg.metadata)) {
-                append_box_bytes(trak, make_mp4_udta(cfg.metadata));
-            }
-            append_box_bytes(body, box("trak", trak));
-        }
-
-        /* File-level udta goes after all trak boxes.  Always emitted: the
-         * muxer-owned ©too encoder tag must be present even with no user tags. */
-        append_box_bytes(body, make_mp4_udta(metadata, true));
-
-        return box("moov", body);
-    };
-
-    const Mp4Bytes moov_placeholder = build_moov();
-
-    const std::uint64_t mdat_data_offset =
-        static_cast<std::uint64_t>(ftyp.size()) + moov_placeholder.size() + mdat_header_size;
-
-    std::uint64_t running = mdat_data_offset;
-    for (std::size_t i = 0u; i < n; ++i) {
-        chunk_offsets[i] = running;
-        running += payloads[i].size();
-    }
-
-    const Mp4Bytes moov = build_moov();
-
-    /* 3. Emit everything in file order. */
-    emit_box(sink, ftyp);
-    emit_box(sink, moov);
-
-    Mp4Bytes mdat_header;
-    if (mdat_header_size == 16u) {
-        be32(mdat_header, 1u); // extended size marker
-        put4(mdat_header, "mdat");
-        be64(mdat_header, static_cast<std::uint64_t>(16u + mdat_payload_size));
-    } else {
-        be32(mdat_header, static_cast<std::uint32_t>(8u + mdat_payload_size));
-        put4(mdat_header, "mdat");
-    }
-    emit_box(sink, mdat_header);
-
-    for (const auto& p : payloads) {
-        if (!p.empty()) {
-            emit_box(sink, p);
-        }
-    }
-
-    return true;
-}
-
-/* Backward-compatible overload: no metadata. */
-inline bool write_mp4(
-    FileSink& sink, const std::vector<TrackConfig>& tracks,
-    const std::vector<std::vector<Sample>>& samples
-) {
-    static const Metadata kEmptyMetadata;
-    return write_mp4(sink, kEmptyMetadata, tracks, samples);
 }
 
 /* ------------------------------------------------------------------ */

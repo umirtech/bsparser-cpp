@@ -7,14 +7,22 @@
  *   - metadata strings with embedded NULs / invalid UTF-8 are sanitized
  *   - 64-bit ISO-BMFF box headers are selected above the 32-bit threshold
  *   - nothrow framer wrappers return an empty result instead of throwing
+ *
+ * The muxer is streaming-only: output goes to a path sink rather than an
+ * in-memory buffer, so each round trip uses a unique temporary file.
  */
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
 #include <bsparser.hpp>
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -33,23 +41,60 @@ const std::vector<std::uint8_t> kSample{
     0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1E, 0xAA, 0xBB
 };
 
+/* Unique temp path per invocation so tests never collide. */
+std::string temp_path(const std::string& prefix, bs::mux::Container container) {
+    static int counter = 0;
+    const char* ext = "mp4";
+    if (container == bs::mux::Container::Mkv) {
+        ext = "mkv";
+    }
+    return "/tmp/opencode/" + prefix + "_" + std::to_string(counter++) + "." + ext;
+}
+
+/* Remove the temp file on every exit path, including early returns. */
+struct TempFile {
+    std::string path;
+
+    explicit TempFile(std::string p) : path(std::move(p)) {}
+    ~TempFile() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+    TempFile(const TempFile&) = delete;
+    TempFile& operator=(const TempFile&) = delete;
+};
+
+std::vector<std::uint8_t> read_file_bytes(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::vector<std::uint8_t>(
+        std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()
+    );
+}
+
 void test_stss_roundtrip() {
-    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4);
+    TempFile tmp(temp_path("mux_robust_stss", bs::mux::Container::Mp4));
+    auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4, tmp.path);
     bs::mux::TrackConfig cfg;
     cfg.codec = bs::Codec::Avc;
     cfg.width = 64;
     cfg.height = 64;
     auto track = muxer.add_track(cfg);
 
+    // The streaming muxer folds parameter-set-only samples into the next
+    // access unit, so append a VCL NAL to make each sample a real frame.
+    std::vector<std::uint8_t> frame = kSample;
+    frame.insert(frame.end(), {0x00, 0x00, 0x00, 0x01, 0x41, 0x9A, 0x20});
+
     const bool keys[] = {true, false, false, true, false};
     for (std::size_t i = 0; i < 5; ++i) {
-        track.add_sample(kSample, static_cast<std::int64_t>(i) * 1000,
+        track.add_sample(frame, static_cast<std::int64_t>(i) * 1000,
                          static_cast<std::int64_t>(i) * 1000, 1000, keys[i],
                          bs::NalFramingMode::AnnexB);
     }
 
     CHECK(muxer.finalize());
-    auto demuxer = bs::demux::Demuxer::init(muxer.data());
+    const std::vector<std::uint8_t> bytes = read_file_bytes(tmp.path);
+    auto demuxer = bs::demux::Demuxer::init(std::span<const std::uint8_t>(bytes));
     CHECK(demuxer.ok());
     if (!demuxer.ok()) {
         return;
@@ -79,7 +124,8 @@ void test_stss_roundtrip() {
 }
 
 void test_metadata_sanitization(bs::mux::Container container) {
-    auto muxer = bs::mux::Muxer::create(container);
+    TempFile tmp(temp_path("mux_robust_sanitize", container));
+    auto muxer = bs::mux::Muxer::create(container, tmp.path);
 
     bs::mux::Metadata meta;
     // "Ti\0tle" plus an invalid UTF-8 lead byte followed by ASCII.
@@ -98,7 +144,8 @@ void test_metadata_sanitization(bs::mux::Container container) {
     track.add_sample(kSample, 0, 0, 1000, true, bs::NalFramingMode::AnnexB);
 
     CHECK(muxer.finalize());
-    auto demuxer = bs::demux::Demuxer::init(muxer.data());
+    const std::vector<std::uint8_t> bytes = read_file_bytes(tmp.path);
+    auto demuxer = bs::demux::Demuxer::init(std::span<const std::uint8_t>(bytes));
     CHECK(demuxer.ok());
     if (!demuxer.ok()) {
         return;

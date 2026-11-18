@@ -102,22 +102,23 @@ must stay alive until then.
 ```cpp
 #include <mux/muxer.hpp>
 
-auto muxer = bs::mux::Muxer::create(bs::mux::Container::Mp4);  // or .open("out.mp4")
+auto muxer = bs::mux::Muxer::open("out.mp4");  // or create(Mp4, path)
 bs::mux::TrackConfig cfg;
 cfg.codec = bs::Codec::Avc;
 cfg.width = 1920; cfg.height = 1080;
 auto track = muxer.add_track(cfg);
 track.add_sample(sample.data, sample.pts, sample.dts, sample.duration, sample.is_key, sample.framing);
 muxer.finalize();
-auto bytes = muxer.data();  // feed to Demuxer::init(bytes)
+auto demuxer = bs::demux::Demuxer::init("out.mp4");  // verify the output
 ```
 
-There are three sink destinations: an in-memory buffer via `create(container)`,
-a file path via `create(container, path)` or `open(path)` (container inferred
-from the file extension), and a file descriptor via `create(container, fd)`.
-OS writes are deferred — for path and fd sinks `open()` only records the
-destination, and bytes reach the handle when `finalize()` flushes the buffered
-sink.
+Muxing is streaming-only: output goes to a file path via
+`create(container, path)` or `open(path)` (container inferred from the file
+extension), or to a file descriptor via `create(container, fd)`. Samples are
+written as `add_sample()` is called, so payloads only need to live until that
+call returns. Output reaches the OS through mapped pages (or a bounded
+write-through buffer); `finalize()` patches headers and truncates the file to
+its exact size.
 
 H.26x samples are converted between Annex-B and 4-byte length-prefixed NAL
 framing as each container requires. `avcC` / `hvcC` / `vvcC` currently carry

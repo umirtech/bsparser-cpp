@@ -256,28 +256,29 @@ plus `Unknown`, with `to_demux()` / `from_demux()` converters so output can be
 fed straight back through `Demuxer::init()`), `TrackConfig` (write-side mirror
 of `demux::TrackView`: codec, framing, dimensions, timescale, flags), `Sample`
 (mirror of `demux::SampleView`: a borrowed span plus pts/dts/duration/key and
-framing metadata) and `FileSink` (buffered write-side mirror of
-`demux::FileSource`, with in-memory / path / fd destinations).
+framing metadata) and `FileSink` (streaming write-side mirror of
+`demux::FileSource`, with path / fd destinations).
+
+Muxing is streaming-only: every output goes to a path or fd and samples are
+written as they are added, so there is no whole-file in-memory path.
 
 The implementation follows the demuxer's handle pattern: `detail::MuxerImpl`
-owns the sink, track configs and per-track sample buckets; a lightweight,
+owns the sink, track configs and per-track sample records; a lightweight,
 copyable `Track` handle owns no payload and only references the impl by index;
-and the `Muxer` facade offers static `create(container[, path | fd])` /
+and the `Muxer` facade offers static `create(container, path | fd)` /
 `open(path | fd, ...)` factories mirroring `Demuxer::init()` / `open()`, plus
-`add_track()` and `finalize()`. `add_sample()` borrows the caller's span; it is
-not copied until `finalize()` serializes it, so each payload must stay alive
-until that call.
+`add_track()` and `finalize()`. `add_sample()` writes the payload immediately,
+so it need only stay alive for the duration of that call.
 
-Each container has a small writer in `bs::mux::detail`: `write_mp4`,
-`write_mkv` and `write_ivf`. All three build the container in a local byte
-buffer and emit it in one pass through the buffered `FileSink`, which defers
-the OS write until `finalize()` flushes it. MP4 emits `ftyp` / `moov` / `mdat`;
-because `stco` chunk offsets depend on the size of `moov` itself, `moov` is
-built twice — once with placeholder offsets to learn its size, then with the
-real offsets. MKV writes an EBML `Segment` with the 8-byte unknown-size vint,
-so it needs no back-patch. IVF patches the frame count into the 32-byte `DKIF`
-header — the frame block is assembled first so the count is accurate — then
-writes the header before the frames.
+Each container has a streaming writer in `bs::mux::detail`:
+`start_*` / `append_*` / `finish_*_stream`. The header is emitted once,
+samples are appended as `add_sample()` is called, and `finalize()` patches the
+file's size fields and appends trailing boxes. MP4 writes `ftyp`, a placeholder
+`mdat` header, samples, then `moov` built from the recorded sample/chunk tables;
+`stco`/`co64` offsets are patched in place for the fast-start layout. MKV uses
+an EBML `Segment` with an 8-byte unknown-size vint and a patched Cluster size;
+IVF patches the frame count into the `DKIF` header; WAV patches the RIFF/data
+sizes.
 
 ### Metadata symmetry
 

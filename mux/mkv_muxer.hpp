@@ -40,12 +40,11 @@ namespace detail {
  * H.26x samples are emitted as Annex-B: demuxer-produced samples from
  * MP4 arrive length-prefixed, so each NAL is re-prefixed with a
  * 00 00 00 01 start code.  For conformance, an H.26x TrackEntry carries
- * CodecPrivate: either the caller-supplied avcC/hvcC/vvcC, or (for the
- * one-shot writer) one derived from the first keyframe's parameter sets.
- * Note that build_mkv() turns avcC parameter sets into a leading
- * synthetic sample; that is expected for a conforming record.  The
- * streaming writer cannot see future samples, so its callers should
- * supply TrackConfig::codec_config for H.26x tracks.
+ * CodecPrivate from the caller-supplied avcC/hvcC/vvcC.  Note that
+ * build_mkv() turns avcC parameter sets into a leading synthetic sample;
+ * that is expected for a conforming record.  The writer cannot see future
+ * samples, so its callers should supply TrackConfig::codec_config for
+ * H.26x tracks.
  */
 
 /* EBML IDs used by the writer. */
@@ -358,32 +357,6 @@ inline std::vector<std::uint8_t> mkv_make_avcc(std::span<const std::uint8_t> ann
     return cfg;
 }
 
-/* True when an Annex-B sample contains only AVC parameter sets (SPS/PPS).
- * Used to avoid emitting an in-band copy when the same sets already live
- * in CodecPrivate -- otherwise the demuxer prepends a duplicate phantom
- * parameter-set sample and the sample count drifts on every remux. */
-[[nodiscard]]
-inline bool mkv_is_avc_param_set_only(const TrackConfig& track, const Sample& sample) {
-    if (track.codec != Codec::Avc || (track.is_audio && !track.is_video)) {
-        return false;
-    }
-    const std::vector<std::uint8_t> annexb = mkv_to_annex_b(sample.data, track.length_size);
-    const auto nals = mkv_split_annexb(annexb);
-    if (nals.empty()) {
-        return false;
-    }
-    for (const auto nal : nals) {
-        if (nal.empty()) {
-            continue;
-        }
-        const unsigned type = static_cast<unsigned>(nal[0]) & 0x1Fu;
-        if (type != 7u && type != 8u) { // SPS / PPS
-            return false;
-        }
-    }
-    return true;
-}
-
 /* Minimal hvcC / vvcC placeholder: byte 18 (HEVC) / byte 14 (VVC) carries
  * lengthSizeMinusOne = 3 so the demuxer's length-size probe resolves to
  * 4-byte NAL lengths. */
@@ -579,10 +552,9 @@ inline std::vector<std::uint8_t> mkv_make_tags(const Metadata& metadata) {
 /*
  * Build the Tracks element with one TrackEntry per track (video or audio).
  *
- * When `samples` is provided, an H.26x video track with no caller-supplied
- * codec_config gets a CodecPrivate derived from its first keyframe.  The
- * streaming writer calls the single-argument overload (empty samples) and
- * therefore only emits a caller-supplied codec_config.
+ * Derivation from samples is supported by the two-argument overload; the
+ * single-argument overload used by the streaming writer passes no samples
+ * and therefore emits only a caller-supplied codec_config.
  */
 [[nodiscard]]
 inline std::vector<std::uint8_t> mkv_make_tracks(
@@ -596,7 +568,7 @@ inline std::vector<std::uint8_t> mkv_make_tracks(
         const std::uint64_t number = mkv_track_number(track, i);
 
         // Prefer the caller's config; otherwise derive one when samples are
-        // available (the one-shot writer) and this is an H.26x video track.
+        // available and this is an H.26x video track.
         std::vector<std::uint8_t> codec_private = track.codec_config;
         if (codec_private.empty() && !samples.empty() && i < samples.size()) {
             codec_private = mkv_derive_codec_config(track, samples[i]);
@@ -733,74 +705,6 @@ inline std::vector<std::uint8_t> mkv_make_tracks(const std::vector<TrackConfig>&
     return mkv_make_tracks(tracks, kNoSamples);
 }
 
-/* Build a Cluster holding one SimpleBlock per (non-empty) sample.  When
- * `omit_param_sets[i]` is set, an in-band AVC parameter-set-only sample is
- * dropped because the same SPS/PPS already reside in that track's
- * CodecPrivate (the demuxer would otherwise synthesise a duplicate). */
-[[nodiscard]]
-inline std::vector<std::uint8_t> mkv_make_cluster(
-    const std::vector<TrackConfig>& tracks,
-    const std::vector<std::vector<Sample>>& samples,
-    const std::vector<bool>& omit_param_sets = {}
-) {
-    std::vector<std::uint8_t> cluster;
-
-    std::vector<std::uint8_t> tmp;
-    tmp.push_back(0u);  // cluster timecode = 0
-    mkv_push_element(cluster, kMkvTimecode, tmp);
-
-    for (std::size_t i = 0; i < tracks.size() && i < samples.size(); ++i) {
-        const TrackConfig& track = tracks[i];
-        const std::uint64_t number = mkv_track_number(track, i);
-        const bool skip_params = !omit_param_sets.empty() && i < omit_param_sets.size()
-                              && omit_param_sets[i];
-
-        for (const Sample& sample : samples[i]) {
-            if (sample.data.empty()) {
-                continue;
-            }
-            if (skip_params && mkv_is_avc_param_set_only(track, sample)) {
-                continue;
-            }
-
-            std::vector<std::uint8_t> block;
-
-            // Vint track number, 2-byte signed relative timestamp, flags.
-            mkv_push_vint(block, number);
-
-            const std::int64_t rel = sample.pts;  // cluster timecode is 0
-            const std::int64_t lo = static_cast<std::int64_t>(
-                std::numeric_limits<std::int16_t>::min()
-            );
-            const std::int64_t hi = static_cast<std::int64_t>(
-                std::numeric_limits<std::int16_t>::max()
-            );
-            const std::int16_t timestamp = static_cast<std::int16_t>(
-                std::clamp(rel, lo, hi)
-            );
-            mkv_push_uint(block, static_cast<std::uint16_t>(timestamp), 2u);
-
-            block.push_back(sample.is_key ? 0x80u : 0x00u);
-
-            // H.26x frames must reach build_mkv() as Annex-B; audio payloads
-            // (whose Codec field is often left at its default) are copied raw.
-            if (mkv_track_uses_annex_b(track)) {
-                const std::vector<std::uint8_t> annex_b =
-                    mkv_to_annex_b(sample.data, track.length_size);
-                block.insert(block.end(), annex_b.begin(), annex_b.end());
-            } else {
-                block.insert(block.end(), sample.data.begin(), sample.data.end());
-            }
-
-            mkv_push_element(cluster, kMkvSimpleBlock, block);
-        }
-    }
-
-    std::vector<std::uint8_t> element;
-    mkv_push_element(element, kMkvCluster, cluster);
-    return element;
-}
-
 /*
  * Build the Segment-level Cues element (seek index).
  *
@@ -813,7 +717,8 @@ inline std::vector<std::uint8_t> mkv_make_cluster(
  *
  * CueTime is sample.pts; TimecodeScale is 1 ms, so the value is in ms.
  * CueTrack is hard-coded to 1 (the primary/video track).  Empty samples
- * are skipped to stay in sync with mkv_make_cluster(), which drops them.
+ * are skipped to stay in sync with the streaming sample appender, which
+ * drops them.
  * Returns an empty buffer when there is no keyframe, so the caller can
  * simply omit Cues in that case.
  */
@@ -855,97 +760,6 @@ inline std::vector<std::uint8_t> mkv_make_cues(
     return element;
 }
 
-/*
- * Write a Matroska file that round-trips through demux::build_mkv().
- * Returns false for an empty track list or when no track uses a codec
- * the MKV container supports.
- *
- * `metadata` carries file-level tags / creation time; each TrackConfig may
- * additionally carry per-track language / title in its own `metadata`.
- */
-inline bool write_mkv(FileSink& sink,
-                      const Metadata& metadata,
-                      const std::vector<TrackConfig>& tracks,
-                      const std::vector<std::vector<Sample>>& samples) {
-    if (tracks.empty()) {
-        return false;
-    }
-
-    bool any_supported = false;
-    for (const TrackConfig& track : tracks) {
-        if (container_supports_codec(Container::Mkv, track.codec)) {
-            any_supported = true;
-            break;
-        }
-    }
-    if (!any_supported) {
-        return false;
-    }
-
-    // When CodecPrivate was derived with in-band SPS/PPS, drop the matching
-    // parameter-set-only sample from the Cluster so the demuxer's synthetic
-    // copy does not inflate the sample count.
-    std::vector<bool> omit_param_sets(tracks.size(), false);
-    for (std::size_t i = 0; i < tracks.size() && i < samples.size(); ++i) {
-        if (tracks[i].codec_config.empty() && tracks[i].codec == Codec::Avc &&
-            !mkv_derive_codec_config(tracks[i], samples[i]).empty()) {
-            omit_param_sets[i] = true;
-        }
-    }
-
-    std::vector<std::uint8_t> segment;
-    const std::vector<std::uint8_t> info = mkv_make_info(metadata);
-    const std::vector<std::uint8_t> tracks_element = mkv_make_tracks(tracks, samples);
-    const std::vector<std::uint8_t> cluster = mkv_make_cluster(tracks, samples, omit_param_sets);
-
-    segment.insert(segment.end(), info.begin(), info.end());
-    segment.insert(segment.end(), tracks_element.begin(), tracks_element.end());
-    const std::vector<std::uint8_t> tags = mkv_make_tags(metadata);
-    if (!tags.empty()) {
-        segment.insert(segment.end(), tags.begin(), tags.end());
-    }
-    // The Cluster begins at `segment`'s current size, measured from the start
-    // of the Segment data -- the offset base used by CueClusterPosition.
-    const std::uint64_t clusters_base_offset =
-        static_cast<std::uint64_t>(segment.size());
-    segment.insert(segment.end(), cluster.begin(), cluster.end());
-
-    // Seek index: append Cues after the Cluster. The Segment carries an
-    // unknown size, so growing its payload needs no header back-patch.
-    // No keyframe -> no Cues element at all.
-    if (!samples.empty()) {
-        const std::vector<std::uint8_t> cues =
-            mkv_make_cues(samples.front(), clusters_base_offset);
-        if (!cues.empty()) {
-            segment.insert(segment.end(), cues.begin(), cues.end());
-        }
-    }
-
-    std::vector<std::uint8_t> file;
-    const std::vector<std::uint8_t> header = mkv_make_ebml_header();
-    file.insert(file.end(), header.begin(), header.end());
-
-    // Segment with the 8-byte unknown-size vint: 0x01 FF FF FF FF FF FF FF.
-    mkv_push_id(file, kMkvSegment);
-    file.push_back(0x01u);
-    for (unsigned i = 0; i < 7u; ++i) {
-        file.push_back(0xFFu);
-    }
-    file.insert(file.end(), segment.begin(), segment.end());
-
-    sink.write(file);
-
-    return true;
-}
-
-/* Backward-compatible overload: no metadata. */
-inline bool write_mkv(FileSink& sink,
-                      const std::vector<TrackConfig>& tracks,
-                      const std::vector<std::vector<Sample>>& samples) {
-    static const Metadata kEmptyMetadata;
-    return write_mkv(sink, kEmptyMetadata, tracks, samples);
-}
-
 /* ------------------------------------------------------------------ */
 /* Streaming MKV writer                                                */
 /* ------------------------------------------------------------------ */
@@ -970,7 +784,7 @@ inline bool write_mkv(FileSink& sink,
 inline std::uint64_t start_mkv_stream(FileSink& sink,
                                       const Metadata& metadata,
                                       const std::vector<TrackConfig>& tracks) {
-    // EBML header (identical to write_mkv).
+    // EBML header.
     const std::vector<std::uint8_t> header = mkv_make_ebml_header();
     sink.write(header);
 
@@ -1012,7 +826,7 @@ inline std::uint64_t start_mkv_stream(FileSink& sink,
 }
 
 /* Append one already-framed sample as a SimpleBlock inside the single
- * Cluster.  The block layout matches mkv_make_cluster() exactly. */
+ * Cluster. */
 inline void append_mkv_stream_sample(FileSink& sink,
                                      const TrackConfig& track,
                                      std::uint32_t track_index,
@@ -1044,7 +858,7 @@ inline void append_mkv_stream_sample(FileSink& sink,
     block.push_back(sample.is_key ? 0x80u : 0x00u);
 
     // H.26x frames must reach build_mkv() as Annex-B; other payloads are
-    // copied raw (see mkv_make_cluster()).
+    // copied raw.
     if (mkv_track_uses_annex_b(track)) {
         const std::vector<std::uint8_t> annex_b =
             mkv_to_annex_b(sample.data, track.length_size);

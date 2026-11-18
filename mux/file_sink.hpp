@@ -33,11 +33,7 @@ namespace mux {
  * File sink
  * -----------------------------------------------------------
  *
- * Write-side mirror of demux::FileSource.  Three backends:
- *
- *   Memory    open_buffer(); bytes accumulate in a vector and data()
- *             exposes the result.  Used by the whole-file writers and
- *             by callers that want the output in memory.
+ * Write-side mirror of demux::FileSource.  Streaming backends only:
  *
  *   Mapped    path/fd where the OS can map a writable file.  write()
  *             memcpy()s straight into shared pages; the kernel handles
@@ -55,7 +51,7 @@ namespace mux {
  * streaming writes begin at add_sample() time rather than at finalize().
  */
 class FileSink {
-    enum class Backend : std::uint8_t { None, Memory, Buffered, Mapped };
+    enum class Backend : std::uint8_t { None, Buffered, Mapped };
 
    public:
     static constexpr std::size_t kDefaultChunk = 4u << 20; // 4 MiB
@@ -152,22 +148,12 @@ class FileSink {
         return true;
     }
 
-    bool open_buffer() {
-        close();
-        backend_ = Backend::Memory;
-        return true;
-    }
-
-    /* Append bytes.  In streaming backends the bytes reach the OS here. */
+    /* Append bytes.  The bytes reach the OS here. */
     void write(std::span<const std::uint8_t> bytes) {
         if (bytes.empty()) {
             return;
         }
         switch (backend_) {
-            case Backend::Memory:
-                buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
-                total_ = buffer_.size();
-                break;
             case Backend::Mapped:
                 ensure_capacity(bytes.size());
                 if (map_ != nullptr && map_offset_ + bytes.size() <= map_size_) {
@@ -196,12 +182,6 @@ class FileSink {
             return true;
         }
         switch (backend_) {
-            case Backend::Memory:
-                if (offset > buffer_.size() || bytes.size() > buffer_.size() - offset) {
-                    return false;
-                }
-                std::memcpy(buffer_.data() + offset, bytes.data(), bytes.size());
-                return true;
             case Backend::Mapped:
                 if (offset > map_size_ || bytes.size() > map_size_ - offset) {
                     return false;
@@ -274,11 +254,8 @@ class FileSink {
         return total_;
     }
 
-    /* Valid for Memory while open, and for Mapped until finish(). */
+    /* A read-only view of the mapped output, valid until finish(). */
     [[nodiscard]] std::span<const std::uint8_t> data() const noexcept {
-        if (backend_ == Backend::Memory) {
-            return {buffer_.data(), buffer_.size()};
-        }
         if (backend_ == Backend::Mapped && map_ != nullptr) {
             return {map_, map_offset_};
         }

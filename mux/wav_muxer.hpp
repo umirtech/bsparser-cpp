@@ -83,13 +83,6 @@ inline std::size_t wav_data_size_offset(unsigned channels) noexcept {
     return 24u + wav_fmt_body_bytes(channels); // 40 classic, 64 extensible
 }
 
-[[nodiscard]]
-inline std::uint64_t wav_riff_size(std::size_t fmt_body_bytes,
-                                   std::uint64_t data_bytes) noexcept {
-    return 20u + static_cast<std::uint64_t>(fmt_body_bytes) +
-           wav_padded_size(data_bytes);
-}
-
 /* Build the complete "fmt " chunk (8-byte header + body). */
 [[nodiscard]]
 inline std::vector<std::uint8_t> make_wav_fmt(
@@ -128,79 +121,6 @@ inline std::vector<std::uint8_t> make_wav_fmt(
         fmt.insert(fmt.end(), kPcmSubFormat, kPcmSubFormat + 16u);
     }
     return fmt;
-}
-
-[[nodiscard]]
-inline bool write_wav(
-    FileSink& sink, const std::vector<TrackConfig>& tracks,
-    const std::vector<std::vector<Sample>>& samples
-) {
-    if (tracks.empty() || samples.empty()) {
-        return false;
-    }
-
-    const TrackConfig& cfg = tracks.front();
-    if (cfg.sample_rate == 0u || cfg.channels == 0u) {
-        return false;
-    }
-
-    const unsigned bits = audio_bits_per_sample(cfg.audio_codec);
-    if (!wav_valid_bits(bits)) {
-        return false;
-    }
-
-    const std::uint32_t block_align =
-        static_cast<std::uint32_t>(cfg.channels) * (bits / 8u);
-    const std::uint64_t byte_rate =
-        static_cast<std::uint64_t>(cfg.sample_rate) * block_align;
-    if (byte_rate > std::numeric_limits<std::uint32_t>::max()) {
-        return false;
-    }
-
-    // Concatenate sample payloads first so the data chunk size is known.
-    std::vector<std::uint8_t> data;
-    for (const auto& s : samples.front()) {
-        if (s.data.empty()) {
-            continue;
-        }
-        if (block_align != 0u && s.data.size() % block_align != 0u) {
-            return false;
-        }
-        data.insert(data.end(), s.data.begin(), s.data.end());
-    }
-    if (data.empty() || data.size() > std::numeric_limits<std::uint32_t>::max()) {
-        return false;
-    }
-
-    const std::size_t body = wav_fmt_body_bytes(cfg.channels);
-    const std::uint64_t riff = wav_riff_size(body, data.size());
-    if (riff > std::numeric_limits<std::uint32_t>::max()) {
-        return false;
-    }
-
-    std::vector<std::uint8_t> out;
-    out.reserve(static_cast<std::size_t>(
-        12u + 8u + body + 8u + wav_padded_size(data.size())
-    ));
-
-    out.insert(out.end(), {'R', 'I', 'F', 'F'});
-    wav_push_u32(out, static_cast<std::uint32_t>(riff));
-    out.insert(out.end(), {'W', 'A', 'V', 'E'});
-
-    const std::vector<std::uint8_t> fmt = make_wav_fmt(
-        cfg, bits, block_align, static_cast<std::uint32_t>(byte_rate)
-    );
-    out.insert(out.end(), fmt.begin(), fmt.end());
-
-    out.insert(out.end(), {'d', 'a', 't', 'a'});
-    wav_push_u32(out, static_cast<std::uint32_t>(data.size())); // raw, unpadded
-    out.insert(out.end(), data.begin(), data.end());
-    if (wav_pad_bytes(data.size()) != 0u) {
-        out.push_back(0u); // word-align the data chunk; not in its size
-    }
-
-    sink.write(out);
-    return sink.ok();
 }
 
 /* ------------------------------------------------------------------ */
