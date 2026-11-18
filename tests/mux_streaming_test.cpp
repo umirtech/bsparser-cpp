@@ -298,6 +298,105 @@ void test_interleaved_av_from_corpus() {
     (void)std::filesystem::remove(path, ec);
 }
 
+void test_other_containers_streaming() {
+    {   // MKV (video)
+        const std::string path = "/tmp/opencode/mux_stream_other.mkv";
+        std::error_code ec;
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 4096);
+        CHECK(m.ok());
+        auto t = m.add_track(avc_cfg(1));
+        for (int i = 0; i < 10; ++i) {
+            t.add_sample(kAvcNal, i * 100, i * 100, 100, i % 3 == 0,
+                         bs::NalFramingMode::AnnexB);
+        }
+        CHECK(m.finalize());
+        auto d = bs::demux::Demuxer::init(path);
+        CHECK(d.ok());
+        if (d.ok()) {
+            auto ts = d.tracks();
+            CHECK(ts.size() == 1);
+            if (!ts.empty()) {
+                CHECK(ts[0].codec == bs::Codec::Avc);
+                CHECK(ts[0].sampleCount() == 10);
+            }
+        }
+        (void)std::filesystem::remove(path, ec);
+    }
+    {   // IVF (VP9)
+        const std::string path = "/tmp/opencode/mux_stream_other.ivf";
+        std::error_code ec;
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Ivf, path, 4096);
+        CHECK(m.ok());
+        auto t = m.add_track([]{
+            bs::mux::TrackConfig c;
+            c.codec = bs::Codec::Vp9; c.width = 192; c.height = 108;
+            return c;
+        }());
+        for (int i = 0; i < 10; ++i) {
+            const std::vector<std::uint8_t> f{0x82, 0x49, 0x83, 0x42, 0x00};
+            t.add_sample(f, i, i, 1, true, bs::NalFramingMode::RawFrame);
+        }
+        CHECK(m.finalize());
+        auto d = bs::demux::Demuxer::init(path);
+        CHECK(d.ok());
+        if (d.ok()) {
+            auto ts = d.tracks();
+            CHECK(ts.size() == 1);
+            if (!ts.empty()) {
+                CHECK(ts[0].codec == bs::Codec::Vp9);
+                CHECK(ts[0].sampleCount() == 10);
+            }
+        }
+        // Frame count in the 32-byte header (offset 24, little-endian).
+        std::ifstream in(path, std::ios::binary);
+        std::vector<char> h(28);
+        in.read(h.data(), static_cast<std::streamsize>(h.size()));
+        const std::uint32_t count = static_cast<unsigned char>(h[24]) |
+                                    (static_cast<std::uint32_t>(static_cast<unsigned char>(h[25])) << 8) |
+                                    (static_cast<std::uint32_t>(static_cast<unsigned char>(h[26])) << 16);
+        CHECK(count == 10u);
+        (void)std::filesystem::remove(path, ec);
+    }
+    {   // WAV (PCM) — demuxer has no WAV reader, verify header bytes only.
+        const std::string path = "/tmp/opencode/mux_stream_other.wav";
+        std::error_code ec;
+        (void)std::filesystem::remove(path, ec);
+        auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
+        CHECK(m.ok());
+        auto t = m.add_track([]{
+            bs::mux::TrackConfig c;
+            c.is_audio = true; c.is_video = false;
+            c.audio_codec = bs::mux::AudioCodec::Pcm16;
+            c.sample_rate = 8000; c.channels = 1;
+            return c;
+        }());
+        for (int i = 0; i < 10; ++i) {
+            const std::vector<std::uint8_t> pcm{0x01, 0x02, 0x03, 0x04};
+            t.add_sample(pcm, i * 4, i * 4, 4, true, bs::NalFramingMode::RawFrame);
+        }
+        CHECK(m.finalize());
+        std::ifstream in(path, std::ios::binary);
+        std::vector<char> h(44);
+        in.read(h.data(), static_cast<std::streamsize>(h.size()));
+        const std::string s(h.data(), h.size());
+        CHECK(s.find("RIFF") != std::string::npos);
+        CHECK(s.find("WAVE") != std::string::npos);
+        CHECK(s.find("fmt ") != std::string::npos);
+        CHECK(s.find("data") != std::string::npos);
+        // RIFF size (offset 4) = 36 + 40 = 76; data size (offset 40) = 40.
+        const auto le32 = [&](std::size_t at) {
+            return static_cast<std::uint32_t>(static_cast<unsigned char>(h[at])) |
+                   (static_cast<std::uint32_t>(static_cast<unsigned char>(h[at + 1])) << 8) |
+                   (static_cast<std::uint32_t>(static_cast<unsigned char>(h[at + 2])) << 16);
+        };
+        CHECK(le32(40) == 40u);
+        CHECK(le32(4) == 76u);
+        (void)std::filesystem::remove(path, ec);
+    }
+}
+
 void test_remux_from_corpus() {
     auto demuxer = bs::demux::Demuxer::init(
         std::string("tests/fuzz/corpus/h264.mp4"));
@@ -351,6 +450,7 @@ int main() {
     test_fast_start_and_callbacks();
     test_audio_track();
     test_interleaved_av_from_corpus();
+    test_other_containers_streaming();
     test_remux_from_corpus();
 
     if (g_failures != 0) {

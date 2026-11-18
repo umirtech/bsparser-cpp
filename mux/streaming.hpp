@@ -120,12 +120,35 @@ class MuxerImpl {
         if (!sink_.streaming() || stream_started_) {
             return false;
         }
-        if (container_ != Container::Mp4) {
-            return false; // streaming writer implemented for MP4 first
+        switch (container_) {
+            case Container::Mp4: {
+                stream_records_.assign(tracks_.size(), {});
+                const std::size_t reserve = options_.fast_start ? 1u << 20 : 0u;
+                mdat_header_offset_ = detail::start_mp4_stream(
+                    sink_, reserve, reserve_offset_
+                );
+                break;
+            }
+            case Container::Mkv:
+                segment_data_offset_ = detail::start_mkv_stream(
+                    sink_, metadata_, tracks_
+                );
+                break;
+            case Container::Ivf:
+                if (tracks_.empty()) {
+                    return false;
+                }
+                detail::start_ivf_stream(sink_, tracks_.front());
+                break;
+            case Container::Wav:
+                if (tracks_.empty() ||
+                    !detail::start_wav_stream(sink_, tracks_.front(), block_align_)) {
+                    return false;
+                }
+                break;
+            default:
+                return false;
         }
-        stream_records_.assign(tracks_.size(), {});
-        const std::size_t reserve = options_.fast_start ? 1u << 20 : 0u;
-        mdat_header_offset_ = detail::start_mp4_stream(sink_, reserve, reserve_offset_);
         stream_started_ = true;
         return true;
     }
@@ -148,58 +171,112 @@ class MuxerImpl {
             sample.framing = tracks_[index].framing;
         }
 
-        if (sink_.streaming() && container_ == Container::Mp4 && !stream_started_) {
+        if (sink_.streaming() && !stream_started_) {
             start_stream();
         }
 
         if (stream_started_) {
-            if (index >= stream_records_.size() || sample.data.empty()) {
+            if (sample.data.empty()) {
                 return;
             }
-            Mp4Bytes framed = detail::frame_mp4_sample(
-                tracks_[index].codec, sample, tracks_[index]
-            );
-            /* A leading parameter-set pseudo-sample from the demuxer is not
-             * an access unit: fold it into the next real sample. */
-            if (detail::is_param_set_only_sample(tracks_[index].codec, sample.data)) {
-                if (pending_param_sets_.size() <= index) {
-                    pending_param_sets_.resize(index + 1u);
+            switch (container_) {
+                case Container::Mp4: {
+                    if (index >= stream_records_.size()) {
+                        return;
+                    }
+                    Mp4Bytes framed = detail::frame_mp4_sample(
+                        tracks_[index].codec, sample, tracks_[index]
+                    );
+                    /* A leading parameter-set pseudo-sample from the demuxer
+                     * is not an access unit: fold it into the next sample. */
+                    if (detail::is_param_set_only_sample(
+                            tracks_[index].codec, sample.data)) {
+                        if (pending_param_sets_.size() <= index) {
+                            pending_param_sets_.resize(index + 1u);
+                        }
+                        auto& pending = pending_param_sets_[index];
+                        pending.insert(pending.end(), framed.begin(), framed.end());
+                        return;
+                    }
+                    if (index < pending_param_sets_.size() &&
+                        !pending_param_sets_[index].empty()) {
+                        auto& pending = pending_param_sets_[index];
+                        framed.insert(framed.begin(), pending.begin(), pending.end());
+                        pending.clear();
+                    }
+                    if (framed.size() > 0xFFFFFFFFull) {
+                        return;
+                    }
+                    SampleRecord rec;
+                    rec.offset = sink_.size();
+                    rec.size = framed.size();
+                    rec.pts = sample.pts;
+                    rec.dts = sample.dts;
+                    rec.duration = sample.duration;
+                    rec.is_key = sample.is_key;
+                    sink_.write(framed);
+                    stream_records_[index].push_back(rec);
+                    if (chunks_.empty() || chunks_.back().track != index) {
+                        ChunkRecord c;
+                        c.track = index;
+                        c.first_sample = stream_records_[index].size() - 1u;
+                        c.sample_count = 1u;
+                        c.offset = rec.offset;
+                        chunks_.push_back(c);
+                    } else {
+                        ++chunks_.back().sample_count;
+                    }
+                    break;
                 }
-                auto& pending = pending_param_sets_[index];
-                pending.insert(pending.end(), framed.begin(), framed.end());
-                return;
+                case Container::Mkv: {
+                    /* Fold a leading parameter-set pseudo-sample into the
+                     * next real sample.  Normalise both to length-prefixed
+                     * NALs so mkv_to_annex_b() can convert the merged data. */
+                    Sample out = sample;
+                    if (detail::is_param_set_only_sample(
+                            tracks_[index].codec, sample.data)) {
+                        if (pending_mkv_param_.size() <= index) {
+                            pending_mkv_param_.resize(index + 1u);
+                        }
+                        const Mp4Bytes framed = detail::frame_mp4_sample(
+                            tracks_[index].codec, sample, tracks_[index]
+                        );
+                        auto& p = pending_mkv_param_[index];
+                        p.insert(p.end(), framed.begin(), framed.end());
+                        return;
+                    }
+                    if (index < pending_mkv_param_.size() &&
+                        !pending_mkv_param_[index].empty()) {
+                        const Mp4Bytes framed = detail::frame_mp4_sample(
+                            tracks_[index].codec, sample, tracks_[index]
+                        );
+                        auto& p = pending_mkv_param_[index];
+                        p.insert(p.end(), framed.begin(), framed.end());
+                        out.data = p;
+                        p.clear();
+                    }
+                    detail::append_mkv_stream_sample(
+                        sink_, tracks_[index], static_cast<std::uint32_t>(index), out
+                    );
+                    if (out.is_key) {
+                        stream_keyframes_.push_back(out);
+                    }
+                    break;
+                }
+                case Container::Ivf:
+                    detail::append_ivf_stream_sample(sink_, sample);
+                    ++stream_frame_count_;
+                    break;
+                case Container::Wav:
+                    if (!detail::append_wav_stream_sample(sink_, sample, block_align_)) {
+                        return;
+                    }
+                    stream_data_bytes_ += sample.data.size();
+                    break;
+                default:
+                    return;
             }
-            if (index < pending_param_sets_.size() && !pending_param_sets_[index].empty()) {
-                auto& pending = pending_param_sets_[index];
-                framed.insert(framed.begin(), pending.begin(), pending.end());
-                pending.clear();
-            }
-            if (framed.size() > 0xFFFFFFFFull) {
-                return;
-            }
-            SampleRecord rec;
-            rec.offset = sink_.size();
-            rec.size = framed.size();
-            rec.pts = sample.pts;
-            rec.dts = sample.dts;
-            rec.duration = sample.duration;
-            rec.is_key = sample.is_key;
-            sink_.write(framed);
             report_progress();
-            stream_records_[index].push_back(rec);
-
-            /* Caller-driven interleaving: a new chunk starts whenever the
-             * active track changes; consecutive same-track samples group. */
-            if (chunks_.empty() || chunks_.back().track != index) {
-                ChunkRecord c;
-                c.track = index;
-                c.first_sample = stream_records_[index].size() - 1u;
-                c.sample_count = 1u;
-                c.offset = rec.offset;
-                chunks_.push_back(c);
-            } else {
-                ++chunks_.back().sample_count;
-            }
             return;
         }
 
@@ -248,13 +325,31 @@ class MuxerImpl {
 
         bool written = false;
         if (stream_started_) {
-            written = detail::finish_mp4_stream(
-                sink_, mdat_header_offset_, final_metadata,
-                final_tracks, stream_records_, chunks_,
-                options_.fast_start ? 1u << 20 : 0u, reserve_offset_
-            );
-        } else if (sink_.streaming() && container_ == Container::Mp4) {
-            // Start late if no samples were added through add_sample().
+            switch (container_) {
+                case Container::Mp4:
+                    written = detail::finish_mp4_stream(
+                        sink_, mdat_header_offset_, final_metadata,
+                        final_tracks, stream_records_, chunks_,
+                        options_.fast_start ? 1u << 20 : 0u, reserve_offset_
+                    );
+                    break;
+                case Container::Mkv:
+                    written = detail::finish_mkv_stream(
+                        sink_, final_metadata, final_tracks,
+                        segment_data_offset_, stream_keyframes_
+                    );
+                    break;
+                case Container::Ivf:
+                    written = detail::finish_ivf_stream(sink_, stream_frame_count_);
+                    break;
+                case Container::Wav:
+                    written = detail::finish_wav_stream(sink_, stream_data_bytes_);
+                    break;
+                default:
+                    return false;
+            }
+        } else if (sink_.streaming()) {
+            // Streaming sink with no samples added: nothing valid to write.
             written = false;
         } else {
             switch (container_) {
@@ -318,6 +413,12 @@ class MuxerImpl {
     std::vector<std::vector<SampleRecord>> stream_records_{};
     std::vector<Mp4Bytes> pending_param_sets_{};
     std::vector<ChunkRecord> chunks_{};
+    std::vector<Sample> stream_keyframes_{};
+    std::vector<std::vector<std::uint8_t>> pending_mkv_param_{};
+    std::uint32_t stream_frame_count_ = 0;
+    std::uint64_t stream_data_bytes_ = 0;
+    std::uint32_t block_align_ = 0;
+    std::uint64_t segment_data_offset_ = 0;
     std::size_t mdat_header_offset_ = 0;
     std::size_t reserve_offset_ = 0;
     bool stream_started_ = false;
