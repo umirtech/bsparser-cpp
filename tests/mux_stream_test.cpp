@@ -112,8 +112,9 @@ void test_path_sink() {
     CHECK(track.valid());
     track.add_sample(kVp9Frame, 0);
 
-    // open() records the destination only; the file appears at flush().
-    CHECK(!std::filesystem::exists(path));
+    // Path sinks stream through OS-backed pages from open(): the file is
+    // created immediately and finalized to its exact size.
+    CHECK(std::filesystem::exists(path));
     CHECK(muxer.finalize());
     CHECK(std::filesystem::exists(path));
 

@@ -35,16 +35,47 @@ class MuxerImpl {
         return true;
     }
 
-    bool open_path(Container container, const std::string& path) {
-        if (!sink_.open(path)) {
+    void set_options(const MuxerOptions& options) {
+        options_ = options;
+    }
+
+    [[nodiscard]]
+    const MuxerOptions& options() const noexcept {
+        return options_;
+    }
+
+    void report_progress() {
+        if (options_.on_progress != nullptr) {
+            options_.on_progress(
+                options_.ctx,
+                static_cast<std::uint64_t>(sink_.size()),
+                static_cast<std::uint64_t>(options_.expected_size)
+            );
+        }
+    }
+
+    void report_error(const char* message) {
+        if (options_.on_error != nullptr) {
+            options_.on_error(options_.ctx, message);
+        }
+    }
+
+    bool open_path(Container container, const std::string& path,
+                   std::size_t expected_size = 0, bool try_mmap = true) {
+        const std::size_t size = expected_size != 0u ? expected_size : options_.expected_size;
+        const bool mmap = try_mmap && options_.try_mmap;
+        if (!sink_.open(path, size, mmap)) {
             return false;
         }
         container_ = container;
         return true;
     }
 
-    bool open_fd(Container container, int fd, bool close_on_destroy = false) {
-        if (!sink_.open_fd(fd, close_on_destroy)) {
+    bool open_fd(Container container, int fd, bool close_on_destroy = false,
+                 std::size_t expected_size = 0, bool try_mmap = true) {
+        const std::size_t size = expected_size != 0u ? expected_size : options_.expected_size;
+        const bool mmap = try_mmap && options_.try_mmap;
+        if (!sink_.open_fd(fd, close_on_destroy, size, mmap)) {
             return false;
         }
         container_ = container;
@@ -84,7 +115,23 @@ class MuxerImpl {
         return index < tracks_.size();
     }
 
-    /* Queue one sample.  The payload span is only borrowed. */
+    /* Start streaming output (path/fd sinks only). */
+    bool start_stream() {
+        if (!sink_.streaming() || stream_started_) {
+            return false;
+        }
+        if (container_ != Container::Mp4) {
+            return false; // streaming writer implemented for MP4 first
+        }
+        stream_records_.assign(tracks_.size(), {});
+        const std::size_t reserve = options_.fast_start ? 1u << 20 : 0u;
+        mdat_header_offset_ = detail::start_mp4_stream(sink_, reserve, reserve_offset_);
+        stream_started_ = true;
+        return true;
+    }
+
+    /* Queue one sample.  In streaming mode the payload is framed and
+     * written immediately; only a tiny record is retained. */
     void add_sample(std::size_t index, Sample sample) {
         if (finalized_ || index >= samples_.size()) {
             return;
@@ -99,6 +146,46 @@ class MuxerImpl {
         }
         if (sample.framing == NalFramingMode::AnnexB && is_h26x(tracks_[index].codec)) {
             sample.framing = tracks_[index].framing;
+        }
+
+        if (sink_.streaming() && container_ == Container::Mp4 && !stream_started_) {
+            start_stream();
+        }
+
+        if (stream_started_) {
+            if (index >= stream_records_.size() || sample.data.empty()) {
+                return;
+            }
+            const Mp4Bytes framed = detail::frame_mp4_sample(
+                tracks_[index].codec, sample, tracks_[index]
+            );
+            if (framed.size() > 0xFFFFFFFFull) {
+                return;
+            }
+            SampleRecord rec;
+            rec.offset = sink_.size();
+            rec.size = framed.size();
+            rec.pts = sample.pts;
+            rec.dts = sample.dts;
+            rec.duration = sample.duration;
+            rec.is_key = sample.is_key;
+            sink_.write(framed);
+            report_progress();
+            stream_records_[index].push_back(rec);
+
+            /* Caller-driven interleaving: a new chunk starts whenever the
+             * active track changes; consecutive same-track samples group. */
+            if (chunks_.empty() || chunks_.back().track != index) {
+                ChunkRecord c;
+                c.track = index;
+                c.first_sample = stream_records_[index].size() - 1u;
+                c.sample_count = 1u;
+                c.offset = rec.offset;
+                chunks_.push_back(c);
+            } else {
+                ++chunks_.back().sample_count;
+            }
+            return;
         }
 
         samples_[index].push_back(sample);
@@ -145,7 +232,17 @@ class MuxerImpl {
         }
 
         bool written = false;
-        switch (container_) {
+        if (stream_started_) {
+            written = detail::finish_mp4_stream(
+                sink_, mdat_header_offset_, final_metadata,
+                final_tracks, stream_records_, chunks_,
+                options_.fast_start ? 1u << 20 : 0u, reserve_offset_
+            );
+        } else if (sink_.streaming() && container_ == Container::Mp4) {
+            // Start late if no samples were added through add_sample().
+            written = false;
+        } else {
+            switch (container_) {
             case Container::Mp4:
                 written = write_mp4(sink_, final_metadata, final_tracks, samples_);
                 break;
@@ -160,12 +257,15 @@ class MuxerImpl {
                 break;
             default:
                 return false;
+            }
         }
 
-        if (!written || !sink_.flush()) {
+        if (!written || !sink_.flush() || !sink_.finish()) {
+            report_error("mux finalize failed");
             return false;
         }
 
+        report_progress();
         finalized_ = true;
         return true;
     }
@@ -200,7 +300,13 @@ class MuxerImpl {
     Container container_ = Container::Unknown;
     std::vector<TrackConfig> tracks_{};
     std::vector<std::vector<Sample>> samples_{};
+    std::vector<std::vector<SampleRecord>> stream_records_{};
+    std::vector<ChunkRecord> chunks_{};
+    std::size_t mdat_header_offset_ = 0;
+    std::size_t reserve_offset_ = 0;
+    bool stream_started_ = false;
     Metadata metadata_{};
+    MuxerOptions options_{};
     bool finalized_ = false;
 };
 
@@ -295,6 +401,20 @@ class Muxer {
    public:
     Muxer() = default;
 
+    /* Apply muxer options (expected size, callbacks, fast-start, backend). */
+    Muxer& with_options(const MuxerOptions& options) {
+        if (impl_) {
+            impl_->set_options(options);
+        }
+        return *this;
+    }
+
+    [[nodiscard]]
+    const MuxerOptions& options() const noexcept {
+        static const MuxerOptions empty{};
+        return impl_ ? impl_->options() : empty;
+    }
+
     /* In-memory destination; result is available through data() after finalize(). */
     [[nodiscard]]
     static Muxer create(Container container) {
@@ -305,10 +425,11 @@ class Muxer {
     }
 
     [[nodiscard]]
-    static Muxer create(Container container, const std::string& path) {
+    static Muxer create(Container container, const std::string& path,
+                        std::size_t expected_size = 0, bool try_mmap = true) {
         Muxer m;
         m.impl_ = std::make_shared<detail::MuxerImpl>();
-        m.impl_->open_path(container, path);
+        m.impl_->open_path(container, path, expected_size, try_mmap);
         return m;
     }
 

@@ -29,7 +29,18 @@ namespace mux {
 enum class Container : std::uint8_t { Unknown, Mp4, Mkv, Ivf, Wav };
 
 /* PCM integer encodings supported by the WAV writer. */
-enum class AudioCodec : std::uint8_t { Pcm8, Pcm16, Pcm24, Pcm32 };
+enum class AudioCodec : std::uint8_t { Pcm8, Pcm16, Pcm24, Pcm32, Aac };
+
+/* Optional progress / error reporting for a mux session. */
+struct MuxerOptions {
+    std::size_t expected_size = 0;
+    std::size_t initial_map_size = 0;       // 0 -> FileSink::kDefaultChunk
+    bool fast_start = false;               // reserve/patch moov at the front
+    bool try_mmap = true;                  // false -> force buffered fallback
+    void* ctx = nullptr;
+    void (*on_progress)(void*, std::uint64_t /*bytes*/, std::uint64_t /*total*/) = nullptr;
+    void (*on_error)(void*, const char* /*message*/) = nullptr;
+};
 
 [[nodiscard]]
 inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
@@ -42,6 +53,8 @@ inline constexpr unsigned audio_bits_per_sample(AudioCodec codec) noexcept {
             return 24u;
         case AudioCodec::Pcm32:
             return 32u;
+        case AudioCodec::Aac:
+            return 16u;
     }
     return 16u;
 }
@@ -159,6 +172,7 @@ struct TrackConfig {
     AudioCodec audio_codec = AudioCodec::Pcm16;
     std::uint32_t sample_rate = 44100;
     std::uint16_t channels = 2;
+    std::vector<std::uint8_t> audio_config; /* AAC AudioSpecificConfig */
 
     Metadata metadata; /* per-track tags (MP4 trak/udta, MKV TrackEntry) */
 };
@@ -296,6 +310,29 @@ inline std::string sanitize_metadata_string(std::string_view input) {
 
     return out;
 }
+
+/*
+ * Write-side mirror of demux::SampleEntry: where one already-written sample
+ * lives in the output and how it is timed.  No payload is stored — just a
+ * file offset and metadata — so a multi-gigabyte stream keeps only a tiny
+ * index in memory (the same design as the demuxer).
+ */
+struct SampleRecord {
+    std::size_t offset = 0;
+    std::size_t size = 0;
+    std::int64_t pts = 0;
+    std::int64_t dts = 0;
+    std::int64_t duration = 0;
+    bool is_key = true;
+};
+
+/* A run of consecutive same-track samples written to one chunk. */
+struct ChunkRecord {
+    std::size_t track = 0;
+    std::size_t first_sample = 0;
+    std::size_t sample_count = 0;
+    std::uint64_t offset = 0;
+};
 
 struct Sample {
     std::uint32_t track_id = 0;

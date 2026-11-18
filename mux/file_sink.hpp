@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include <string>
 #include <utility>
@@ -16,8 +17,10 @@
 #include <fcntl.h>
 #include <io.h>
 #include <sys/stat.h>
+#include <windows.h>
 #else
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -30,21 +33,33 @@ namespace mux {
  * File sink
  * -----------------------------------------------------------
  *
- * Write-side mirror of demux::FileSource.  Bytes handed to write()
- * accumulate in an internal buffer.  An in-memory sink needs only
- * open_buffer(), after which data() exposes the accumulated result.
+ * Write-side mirror of demux::FileSource.  Three backends:
  *
- * For a path/fd sink the OS write is deferred until flush(): open()
- * and open_fd() merely record the destination, so a muxer can build
- * its bytes first.  flush() pushes only the bytes added since the
- * previous flush, making it safe to call repeatedly.  No implicit
- * flush happens on close() or destruction -- the caller decides when
- * buffered bytes reach the OS handle.
+ *   Memory    open_buffer(); bytes accumulate in a vector and data()
+ *             exposes the result.  Used by the whole-file writers and
+ *             by callers that want the output in memory.
+ *
+ *   Mapped    path/fd where the OS can map a writable file.  write()
+ *             memcpy()s straight into shared pages; the kernel handles
+ *             paging and writeback.  patch() edits already-written
+ *             bytes in place (header fixups), and grow uses ftruncate +
+ *             mremap so previously written pages are never copied.
+ *             Mirrors demux::FileSource's mmap-backed zero-copy path.
+ *
+ *   Buffered  fallback when mapping is unavailable (non-regular fd,
+ *             mapping failure, or forced by try_mmap=false).  A small
+ *             userspace chunk buffer is written through with write();
+ *             patch() uses positional writes.  Memory stays bounded.
+ *
+ * For path/fd sinks the file is created when the sink is opened, because
+ * streaming writes begin at add_sample() time rather than at finalize().
  */
 class FileSink {
-    enum class Destination : std::uint8_t { None, Buffer, Path, Fd };
+    enum class Backend : std::uint8_t { None, Memory, Buffered, Mapped };
 
    public:
+    static constexpr std::size_t kDefaultChunk = 4u << 20; // 4 MiB
+
     FileSink() = default;
 
     FileSink(const FileSink&) = delete;
@@ -58,21 +73,28 @@ class FileSink {
         if (this == &other) {
             return *this;
         }
-
         close();
 
         buffer_ = std::move(other.buffer_);
         path_ = std::move(other.path_);
         fd_ = other.fd_;
         close_fd_ = other.close_fd_;
-        flushed_ = other.flushed_;
-        kind_ = other.kind_;
+        total_ = other.total_;
+        chunk_ = other.chunk_;
+        map_ = other.map_;
+        map_size_ = other.map_size_;
+        map_offset_ = other.map_offset_;
+        finished_ = other.finished_;
+        backend_ = other.backend_;
 
         other.fd_ = -1;
         other.close_fd_ = false;
-        other.flushed_ = 0;
-        other.kind_ = Destination::None;
-
+        other.total_ = 0;
+        other.map_ = nullptr;
+        other.map_size_ = 0;
+        other.map_offset_ = 0;
+        other.finished_ = false;
+        other.backend_ = Backend::None;
         return *this;
     }
 
@@ -80,90 +102,295 @@ class FileSink {
         close();
     }
 
-    /* Buffered: the file is created/truncated only when flush() runs. */
-    bool open(const std::string& path) {
+    bool open(const std::string& path, std::size_t expected_size = 0, bool try_mmap = true) {
         close();
-
         if (path.empty()) {
             return false;
         }
-
         path_ = path;
-        kind_ = Destination::Path;
+        chunk_ = expected_size != 0u ? align_up(std::max(expected_size, std::size_t{4096}))
+                                     : kDefaultChunk;
+
+        fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (fd_ < 0) {
+            return false;
+        }
+        close_fd_ = true;
+
+#if !defined(_WIN32)
+        if (try_mmap && map_file(chunk_)) {
+            backend_ = Backend::Mapped;
+            return true;
+        }
+#endif
+        backend_ = Backend::Buffered;
+        buffer_.clear();
+        buffer_.reserve(std::min<std::size_t>(chunk_, 1u << 16));
         return true;
     }
 
-    /* Buffered: writes go to fd on flush(), which never closes it. */
-    bool open_fd(int fd, bool close_on_destroy = false) {
+    bool open_fd(int fd, bool close_on_destroy = false, std::size_t expected_size = 0,
+                 bool try_mmap = true) {
         close();
-
         if (fd < 0) {
             return false;
         }
-
         fd_ = fd;
         close_fd_ = close_on_destroy;
-        kind_ = Destination::Fd;
+        chunk_ = expected_size != 0u ? align_up(std::max(expected_size, std::size_t{4096}))
+                                     : kDefaultChunk;
+
+#if !defined(_WIN32)
+        if (try_mmap && map_file(chunk_)) {
+            backend_ = Backend::Mapped;
+            return true;
+        }
+#endif
+        backend_ = Backend::Buffered;
+        buffer_.clear();
+        buffer_.reserve(std::min<std::size_t>(chunk_, 1u << 16));
         return true;
     }
 
     bool open_buffer() {
         close();
-        kind_ = Destination::Buffer;
+        backend_ = Backend::Memory;
         return true;
     }
 
-    /* Append bytes to the buffer; no-op with no destination or empty span. */
+    /* Append bytes.  In streaming backends the bytes reach the OS here. */
     void write(std::span<const std::uint8_t> bytes) {
-        if (kind_ == Destination::None || bytes.empty()) {
+        if (bytes.empty()) {
             return;
         }
-
-        buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+        switch (backend_) {
+            case Backend::Memory:
+                buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+                total_ = buffer_.size();
+                break;
+            case Backend::Mapped:
+                ensure_capacity(bytes.size());
+                if (map_ != nullptr && map_offset_ + bytes.size() <= map_size_) {
+                    std::memcpy(map_ + map_offset_, bytes.data(), bytes.size());
+                    map_offset_ += bytes.size();
+                    total_ += bytes.size();
+                }
+                break;
+            case Backend::Buffered: {
+                buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
+                total_ += bytes.size();
+                const std::size_t limit = std::min<std::size_t>(chunk_, 1u << 16);
+                if (buffer_.size() >= limit) {
+                    flush_buffered();
+                }
+                break;
+            }
+            default:
+                break;
+        }
     }
 
-    bool flush() {
-        if (kind_ == Destination::None || kind_ == Destination::Buffer) {
+    /* Edit bytes already written. Used for MP4/IVF/WAV header fixups. */
+    bool patch(std::size_t offset, std::span<const std::uint8_t> bytes) {
+        if (bytes.empty()) {
             return true;
         }
-
-        // A path sink has no handle until the first flush; creating it here
-        // keeps open() from truncating a file before any bytes are written.
-        if (kind_ == Destination::Path && fd_ < 0) {
-#if defined(_WIN32)
-            fd_ = ::_open(
-                path_.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY,
-                _S_IREAD | _S_IWRITE
-            );
-#else
-            fd_ = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-#endif
-            if (fd_ < 0) {
-                return false;
+        switch (backend_) {
+            case Backend::Memory:
+                if (offset > buffer_.size() || bytes.size() > buffer_.size() - offset) {
+                    return false;
+                }
+                std::memcpy(buffer_.data() + offset, bytes.data(), bytes.size());
+                return true;
+            case Backend::Mapped:
+                if (offset > map_size_ || bytes.size() > map_size_ - offset) {
+                    return false;
+                }
+                std::memcpy(map_ + offset, bytes.data(), bytes.size());
+                return true;
+            case Backend::Buffered: {
+                if (!flush_buffered()) {
+                    return false;
+                }
+                return positional_write(offset, bytes);
             }
-            close_fd_ = true;
-            flushed_ = 0;
+            default:
+                return false;
         }
+    }
 
-        if (fd_ < 0) {
+    /* Push any userspace-buffered bytes to the OS. */
+    bool flush() {
+        if (backend_ == Backend::Buffered) {
+            return flush_buffered();
+        }
+        return true;
+    }
+
+    /* Finalize the file: truncate to the exact size and unmap. */
+    bool finish() {
+        if (finished_) {
+            return true;
+        }
+        bool ok = true;
+        if (backend_ == Backend::Mapped) {
+#if !defined(_WIN32)
+            if (::ftruncate(fd_, static_cast<off_t>(total_)) != 0) {
+                ok = false;
+            }
+            if (map_ != nullptr) {
+                if (map_size_ != 0u) {
+                    ::msync(map_, map_size_, MS_ASYNC);
+                }
+                ::munmap(map_, map_size_);
+            }
+#else
+            if (map_ != nullptr) {
+                (void)::UnmapViewOfFile(map_);
+            }
+#endif
+            map_ = nullptr;
+            map_size_ = 0;
+        } else if (backend_ == Backend::Buffered) {
+            ok = flush_buffered();
+        }
+        finished_ = true;
+        return ok;
+    }
+
+    [[nodiscard]] bool ok() const noexcept {
+        return backend_ != Backend::None;
+    }
+
+    [[nodiscard]] bool mapped() const noexcept {
+        return backend_ == Backend::Mapped;
+    }
+
+    [[nodiscard]] bool streaming() const noexcept {
+        return backend_ == Backend::Mapped || backend_ == Backend::Buffered;
+    }
+
+    [[nodiscard]] std::size_t size() const noexcept {
+        return total_;
+    }
+
+    /* Valid for Memory while open, and for Mapped until finish(). */
+    [[nodiscard]] std::span<const std::uint8_t> data() const noexcept {
+        if (backend_ == Backend::Memory) {
+            return {buffer_.data(), buffer_.size()};
+        }
+        if (backend_ == Backend::Mapped && map_ != nullptr) {
+            return {map_, map_offset_};
+        }
+        return {};
+    }
+
+    [[nodiscard]] const std::string& path() const noexcept {
+        return path_;
+    }
+
+    void close() noexcept {
+        if (backend_ == Backend::Mapped && map_ != nullptr) {
+#if !defined(_WIN32)
+            ::munmap(map_, map_size_);
+#else
+            (void)::UnmapViewOfFile(map_);
+#endif
+        }
+        if (fd_ >= 0 && close_fd_) {
+#if defined(_WIN32)
+            ::_close(fd_);
+#else
+            ::close(fd_);
+#endif
+        }
+        buffer_.clear();
+        path_.clear();
+        fd_ = -1;
+        close_fd_ = false;
+        total_ = 0;
+        map_ = nullptr;
+        map_size_ = 0;
+        map_offset_ = 0;
+        finished_ = false;
+        backend_ = Backend::None;
+    }
+
+   private:
+    static std::size_t align_up(std::size_t v) noexcept {
+        constexpr std::size_t page = 4096u;
+        return (v + page - 1u) & ~(page - 1u);
+    }
+
+#if !defined(_WIN32)
+    bool map_file(std::size_t size) {
+        if (fd_ < 0 || ::ftruncate(fd_, static_cast<off_t>(size)) != 0) {
             return false;
         }
+        void* p = ::mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+        if (p == MAP_FAILED) {
+            return false;
+        }
+        map_ = static_cast<std::uint8_t*>(p);
+        map_size_ = size;
+        map_offset_ = 0;
+        return true;
+    }
 
-        std::size_t off = flushed_;
+    bool grow_map(std::size_t need) {
+        std::size_t want = map_size_ != 0u ? map_size_ : chunk_;
+        while (want < need) {
+            want *= 2u;
+        }
+        if (::ftruncate(fd_, static_cast<off_t>(want)) != 0) {
+            return false;
+        }
+#if defined(__linux__) && defined(MREMAP_MAYMOVE)
+        void* p = ::mremap(map_, map_size_, want, MREMAP_MAYMOVE);
+        if (p != MAP_FAILED) {
+            map_ = static_cast<std::uint8_t*>(p);
+            map_size_ = want;
+            return true;
+        }
+#endif
+        // Portable fallback: sync, unmap, remap (file contents are intact).
+        ::msync(map_, map_size_, MS_SYNC);
+        ::munmap(map_, map_size_);
+        void* q = ::mmap(nullptr, want, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+        if (q == MAP_FAILED) {
+            map_ = nullptr;
+            map_size_ = 0;
+            return false;
+        }
+        map_ = static_cast<std::uint8_t*>(q);
+        map_size_ = want;
+        return true;
+    }
+#endif
+
+    void ensure_capacity(std::size_t extra) {
+#if !defined(_WIN32)
+        if (backend_ == Backend::Mapped && map_offset_ + extra > map_size_) {
+            (void)grow_map(map_offset_ + extra);
+        }
+#endif
+    }
+
+    bool flush_buffered() {
+        if (buffer_.empty()) {
+            return true;
+        }
+        std::size_t off = 0;
         while (off < buffer_.size()) {
-            const std::size_t remaining = buffer_.size() - off;
 #if defined(_WIN32)
-            /* _write takes unsigned int; cap each call so a >4 GiB buffer
-             * cannot truncate the length argument. */
-            const std::size_t chunk = std::min<std::size_t>(remaining, 0x7FFFFFFFu);
-            const int n = ::_write(
-                fd_, buffer_.data() + off, static_cast<unsigned int>(chunk)
-            );
-            if (n <= 0) {
+            const std::size_t n = std::min<std::size_t>(buffer_.size() - off, 0x7FFFFFFFu);
+            const int written = ::_write(fd_, buffer_.data() + off, static_cast<unsigned int>(n));
+            if (written <= 0) {
                 return false;
             }
+            off += static_cast<std::size_t>(written);
 #else
-            const ssize_t n = ::write(fd_, buffer_.data() + off, remaining);
+            const ssize_t n = ::write(fd_, buffer_.data() + off, buffer_.size() - off);
             if (n < 0) {
                 if (errno == EINTR) {
                     continue;
@@ -173,59 +400,57 @@ class FileSink {
             if (n == 0) {
                 return false;
             }
-#endif
             off += static_cast<std::size_t>(n);
-            flushed_ = off;
+#endif
         }
-
+        buffer_.clear();
         return true;
     }
 
-    [[nodiscard]]
-    bool ok() const noexcept {
-        return kind_ != Destination::None;
-    }
-
-    [[nodiscard]]
-    std::size_t size() const noexcept {
-        return buffer_.size();
-    }
-
-    [[nodiscard]]
-    std::span<const std::uint8_t> data() const noexcept {
-        return std::span<const std::uint8_t>(buffer_.data(), buffer_.size());
-    }
-
-    [[nodiscard]]
-    const std::string& path() const noexcept {
-        return path_;
-    }
-
-    /* Releases resources; buffered bytes are NOT flushed automatically. */
-    void close() noexcept {
-        if (fd_ >= 0 && close_fd_) {
+    bool positional_write(std::size_t offset, std::span<const std::uint8_t> bytes) {
+        std::size_t off = 0;
+        while (off < bytes.size()) {
 #if defined(_WIN32)
-            ::_close(fd_);
+            const DWORD pos = static_cast<DWORD>(offset + off);
+            if (::SetFilePointer(reinterpret_cast<HANDLE>(_get_osfhandle(fd_)),
+                                 static_cast<LONG>(pos), nullptr, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+                return false;
+            }
+            const std::size_t n = std::min<std::size_t>(bytes.size() - off, 0x7FFFFFFFu);
+            const int written = ::_write(fd_, bytes.data() + off, static_cast<unsigned int>(n));
+            if (written <= 0) {
+                return false;
+            }
+            off += static_cast<std::size_t>(written);
 #else
-            ::close(fd_);
+            const ssize_t n = ::pwrite(fd_, bytes.data() + off, bytes.size() - off,
+                                       static_cast<off_t>(offset + off));
+            if (n < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                return false;
+            }
+            if (n == 0) {
+                return false;
+            }
+            off += static_cast<std::size_t>(n);
 #endif
         }
-
-        buffer_.clear();
-        path_.clear();
-        fd_ = -1;
-        close_fd_ = false;
-        flushed_ = 0;
-        kind_ = Destination::None;
+        return true;
     }
 
-   private:
     std::vector<std::uint8_t> buffer_{};
     std::string path_;
     int fd_ = -1;
     bool close_fd_ = false;
-    std::size_t flushed_ = 0;
-    Destination kind_ = Destination::None;
+    std::size_t total_ = 0;
+    std::size_t chunk_ = kDefaultChunk;
+    std::uint8_t* map_ = nullptr;
+    std::size_t map_size_ = 0;
+    std::size_t map_offset_ = 0;
+    bool finished_ = false;
+    Backend backend_ = Backend::None;
 };
 
 }  // namespace mux

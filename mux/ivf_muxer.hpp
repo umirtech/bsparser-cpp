@@ -9,7 +9,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace bs {
@@ -28,9 +30,81 @@ namespace detail {
  * (allowing an accurate frame count) and the header is emitted just before
  * it in a second write().
  */
+
+/* Append a little-endian integer to the sidecar index buffer. */
+inline void ivf_push_le32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    for (unsigned i = 0; i < 4u; ++i) {
+        out.push_back(static_cast<std::uint8_t>(value >> (8u * i)));
+    }
+}
+
+inline void ivf_push_le64(std::vector<std::uint8_t>& out, std::uint64_t value) {
+    for (unsigned i = 0; i < 8u; ++i) {
+        out.push_back(static_cast<std::uint8_t>(value >> (8u * i)));
+    }
+}
+
+/*
+ * Write an optional frame index next to an IVF file.
+ *
+ * `<ivf_path>.idx` is a flat binary table (all integers little-endian):
+ *
+ *   u32 frame_count
+ *   repeated frame_count times:
+ *       u32 frame_size    payload size of the frame in the IVF file
+ *       u64 pts           presentation timestamp of the frame
+ *       u64 file_offset   byte offset of the frame's 12-byte IVF frame
+ *                         header (its payload starts 12 bytes later)
+ *
+ * Empty samples are skipped, matching write_ivf(): they produce no frame
+ * in the IVF file, so they get no index entry either.  Returns false if the
+ * sidecar cannot be opened/written or a frame size does not fit in u32.
+ */
+inline bool write_ivf_index(const std::string& ivf_path,
+                            const std::vector<Sample>& samples) {
+    if (ivf_path.empty()) {
+        return false;
+    }
+
+    std::vector<std::uint8_t> index;
+
+    std::uint32_t count = 0;
+    for (const Sample& sample : samples) {
+        if (!sample.data.empty()) {
+            ++count;
+        }
+    }
+    ivf_push_le32(index, count);
+
+    // A 32-byte IVF file header precedes the first 12-byte frame header.
+    std::uint64_t offset = 32u;
+    for (const Sample& sample : samples) {
+        if (sample.data.empty()) {
+            continue;
+        }
+        if (sample.data.size() > 0xFFFFFFFFull) {
+            return false;  // IVF frame sizes are 32-bit
+        }
+        ivf_push_le32(index, static_cast<std::uint32_t>(sample.data.size()));
+        ivf_push_le64(index, static_cast<std::uint64_t>(sample.pts));
+        ivf_push_le64(index, offset);
+        offset += 12u + sample.data.size();
+    }
+
+    std::ofstream out(ivf_path + ".idx", std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return false;
+    }
+    out.write(reinterpret_cast<const char*>(index.data()),
+              static_cast<std::streamsize>(index.size()));
+    out.flush();
+    return out.good();
+}
+
 inline bool write_ivf(FileSink& sink,
                       const std::vector<TrackConfig>& tracks,
-                      const std::vector<std::vector<Sample>>& samples) {
+                      const std::vector<std::vector<Sample>>& samples,
+                      const std::string* index_path = nullptr) {
     if (tracks.empty() || samples.empty()) {
         return false;
     }
@@ -118,7 +192,17 @@ inline bool write_ivf(FileSink& sink,
     sink.write(header);
     sink.write(frame_block);
 
-    return sink.ok();
+    if (!sink.ok()) {
+        return false;
+    }
+
+    // Opt-in only: without an index_path nothing extra is written, so all
+    // existing callers are unaffected.  `frames` is what write_ivf() emitted;
+    // write_ivf_index() appends ".idx" to the supplied path.
+    if (index_path != nullptr) {
+        return write_ivf_index(*index_path, frames);
+    }
+    return true;
 }
 
 }  // namespace detail

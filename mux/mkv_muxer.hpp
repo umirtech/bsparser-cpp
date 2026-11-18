@@ -9,6 +9,7 @@
 #include "demux/es_reconstruct.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -30,7 +31,7 @@ namespace detail {
  *
  *   EBML header -> Segment (unknown size)
  *                    |- Info (TimecodeScale / MuxingApp / WritingApp)
- *                    |- Tracks (one video TrackEntry per input track)
+ *                    |- Tracks (one TrackEntry per input track, video or audio)
  *                    |- Cluster (Timecode = 0 + one SimpleBlock per sample)
  *
  * The Segment uses the 8-byte "unknown size" vint so the element does
@@ -82,9 +83,21 @@ constexpr std::uint64_t kMkvVideo = 0xE0ull;
 constexpr std::uint64_t kMkvPixelWidth = 0xB0ull;
 constexpr std::uint64_t kMkvPixelHeight = 0xBAull;
 
+constexpr std::uint64_t kMkvAudio = 0xE1ull;
+constexpr std::uint64_t kMkvSamplingFrequency = 0xB5ull;
+constexpr std::uint64_t kMkvChannels = 0x9Full;
+constexpr std::uint64_t kMkvCodecPrivate = 0x63A2ull;
+
 constexpr std::uint64_t kMkvCluster = 0x1F43B675ull;
 constexpr std::uint64_t kMkvTimecode = 0xE7ull;
 constexpr std::uint64_t kMkvSimpleBlock = 0xA3ull;
+
+constexpr std::uint64_t kMkvCues = 0x1C53BB6Bull;
+constexpr std::uint64_t kMkvCuePoint = 0xBBull;
+constexpr std::uint64_t kMkvCueTime = 0xB3ull;
+constexpr std::uint64_t kMkvCueTrackPositions = 0xB7ull;
+constexpr std::uint64_t kMkvCueTrack = 0xF7ull;
+constexpr std::uint64_t kMkvCueClusterPosition = 0xF1ull;
 
 /* Append `bytes` big-endian integers, most significant first. */
 inline void mkv_push_uint(
@@ -172,6 +185,27 @@ inline void mkv_push_string(std::vector<std::uint8_t>& out, std::string_view tex
 inline std::uint64_t mkv_track_number(const TrackConfig& track, std::size_t index) noexcept {
     return track.id != 0u ? static_cast<std::uint64_t>(track.id)
                           : static_cast<std::uint64_t>(index + 1u);
+}
+
+/* Matroska CodecID for an audio track. */
+[[nodiscard]]
+inline const char* mkv_audio_codec_id(AudioCodec codec) noexcept {
+    switch (codec) {
+        case AudioCodec::Aac:
+            return "A_AAC";
+        case AudioCodec::Pcm8:
+        case AudioCodec::Pcm16:
+        case AudioCodec::Pcm24:
+        case AudioCodec::Pcm32:
+            return "A_PCM/INT/LIT";
+    }
+    return "A_PCM/INT/LIT";
+}
+
+/* True only for tracks whose samples need Annex-B framing in MKV. */
+[[nodiscard]]
+inline bool mkv_track_uses_annex_b(const TrackConfig& track) noexcept {
+    return !(track.is_audio && !track.is_video) && is_h26x(track.codec);
 }
 
 /*
@@ -338,7 +372,7 @@ inline std::vector<std::uint8_t> mkv_make_tags(const Metadata& metadata) {
     return element;
 }
 
-/* Build the Tracks element with one video TrackEntry per track. */
+/* Build the Tracks element with one TrackEntry per track (video or audio). */
 [[nodiscard]]
 inline std::vector<std::uint8_t> mkv_make_tracks(const std::vector<TrackConfig>& tracks) {
     std::vector<std::uint8_t> tracks_payload;
@@ -358,12 +392,15 @@ inline std::vector<std::uint8_t> mkv_make_tracks(const std::vector<TrackConfig>&
         mkv_push_min_uint(tmp, number);
         mkv_push_element(entry, kMkvTrackUid, tmp);
 
+        const bool is_audio = track.is_audio && !track.is_video;
+
         tmp.clear();
-        tmp.push_back(1u);  // video
+        tmp.push_back(is_audio ? 2u : 1u); // 1 = video, 2 = audio
         mkv_push_element(entry, kMkvTrackType, tmp);
 
         tmp.clear();
-        const char* const codec_id = mkv_codec_id(track.codec);
+        const char* const codec_id =
+            is_audio ? mkv_audio_codec_id(track.audio_codec) : mkv_codec_id(track.codec);
         mkv_push_string(tmp, codec_id);
         mkv_push_element(entry, kMkvCodecId, tmp);
 
@@ -390,35 +427,58 @@ inline std::vector<std::uint8_t> mkv_make_tracks(const std::vector<TrackConfig>&
             mkv_push_element(entry, kMkvCodecName, tmp);
         }
 
-        // Video: always emit numeric PixelWidth / PixelHeight so build_mkv
-        // sees the fields. Use a small placeholder when the config has none.
-        std::uint32_t width = track.width;
-        std::uint32_t height = track.height;
-        if (width == 0u) {
-            width = 16u;
-        }
-        if (height == 0u) {
-            height = 16u;
-        }
-        if (width > 0xFFFFu) {
-            width = 0xFFFFu;
-        }
-        if (height > 0xFFFFu) {
-            height = 0xFFFFu;
+        if (is_audio) {
+            // Audio: SamplingFrequency (float64) + Channels.  AAC additionally
+            // carries its AudioSpecificConfig in CodecPrivate.
+            std::vector<std::uint8_t> audio;
+            const double rate = static_cast<double>(
+                track.sample_rate != 0u ? track.sample_rate : 44100u
+            );
+            tmp.clear();
+            mkv_push_uint(tmp, std::bit_cast<std::uint64_t>(rate), 8u);
+            mkv_push_element(audio, kMkvSamplingFrequency, tmp);
+
+            tmp.clear();
+            mkv_push_min_uint(tmp, track.channels != 0u ? track.channels : 2u);
+            mkv_push_element(audio, kMkvChannels, tmp);
+
+            mkv_push_element(entry, kMkvAudio, audio);
+
+            if (track.audio_codec == AudioCodec::Aac && !track.audio_config.empty()) {
+                mkv_push_element(entry, kMkvCodecPrivate, track.audio_config);
+            }
+        } else {
+            // Video: always emit numeric PixelWidth / PixelHeight so build_mkv
+            // sees the fields. Use a small placeholder when the config has none.
+            std::uint32_t width = track.width;
+            std::uint32_t height = track.height;
+            if (width == 0u) {
+                width = 16u;
+            }
+            if (height == 0u) {
+                height = 16u;
+            }
+            if (width > 0xFFFFu) {
+                width = 0xFFFFu;
+            }
+            if (height > 0xFFFFu) {
+                height = 0xFFFFu;
+            }
+
+            std::vector<std::uint8_t> video;
+            tmp.clear();
+            mkv_push_uint(tmp, width, 2u);
+            mkv_push_element(video, kMkvPixelWidth, tmp);
+
+            tmp.clear();
+            mkv_push_uint(tmp, height, 2u);
+            mkv_push_element(video, kMkvPixelHeight, tmp);
+
+            mkv_push_element(entry, kMkvVideo, video);
+
+            // CodecPrivate is intentionally omitted for video (see file comment).
         }
 
-        std::vector<std::uint8_t> video;
-        tmp.clear();
-        mkv_push_uint(tmp, width, 2u);
-        mkv_push_element(video, kMkvPixelWidth, tmp);
-
-        tmp.clear();
-        mkv_push_uint(tmp, height, 2u);
-        mkv_push_element(video, kMkvPixelHeight, tmp);
-
-        mkv_push_element(entry, kMkvVideo, video);
-
-        // CodecPrivate is intentionally omitted (see the file comment).
         mkv_push_element(tracks_payload, kMkvTrackEntry, entry);
     }
 
@@ -467,8 +527,9 @@ inline std::vector<std::uint8_t> mkv_make_cluster(
 
             block.push_back(sample.is_key ? 0x80u : 0x00u);
 
-            // H.26x frames must reach build_mkv() as Annex-B.
-            if (is_h26x(track.codec)) {
+            // H.26x frames must reach build_mkv() as Annex-B; audio payloads
+            // (whose Codec field is often left at its default) are copied raw.
+            if (mkv_track_uses_annex_b(track)) {
                 const std::vector<std::uint8_t> annex_b =
                     mkv_to_annex_b(sample.data, track.length_size);
                 block.insert(block.end(), annex_b.begin(), annex_b.end());
@@ -482,6 +543,60 @@ inline std::vector<std::uint8_t> mkv_make_cluster(
 
     std::vector<std::uint8_t> element;
     mkv_push_element(element, kMkvCluster, cluster);
+    return element;
+}
+
+/*
+ * Build the Segment-level Cues element (seek index).
+ *
+ * The writer emits a single Cluster, so every cue point refers to the same
+ * cluster offset.  `clusters_base_offset` is the position of that Cluster
+ * relative to the start of the Segment's data (i.e. after the Segment ID
+ * and its size vint), which is what CueClusterPosition expects.  Callers
+ * that cannot determine it may pass 0: that is a legal value, just not a
+ * useful seek target.
+ *
+ * CueTime is sample.pts; TimecodeScale is 1 ms, so the value is in ms.
+ * CueTrack is hard-coded to 1 (the primary/video track).  Empty samples
+ * are skipped to stay in sync with mkv_make_cluster(), which drops them.
+ * Returns an empty buffer when there is no keyframe, so the caller can
+ * simply omit Cues in that case.
+ */
+[[nodiscard]]
+inline std::vector<std::uint8_t> mkv_make_cues(
+    const std::vector<Sample>& samples, std::uint64_t clusters_base_offset
+) {
+    std::vector<std::uint8_t> cues_payload;
+
+    for (const Sample& sample : samples) {
+        if (!sample.is_key || sample.data.empty()) {
+            continue;
+        }
+
+        std::vector<std::uint8_t> positions;
+        std::vector<std::uint8_t> tmp;
+
+        tmp.clear();
+        mkv_push_min_uint(tmp, 1u);  // CueTrack = 1 (primary/video track)
+        mkv_push_element(positions, kMkvCueTrack, tmp);
+
+        tmp.clear();
+        mkv_push_min_uint(tmp, clusters_base_offset);
+        mkv_push_element(positions, kMkvCueClusterPosition, tmp);
+
+        std::vector<std::uint8_t> cue_point;
+        tmp.clear();
+        mkv_push_min_uint(tmp, static_cast<std::uint64_t>(sample.pts));
+        mkv_push_element(cue_point, kMkvCueTime, tmp);
+        mkv_push_element(cue_point, kMkvCueTrackPositions, positions);
+
+        mkv_push_element(cues_payload, kMkvCuePoint, cue_point);
+    }
+
+    std::vector<std::uint8_t> element;
+    if (!cues_payload.empty()) {
+        mkv_push_element(element, kMkvCues, cues_payload);
+    }
     return element;
 }
 
@@ -523,7 +638,22 @@ inline bool write_mkv(FileSink& sink,
     if (!tags.empty()) {
         segment.insert(segment.end(), tags.begin(), tags.end());
     }
+    // The Cluster begins at `segment`'s current size, measured from the start
+    // of the Segment data -- the offset base used by CueClusterPosition.
+    const std::uint64_t clusters_base_offset =
+        static_cast<std::uint64_t>(segment.size());
     segment.insert(segment.end(), cluster.begin(), cluster.end());
+
+    // Seek index: append Cues after the Cluster. The Segment carries an
+    // unknown size, so growing its payload needs no header back-patch.
+    // No keyframe -> no Cues element at all.
+    if (!samples.empty()) {
+        const std::vector<std::uint8_t> cues =
+            mkv_make_cues(samples.front(), clusters_base_offset);
+        if (!cues.empty()) {
+            segment.insert(segment.end(), cues.begin(), cues.end());
+        }
+    }
 
     std::vector<std::uint8_t> file;
     const std::vector<std::uint8_t> header = mkv_make_ebml_header();

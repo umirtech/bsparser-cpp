@@ -121,6 +121,18 @@ inline void emit_box(FileSink& sink, const Mp4Bytes& b) {
     );
 }
 
+/* Media timescale: an explicit config value wins; otherwise audio falls
+ * back to its sample rate (the natural audio clock) and video to 1 kHz. */
+[[nodiscard]] inline std::uint32_t mp4_track_timescale(const TrackConfig& cfg) noexcept {
+    if (cfg.timescale != 0u) {
+        return cfg.timescale;
+    }
+    if (cfg.is_audio && !cfg.is_video && cfg.sample_rate != 0u) {
+        return cfg.sample_rate;
+    }
+    return 1000u;
+}
+
 /* ------- Metadata helpers ------- */
 
 /* A Metadata has udta "tag" content when any ilst/key field is present. */
@@ -417,6 +429,137 @@ inline Mp4Bytes visual_sample_entry(
     return box(fourcc, b);
 }
 
+/* ------- Audio sample entry helpers ------- */
+
+/* Minimal AudioSpecificConfig for AAC-LC.  Only used when the caller did not
+ * supply cfg.audio_config.  The bit layout is: 5-bit audioObjectType (2 =
+ * AAC LC), 4-bit samplingFrequencyIndex, 4-bit channelConfiguration, then
+ * the three GASpecificConfig flags (all zero for the plain LC profile). */
+[[nodiscard]] inline Mp4Bytes make_default_aac_config(const TrackConfig& cfg) {
+    static constexpr std::uint32_t kRates[] = {
+        96000u, 88200u, 64000u, 48000u, 44100u, 32000u,
+        24000u, 22050u, 16000u, 12000u, 11025u, 8000u, 7350u
+    };
+
+    const std::uint32_t rate = cfg.sample_rate != 0u ? cfg.sample_rate : 44100u;
+    unsigned index = 4u; // 44100 Hz fallback
+    for (unsigned i = 0u; i < 13u; ++i) {
+        if (kRates[i] == rate) {
+            index = i;
+            break;
+        }
+    }
+
+    unsigned channels = cfg.channels != 0u ? cfg.channels : 2u;
+    if (channels > 6u) {
+        channels = 2u; // >6 needs a PCE; keep the simple path
+    }
+
+    Mp4Bytes out;
+    out.push_back(static_cast<std::uint8_t>((2u << 3u) | (index >> 1u)));
+    out.push_back(static_cast<std::uint8_t>(((index & 1u) << 7u) | (channels << 3u)));
+    return out;
+}
+
+/* ISO-BMFF / ISO 14496-1 expandable descriptor length (7 bits per byte,
+ * continuation bit on every byte but the last). */
+inline void mp4_push_desc_length(Mp4Bytes& out, std::size_t length) {
+    std::uint8_t groups[4];
+    int count = 0;
+    do {
+        groups[count++] = static_cast<std::uint8_t>(length & 0x7Fu);
+        length >>= 7u;
+    } while (length != 0u && count < 4);
+    for (int i = count - 1; i >= 0; --i) {
+        out.push_back(static_cast<std::uint8_t>(groups[i] | (i != 0 ? 0x80u : 0u)));
+    }
+}
+
+inline void mp4_push_descriptor(Mp4Bytes& out, std::uint8_t tag, const Mp4Bytes& payload) {
+    out.push_back(tag);
+    mp4_push_desc_length(out, payload.size());
+    out.insert(out.end(), payload.begin(), payload.end());
+}
+
+/* esds: ES_Descriptor -> DecoderConfigDescriptor (AAC-LC, MP4 audio stream)
+ * -> DecoderSpecificInfo (AudioSpecificConfig) + SLConfigDescriptor. */
+inline Mp4Bytes make_esds(const TrackConfig& cfg) {
+    Mp4Bytes dsi = cfg.audio_config;
+    if (dsi.empty()) {
+        dsi = make_default_aac_config(cfg);
+    }
+
+    Mp4Bytes dec_specific;
+    mp4_push_descriptor(dec_specific, 0x05u, dsi);
+
+    Mp4Bytes dcd;
+    dcd.push_back(0x40u); // objectTypeIndication: ISO/IEC 14496-3 audio
+    dcd.push_back(0x15u); // streamType 5 (audio), upStream 0, reserved 1
+    put_zeros(dcd, 3u);   // bufferSizeDB
+    be32(dcd, 0u);        // maxBitrate
+    be32(dcd, 0u);        // avgBitrate
+    dcd.insert(dcd.end(), dec_specific.begin(), dec_specific.end());
+
+    Mp4Bytes dec_config;
+    mp4_push_descriptor(dec_config, 0x04u, dcd);
+
+    Mp4Bytes sl;
+    sl.push_back(0x02u); // predefined for MP4
+    Mp4Bytes sl_config;
+    mp4_push_descriptor(sl_config, 0x06u, sl);
+
+    Mp4Bytes es;
+    be16(es, 0u);     // ES_ID
+    es.push_back(0u); // flags
+    es.insert(es.end(), dec_config.begin(), dec_config.end());
+    es.insert(es.end(), sl_config.begin(), sl_config.end());
+
+    Mp4Bytes es_descriptor;
+    mp4_push_descriptor(es_descriptor, 0x03u, es);
+
+    Mp4Bytes payload;
+    put_zeros(payload, 4u); // version + flags
+    payload.insert(payload.end(), es_descriptor.begin(), es_descriptor.end());
+    return box("esds", payload);
+}
+
+/* SoundMediaHeader: version/flags, balance (0.0), reserved. */
+inline Mp4Bytes make_smhd() {
+    Mp4Bytes b;
+    put_zeros(b, 4u); // version + flags
+    be16(b, 0u);      // balance
+    be16(b, 0u);      // reserved
+    return box("smhd", b);
+}
+
+/* Minimal pcmC box for integer PCM sample entries. */
+inline Mp4Bytes make_pcmc() {
+    Mp4Bytes b;
+    put_zeros(b, 4u); // version + flags
+    be16(b, 0u);      // format: integer
+    be16(b, 0u);      // reserved
+    return box("pcmC", b);
+}
+
+/* AudioSampleEntry: reserved/dri, reserved[2], channels, sample size,
+ * pre_defined, reserved, sample rate as a 16.16 fixed-point value. */
+inline Mp4Bytes audio_sample_entry(
+    const char* fourcc, const TrackConfig& cfg, const Mp4Bytes& config
+) {
+    Mp4Bytes b;
+    put_zeros(b, 6u); // reserved
+    be16(b, 1u);      // data_reference_index
+    put_zeros(b, 8u); // reserved[2]
+    be16(b, cfg.channels != 0u ? cfg.channels : 2u);
+    be16(b, static_cast<std::uint16_t>(audio_bits_per_sample(cfg.audio_codec)));
+    be16(b, 0u); // pre_defined
+    be16(b, 0u); // reserved
+    const std::uint32_t rate = cfg.sample_rate != 0u ? cfg.sample_rate : 44100u;
+    be32(b, std::min(rate, 0xFFFFu) << 16u); // 16.16 fixed point
+    b.insert(b.end(), config.begin(), config.end());
+    return box(fourcc, b);
+}
+
 inline Mp4Bytes make_mvhd(
     std::uint32_t duration_ms, std::uint32_t next_track_id, const Mp4Bytes& identity,
     std::uint32_t creation_time
@@ -583,6 +726,26 @@ inline Mp4Bytes make_stsd(
     return box("stsd", b);
 }
 
+/* Audio-aware stsd.  Video tracks keep the exact make_stsd() path above. */
+inline Mp4Bytes make_stsd_for_track(
+    const TrackConfig& cfg, const std::vector<Sample>& samples = {}
+) {
+    if (!cfg.is_audio || cfg.is_video) {
+        return make_stsd(cfg.codec, cfg.width, cfg.height, samples);
+    }
+
+    Mp4Bytes b;
+    put_zeros(b, 4u); // version + flags (FullBox)
+    be32(b, 1u);      // entry_count
+    if (cfg.audio_codec == AudioCodec::Aac) {
+        append_box_bytes(b, audio_sample_entry("mp4a", cfg, make_esds(cfg)));
+    } else {
+        // "sowt" is little-endian signed PCM (matches A_PCM/INT/LIT in MKV).
+        append_box_bytes(b, audio_sample_entry("sowt", cfg, make_pcmc()));
+    }
+    return box("stsd", b);
+}
+
 inline Mp4Bytes make_ftyp() {
     Mp4Bytes b;
     put4(b, "isom"); // major brand
@@ -630,6 +793,11 @@ inline std::vector<std::uint32_t> sample_durations(const std::vector<Sample>& sa
 [[nodiscard]] inline bool needs_annexb_conversion(
     Codec codec, const Sample& sample, const TrackConfig& config
 ) noexcept {
+    // Audio codecs legitimately leave the default Codec value set; never try
+    // to reinterpret PCM/AAC payloads as Annex-B NAL units.
+    if (config.is_audio && !config.is_video) {
+        return false;
+    }
     if (!is_h26x(codec) || sample.data.empty()) {
         return false;
     }
@@ -644,7 +812,7 @@ inline std::vector<std::uint32_t> sample_durations(const std::vector<Sample>& sa
 
 /*
  * Write a progressive MP4 containing the supplied tracks/samples.
- * Returns false when there is nothing video-like to write.
+ * Returns false when there is neither a video nor an audio track to write.
  *
  * `metadata` carries file-level tags / creation time; each TrackConfig may
  * additionally carry per-track tags in its own `metadata` field.
@@ -659,13 +827,16 @@ inline bool write_mp4(
     }
 
     bool has_video = false;
+    bool has_audio = false;
     for (const auto& t : tracks) {
         if (t.is_video) {
             has_video = true;
-            break;
+        }
+        if (t.is_audio && !t.is_video) {
+            has_audio = true;
         }
     }
-    if (!has_video) {
+    if (!has_video && !has_audio) {
         return false;
     }
 
@@ -691,7 +862,7 @@ inline bool write_mp4(
         const TrackConfig& cfg = tracks[i];
         const std::vector<Sample>& ss = *per_track[i];
 
-        timescales[i] = cfg.timescale != 0u ? cfg.timescale : 1000u;
+        timescales[i] = mp4_track_timescale(cfg);
         track_ids[i] = cfg.id != 0u ? cfg.id : static_cast<std::uint32_t>(i + 1u);
         max_track_id = std::max(max_track_id, track_ids[i]);
         durations[i] = sample_durations(ss);
@@ -766,7 +937,7 @@ inline bool write_mp4(
             const std::uint32_t sample_count = static_cast<std::uint32_t>(sizes[i].size());
 
             Mp4Bytes stbl;
-            append_box_bytes(stbl, make_stsd(cfg.codec, cfg.width, cfg.height, ss));
+            append_box_bytes(stbl, make_stsd_for_track(cfg, ss));
             append_box_bytes(stbl, make_stts(durations[i]));
             append_box_bytes(stbl, make_stsc(sample_count));
             append_box_bytes(stbl, make_stsz(sizes[i]));
@@ -795,7 +966,11 @@ inline bool write_mp4(
                 );
             }
 
-            Mp4Bytes minf = box("stbl", stbl);
+            Mp4Bytes minf;
+            if (cfg.is_audio && !cfg.is_video) {
+                append_box_bytes(minf, make_smhd());
+            }
+            append_box_bytes(minf, box("stbl", stbl));
 
             Mp4Bytes mdia;
             append_box_bytes(
@@ -870,6 +1045,271 @@ inline bool write_mp4(
 ) {
     static const Metadata kEmptyMetadata;
     return write_mp4(sink, kEmptyMetadata, tracks, samples);
+}
+
+/* ------------------------------------------------------------------ */
+/* Streaming MP4 writer                                                */
+/* ------------------------------------------------------------------ */
+
+/* Frame one sample for storage in mdat: Annex-B -> 4-byte length-prefixed
+ * for H.26x, otherwise copied verbatim.  Caller writes the result via
+ * FileSink::write() and records the returned offset. */
+[[nodiscard]]
+inline Mp4Bytes frame_mp4_sample(
+    Codec codec, const Sample& sample, const TrackConfig& config
+) {
+    if (needs_annexb_conversion(codec, sample, config)) {
+        return annexb_to_length_prefixed(sample.data);
+    }
+    return Mp4Bytes(sample.data.begin(), sample.data.end());
+}
+
+/* Start a streamed file: ftyp + a 16-byte mdat header whose largesize is
+ * patched in finish_mp4_stream().  Returns the absolute offset of the
+ * mdat header so the muxer can remember it. */
+/* Returns the mdat header offset; writes the reserve offset through the
+ * out parameter so finish can patch it exactly. */
+inline std::size_t start_mp4_stream(
+    FileSink& sink, std::size_t moov_reserve, std::size_t& reserve_offset_out
+) {
+    const Mp4Bytes ftyp = make_ftyp();
+    emit_box(sink, ftyp);
+
+    reserve_offset_out = sink.size();
+    if (moov_reserve >= 8u) {
+        Mp4Bytes free_box;
+        be32(free_box, static_cast<std::uint32_t>(moov_reserve));
+        put4(free_box, "free");
+        put_zeros(free_box, moov_reserve - 8u);
+        emit_box(sink, free_box);
+    }
+
+    Mp4Bytes header;
+    be32(header, 1u); // extended-size marker
+    put4(header, "mdat");
+    be64(header, 16u); // placeholder; patched at finish
+    const std::size_t offset = sink.size();
+    emit_box(sink, header);
+    return offset;
+}
+
+/*
+ * Finish a streamed file: patch mdat's largesize in place, then append a
+ * moov built from the recorded sample/chunk tables.  `records` is indexed
+ * by track; `chunks` is in physical write order (caller-driven interleaving).
+ */
+inline bool finish_mp4_stream(
+    FileSink& sink,
+    std::size_t mdat_header_offset,
+    const Metadata& metadata,
+    const std::vector<TrackConfig>& tracks,
+    const std::vector<std::vector<SampleRecord>>& records,
+    const std::vector<ChunkRecord>& chunks,
+    std::size_t moov_reserve = 0,
+    std::size_t moov_reserve_offset = 0
+) {
+    const std::size_t n = tracks.size();
+
+    // 1. Patch mdat largesize = 16 + payload bytes written so far.
+    const std::uint64_t mdat_payload =
+        static_cast<std::uint64_t>(sink.size()) - (mdat_header_offset + 16u);
+    Mp4Bytes patch;
+    be64(patch, 16u + mdat_payload);
+    if (!sink.patch(mdat_header_offset + 8u, patch)) {
+        return false;
+    }
+
+    // 2. Per-track tables.
+    std::vector<std::vector<std::uint32_t>> sizes(n);
+    std::vector<std::vector<std::uint32_t>> durations(n);
+    std::vector<std::vector<std::uint32_t>> sync(n);
+    std::vector<std::vector<std::int64_t>> ctts(n);
+    std::vector<std::uint32_t> timescales(n, 1000u);
+    std::vector<std::uint32_t> track_ids(n, 0u);
+    std::uint32_t max_track_id = 0u;
+    std::uint64_t movie_duration_ms = 0u;
+    std::vector<std::uint32_t> track_duration_ms(n, 0u);
+
+    for (std::size_t i = 0u; i < n; ++i) {
+        const TrackConfig& cfg = tracks[i];
+        const auto& rs = records[i];
+        timescales[i] = mp4_track_timescale(cfg);
+        track_ids[i] = cfg.id != 0u ? cfg.id : static_cast<std::uint32_t>(i + 1u);
+        max_track_id = std::max(max_track_id, track_ids[i]);
+        sizes[i].reserve(rs.size());
+        durations[i].reserve(rs.size());
+        sync[i].reserve(rs.size());
+        ctts[i].reserve(rs.size());
+
+        std::uint64_t total = 0u;
+        bool has_non_key = false;
+        for (std::size_t j = 0u; j < rs.size(); ++j) {
+            sizes[i].push_back(static_cast<std::uint32_t>(std::min<std::size_t>(rs[j].size, 0xFFFFFFFFu)));
+            const std::int64_t d = rs[j].duration > 0 ? rs[j].duration : 1000;
+            durations[i].push_back(clamp_duration(d));
+            ctts[i].push_back(static_cast<std::int64_t>(std::clamp<std::int64_t>(
+                rs[j].pts - rs[j].dts, -0x80000000LL, 0x7FFFFFFFLL)));
+            if (rs[j].is_key) {
+                sync[i].push_back(static_cast<std::uint32_t>(j + 1u));
+            } else {
+                has_non_key = true;
+            }
+            total += static_cast<std::uint64_t>(d);
+        }
+        if (!has_non_key) {
+            sync[i].clear();
+        }
+        const std::uint64_t ms = total != 0u ? (total * 1000u + timescales[i] / 2u) / timescales[i] : 0u;
+        track_duration_ms[i] = static_cast<std::uint32_t>(std::min<std::uint64_t>(ms, 0xFFFFFFFFu));
+        movie_duration_ms = std::max(movie_duration_ms, ms);
+    }
+
+    // 3. Chunk tables from the physical write order.
+    std::vector<std::uint32_t> chunk_offsets32;
+    std::vector<std::uint64_t> chunk_offsets64;
+    bool any_large_offset = false;
+    for (const auto& c : chunks) {
+        if (c.offset > 0xFFFFFFFFull) {
+            any_large_offset = true;
+        }
+        chunk_offsets64.push_back(c.offset);
+        chunk_offsets32.push_back(static_cast<std::uint32_t>(std::min<std::uint64_t>(c.offset, 0xFFFFFFFFull)));
+    }
+
+    // stsc entries: (first_chunk, samples_per_chunk) per track, coalesced.
+    std::vector<std::vector<std::pair<std::uint32_t, std::uint32_t>>> stsc(n);
+    std::vector<std::uint32_t> per_track_chunk_count(n, 0u);
+    for (const auto& c : chunks) {
+        const std::uint32_t first = per_track_chunk_count[c.track] + 1u;
+        const std::uint32_t spc = static_cast<std::uint32_t>(c.sample_count);
+        auto& entries = stsc[c.track];
+        if (!entries.empty() && entries.back().second == spc &&
+            entries.back().first + 1u == first) {
+            // consecutive same-size run: keep single entry
+        } else {
+            entries.emplace_back(first, spc);
+        }
+        ++per_track_chunk_count[c.track];
+    }
+
+    // 4. Build moov.
+    Mp4Bytes identity;
+    be32(identity, 0x00010000u); be32(identity, 0u); be32(identity, 0u);
+    be32(identity, 0u); be32(identity, 0x00010000u); be32(identity, 0u);
+    be32(identity, 0u); be32(identity, 0u); be32(identity, 0x40000000u);
+
+    Mp4Bytes body = make_mvhd(
+        static_cast<std::uint32_t>(std::min<std::uint64_t>(movie_duration_ms, 0xFFFFFFFFu)),
+        max_track_id + 1u, identity, mp4_time(metadata.creation_time)
+    );
+
+    for (std::size_t i = 0u; i < n; ++i) {
+        const TrackConfig& cfg = tracks[i];
+        const std::uint32_t sample_count = static_cast<std::uint32_t>(sizes[i].size());
+
+        Mp4Bytes stbl = make_stsd_for_track(cfg);
+        append_box_bytes(stbl, make_stts(durations[i]));
+
+        // stsc from the recorded runs; fall back to a single run when empty.
+        Mp4Bytes stsc_payload;
+        put_zeros(stsc_payload, 4u);
+        if (stsc[i].empty()) {
+            be32(stsc_payload, sample_count != 0u ? 1u : 0u);
+            if (sample_count != 0u) {
+                be32(stsc_payload, 1u); be32(stsc_payload, sample_count); be32(stsc_payload, 1u);
+            }
+        } else {
+            be32(stsc_payload, static_cast<std::uint32_t>(stsc[i].size()));
+            for (const auto& e : stsc[i]) {
+                be32(stsc_payload, e.first); be32(stsc_payload, e.second); be32(stsc_payload, 1u);
+            }
+        }
+        append_box_bytes(stbl, box("stsc", stsc_payload));
+        append_box_bytes(stbl, make_stsz(sizes[i]));
+        if (!sync[i].empty()) {
+            append_box_bytes(stbl, make_stss(sync[i]));
+        }
+        if (!ctts[i].empty()) {
+            bool any_offset = false;
+            for (const auto v : ctts[i]) {
+                if (v != 0) { any_offset = true; break; }
+            }
+            if (any_offset) {
+                Mp4Bytes cp;
+                put_zeros(cp, 4u); // version 1 for signed offsets
+                cp[0] = 1u;
+                be32(cp, static_cast<std::uint32_t>(ctts[i].size()));
+                for (const auto v : ctts[i]) {
+                    be32(cp, static_cast<std::uint32_t>(v));
+                    be32(cp, 1u);
+                }
+                append_box_bytes(stbl, box("ctts", cp));
+            }
+        }
+
+        if (any_large_offset) {
+            Mp4Bytes cp;
+            put_zeros(cp, 4u);
+            be32(cp, static_cast<std::uint32_t>(chunk_offsets64.size()));
+            for (const auto v : chunk_offsets64) {
+                be64(cp, v);
+            }
+            append_box_bytes(stbl, box("co64", cp));
+        } else {
+            Mp4Bytes cp;
+            put_zeros(cp, 4u);
+            be32(cp, static_cast<std::uint32_t>(chunk_offsets32.size()));
+            for (const auto v : chunk_offsets32) {
+                be32(cp, v);
+            }
+            append_box_bytes(stbl, box("stco", cp));
+        }
+
+        append_box_bytes(body, [&]() {
+            Mp4Bytes trak;
+            append_box_bytes(
+                trak,
+                make_tkhd(track_ids[i], track_duration_ms[i], cfg.width, cfg.height,
+                          cfg.is_audio && !cfg.is_video, identity, mp4_time(metadata.creation_time))
+            );
+            Mp4Bytes mdia;
+            append_box_bytes(mdia, make_mdhd(timescales[i], track_duration_ms[i],
+                                             mp4_time(metadata.creation_time), cfg.language));
+            append_box_bytes(mdia, make_hdlr(cfg.is_audio && !cfg.is_video));
+            Mp4Bytes minf;
+            if (cfg.is_audio && !cfg.is_video) {
+                append_box_bytes(minf, make_smhd());
+            }
+            append_box_bytes(minf, box("stbl", stbl));
+            append_box_bytes(mdia, box("minf", minf));
+            append_box_bytes(trak, box("mdia", mdia));
+            if (mp4_metadata_has_tags(cfg.metadata)) {
+                append_box_bytes(trak, make_mp4_udta(cfg.metadata));
+            }
+            return box("trak", trak);
+        }());
+    }
+
+    append_box_bytes(body, make_mp4_udta(metadata, true));
+    Mp4Bytes moov = box("moov", body);
+
+    if (moov_reserve >= moov.size() + 8u) {
+        /* Fast-start: overwrite the reserved region in place.  Pad with a
+         * 'free' box so the mdat offset (and all stco/co64 values) stay put. */
+        Mp4Bytes region = moov;
+        const std::size_t pad = moov_reserve - moov.size();
+        if (pad >= 8u) {
+            Mp4Bytes free_box;
+            be32(free_box, static_cast<std::uint32_t>(pad));
+            put4(free_box, "free");
+            put_zeros(free_box, pad - 8u);
+            region.insert(region.end(), free_box.begin(), free_box.end());
+        }
+        return sink.patch(moov_reserve_offset, region);
+    }
+
+    emit_box(sink, moov);
+    return true;
 }
 
 }  // namespace detail

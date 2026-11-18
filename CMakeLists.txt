@@ -1101,6 +1101,23 @@ foreach(fixture IN ITEMS
 endforeach()
 
 add_executable(
+    bs_mux_streaming_test
+    tests/mux_streaming_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_streaming_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_mux_streaming_test
+    COMMAND bs_mux_streaming_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_executable(
     bs_mux_wav_test
     tests/mux_wav_test.cpp
 )
