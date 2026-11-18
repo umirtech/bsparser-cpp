@@ -204,7 +204,7 @@ Useful CMake options:
 | `BS_CAPI_SHARED` | `OFF` | Build the C API as a shared library |
 | `BS_ENABLE_FUZZING` | `ON` | Build the fuzz harnesses |
 | `BS_ENABLE_SANITIZERS` | `ON` | ASan/UBSan on the standalone fuzz driver |
-| `BS_BUILD_BENCHMARKS` | `OFF` | Build `the AVC benchmark tool` and `hash_avc_mv` (development only) |
+| `BS_BUILD_BENCHMARKS` | `OFF` | Build `hash_avc_mv` (development only) |
 
 
 ## Quick start (C++20)

@@ -1308,30 +1308,18 @@ endif()
 #Optional benchmark and deterministic-hash tools (development only)
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #
-#These targets are not part of ctest and are never built by default:
+#This target is not part of ctest and is never built by default:
 #
 #    cmake -B build-bench -DBS_BUILD_BENCHMARKS=ON
-#    cmake --build build-bench --target the AVC benchmark tool hash_avc_mv
-#    ./build-bench/the AVC benchmark tool stream.h264 5 150 1920 1080
+#    cmake --build build-bench --target hash_avc_mv
 #    ./build-bench/hash_avc_mv stream.h264
 #
 option(BS_BUILD_BENCHMARKS
-    "Build the optional AVC benchmark and deterministic hash tools"
+    "Build the optional AVC deterministic hash tool"
     OFF
 )
 
 if(BS_BUILD_BENCHMARKS)
-
-    add_executable(
-        the AVC benchmark tool
-        tools/the AVC benchmark tool.cpp
-    )
-
-    target_link_libraries(
-        the AVC benchmark tool
-        PRIVATE
-            bs
-    )
 
     add_executable(
         hash_avc_mv
