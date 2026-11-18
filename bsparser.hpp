@@ -627,7 +627,8 @@ inline std::size_t dispatch_state_avc(
                                     *resolved.pps,
                                     hdr,
                                     t == avc::NalUnitType::SliceIdr,
-                                    static_cast<std::uint8_t>(nal.header.nal_ref_idc)
+                                    static_cast<std::uint8_t>(nal.header.nal_ref_idc),
+                                    r2.logical_bit_position()
                                 );
                             }
 

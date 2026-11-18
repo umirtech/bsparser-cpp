@@ -132,9 +132,10 @@ class MotionPlaneExtractor {
             const PictureParameterSet& pps,
             const SliceHeader& header,
             bool idr,
-            std::uint8_t nal_ref_idc) {
+            std::uint8_t nal_ref_idc,
+            std::size_t header_bit_offset = 0) {
         try {
-            on_slice_impl(nal, sps, pps, header, idr, nal_ref_idc);
+            on_slice_impl(nal, sps, pps, header, idr, nal_ref_idc, header_bit_offset);
         } catch (...) {
             status_ = MotionVectorStatus::Malformed;
             try {
@@ -160,6 +161,12 @@ class MotionPlaneExtractor {
         if (!current_.started) {
             return;
         }
+
+        /*
+         * Complete cell coverage before the grid is captured by the DPB or
+         * delivered to the consumer: fill macroblocks no slice touched.
+         */
+        fillUncoveredCells();
 
         finalizeSliceReferences();
 
@@ -2636,13 +2643,15 @@ class MotionPlaneExtractor {
         header_mem.slice_map_capacity = current_.slice_map_capacity;
         header_mem.slice_map_coverage = 0;
 
+        if (current_.mbaff) {
+            simd::fillCells(
+                    current_.cells, cell_count, simd::CellPattern::unavailable().cell);
+        }
         /*
-         * MvCell{} already carries ref_idx = -1 and flags = MvUnavailable,
-         * so one 16-byte store per cell is enough.  The SIMD fill turns the
-         * grid clear into wide stores for the common full-picture case.
+         * Grid cells are not cleared here.  Every coded macroblock overwrites
+         * its 4x4 cells, and flush() fills the ones no slice covered (see
+         * fillUncoveredCells()).  This avoids writing the whole grid twice.
          */
-        simd::fillCells(
-                current_.cells, cell_count, simd::CellPattern::unavailable().cell);
     }
 
     void on_slice_impl(
@@ -2651,7 +2660,8 @@ class MotionPlaneExtractor {
             const PictureParameterSet& pps,
             const SliceHeader& header,
             bool idr,
-            std::uint8_t nal_ref_idc) {
+            std::uint8_t nal_ref_idc,
+            std::size_t header_bit_offset = 0) {
         if (sink_.acquire == nullptr || sink_.ready == nullptr) {
             return;
         }
@@ -2748,15 +2758,18 @@ class MotionPlaneExtractor {
 
         extract_rbsp_into(nal.payload_bytes(), rbsp_);
         /*
-         * Parse the header from the original EBSP so that
-         * emulation-prevention bytes are handled exactly once; the resulting
-         * logical bit offset is relative to `rbsp_` and is what the slice-data
-         * readers expect.
+         * The dispatcher already parsed this slice header to build `header`;
+         * reuse its logical bit position instead of re-parsing the header a
+         * second time.  A zero offset means an older caller did not supply it,
+         * in which case fall back to one parse (keeps the API compatible).
          */
-        RbspReader header_reader(nal.payload_bytes());
-        (void)parse_slice_header(
-                header_reader, sps, pps, nal.type(), nal.header.nal_ref_idc);
-        std::size_t bit_offset = header_reader.logical_bit_position();
+        std::size_t bit_offset = header_bit_offset;
+        if (bit_offset == 0u) {
+            RbspReader header_reader(nal.payload_bytes());
+            (void)parse_slice_header(
+                    header_reader, sps, pps, nal.type(), nal.header.nal_ref_idc);
+            bit_offset = header_reader.logical_bit_position();
+        }
 
         if (pps.entropy_coding_mode_flag) {
             bit_offset = (bit_offset + 7u) & ~std::size_t{7u};
@@ -2821,6 +2834,39 @@ class MotionPlaneExtractor {
             simd::fillBlock(current_.cells, current_.width4x4,
                             mb_x * 4u, mb_y * 4u, 4, 4,
                             simd::CellPattern::intra().cell);
+            current_.mbs[mb_addr].intra_cells_written = true;
+        }
+    }
+
+    /*
+     * Fill cells that no slice covered.  Previously the whole grid was
+     * cleared at picture start and then overwritten by every coded MB; this
+     * is the same result with one pass over only the uncovered macroblocks.
+     */
+    void fillUncoveredCells() {
+        if (current_.cells == nullptr) {
+            return;
+        }
+        const std::uint32_t mb_count = currentMbCount();
+        const std::size_t mb_entries = std::min<std::size_t>(mb_count, current_.mbs.size());
+        for (std::uint32_t mb_addr = 0; mb_addr < mb_entries; ++mb_addr) {
+            const detail::MbData& mb = current_.mbs[mb_addr];
+            if (mb.available || mb.intra_cells_written) {
+                continue;
+            }
+            std::uint32_t mb_x = 0;
+            std::uint32_t mb_y = 0;
+            if (current_.mbaff) {
+                const std::uint32_t pair = mb_addr / 2u;
+                mb_x = pair % current_.mb_width;
+                mb_y = (pair / current_.mb_width) * 2u + (mb_addr & 1u);
+            } else {
+                mb_x = mb_addr % current_.mb_width;
+                mb_y = mb_addr / current_.mb_width;
+            }
+            simd::fillBlock(current_.cells, current_.width4x4,
+                            mb_x * 4u, mb_y * 4u, 4, 4,
+                            simd::CellPattern::unavailable().cell);
         }
     }
 
@@ -3023,7 +3069,8 @@ class MotionVectorExtractor {
             const PictureParameterSet& pps,
             const SliceHeader& header,
             bool idr,
-            std::uint8_t nal_ref_idc) {
+            std::uint8_t nal_ref_idc,
+            std::size_t header_bit_offset = 0) {
         try {
             const bool separate = sps.separate_colour_plane_flag;
             const std::uint8_t plane = separate ? header.colour_plane_id : 0;
@@ -3056,7 +3103,7 @@ class MotionVectorExtractor {
 
             auto& decoder = ensure_plane(plane);
             decoder.set_colour_plane(plane, separate ? 3 : 1);
-            decoder.on_slice(nal, sps, pps, header, idr, nal_ref_idc);
+            decoder.on_slice(nal, sps, pps, header, idr, nal_ref_idc, header_bit_offset);
 
             if (decoder.status() != MotionVectorStatus::Ok) {
                 status_ = decoder.status();

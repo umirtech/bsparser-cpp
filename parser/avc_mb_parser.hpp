@@ -295,6 +295,8 @@ struct MbData {
     bool transform8x8 : 1 = false;
     /* True for a field picture MB, or for a field-coded MB in MBAFF. */
     bool field_mb : 1 = false;
+    /* Intra-slice cells were written without setting `available`. */
+    bool intra_cells_written : 1 = false;
     std::uint8_t slice_group = 0;
     std::uint8_t cbp = 0;
     std::uint8_t chroma_pred = 0;
@@ -888,13 +890,22 @@ class SliceDataParser {
      * preserved exactly because saturation only affects magnitudes that are
      * already far above both thresholds.
      */
+    /* Progressive raster shortcut shared by the neighbour-context lookups. */
+    [[nodiscard]] BS_AVC_MB_ALWAYS_INLINE std::uint32_t mb_addr_for_cell_fast(
+            std::uint32_t x4, std::uint32_t y4) const noexcept {
+        if (!mbaff_frame_ && !field_pic_) {
+            return (y4 >> 2) * mb_width_ + (x4 >> 2);
+        }
+        return mb_addr_for_cell(x4, y4);
+    }
+
     [[nodiscard]] int abs_mvd_at(
             std::uint32_t x4,
             std::uint32_t y4,
             int list,
             int comp) const noexcept {
         if (x4 >= width4x4_ || y4 >= height4x4_) return 0;
-        const std::uint32_t addr = mb_addr_for_cell(x4, y4);
+        const std::uint32_t addr = mb_addr_for_cell_fast(x4, y4);
         if (addr >= mbs_.size() || !mbs_[addr].available ||
             mbs_[addr].slice_id != slice_id_) {
             return 0;
@@ -1546,7 +1557,7 @@ class SliceDataParser {
 
     [[nodiscard]] int ref_at(int list, std::uint32_t x4, std::uint32_t y4) const {
         if (x4 >= width4x4_ || y4 >= height4x4_) return -1;
-        const std::uint32_t addr = mb_addr_for_cell(x4, y4);
+        const std::uint32_t addr = mb_addr_for_cell_fast(x4, y4);
         if (addr >= mbs_.size() || !mbs_[addr].available ||
             mbs_[addr].slice_id != slice_id_) {
             return -1;
@@ -1557,7 +1568,7 @@ class SliceDataParser {
 
     [[nodiscard]] bool direct_at(std::uint32_t x4, std::uint32_t y4) const {
         if (x4 >= width4x4_ || y4 >= height4x4_) return false;
-        const std::uint32_t addr = mb_addr_for_cell(x4, y4);
+        const std::uint32_t addr = mb_addr_for_cell_fast(x4, y4);
         if (addr >= mbs_.size() || !mbs_[addr].available ||
             mbs_[addr].slice_id != slice_id_) {
             return false;
@@ -1584,7 +1595,8 @@ class SliceDataParser {
     }
 
     [[nodiscard]] bool field_mb_at_cell(std::uint32_t x4, std::uint32_t y4) const noexcept {
-        const std::uint32_t addr = mb_addr_for_cell(x4, y4);
+        if (x4 >= width4x4_ || y4 >= height4x4_) return false;
+        const std::uint32_t addr = mb_addr_for_cell_fast(x4, y4);
         return addr < mbs_.size() && mbs_[addr].available && mbs_[addr].field_mb;
     }
 

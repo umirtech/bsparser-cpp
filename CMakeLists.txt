@@ -1304,6 +1304,28 @@ if(BS_ENABLE_FUZZING)
 
 endif()
 
+#Single-thread full-decode benchmark for comparing MV extraction cost.
+option(BS_BUILD_FULL_DECODE_BENCH
+    "Build the optional FFmpeg-based single-thread decode benchmark"
+    OFF
+)
+
+if(BS_BUILD_FULL_DECODE_BENCH)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil)
+
+    add_executable(
+        bench_avc_decode_full
+        tools/bench_avc_decode_full.cpp
+    )
+
+    target_link_libraries(
+        bench_avc_decode_full
+        PRIVATE
+            PkgConfig::AVCODEC
+    )
+endif()
+
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #Optional benchmark and deterministic-hash tools (development only)
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
