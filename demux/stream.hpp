@@ -47,7 +47,7 @@ struct ContainerMetadata {
  * Container formats
  * -----------------------------------------------------------
  */
-enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv, Ogg, Ps };
+enum class Container : std::uint8_t { Unknown, Mp4, MpegTs, Avi, Flv, Ivf, Mkv, Ogg, Ps, Wav };
 
 /* Unified codec IDs: demux uses the same bs::Codec values as the parser
  * and the muxer.  This alias keeps source compatibility. */

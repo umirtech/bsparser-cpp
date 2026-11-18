@@ -511,6 +511,12 @@ inline void parse_moov_tracks(
                     pt.view.framing = NalFramingMode::Obu;
                 } else if (pt.view.codec == Codec::Vp9 || pt.view.codec == Codec::Vp8) {
                     pt.view.framing = NalFramingMode::RawFrame;
+                } else if (pt.view.codec == Codec::Unknown ||
+                           (!is_parser_supported(pt.view.codec) &&
+                            is_video_codec(pt.view.codec))) {
+                    // Container-packed video (MPEG-4, MJPEG, etc.) is not
+                    // NAL-framed: expose whole samples as RawFrame.
+                    pt.view.framing = NalFramingMode::RawFrame;
                 } else {
                     pt.view.framing = NalFramingMode::LengthPrefixed;
                 }
@@ -529,6 +535,7 @@ inline void parse_moov_tracks(
                 pt.view.framing = NalFramingMode::RawFrame;
                 if (pt.audio_entry.found) {
                     pt.view.audio_codec = pt.audio_entry.codec;
+                    pt.view.codec = pt.audio_entry.codec; // unified identity
                     pt.view.codec_name = pt.audio_entry.fourcc;
                     pt.view.sample_rate = pt.audio_entry.sample_rate;
                     pt.view.channels = pt.audio_entry.channels;
@@ -1686,6 +1693,7 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
             // Audio track.
             v.is_audio = true;
             v.framing = NalFramingMode::RawFrame;
+            v.codec = Codec::Unknown;
             v.sample_rate = t.sample_rate;
             v.channels = t.channels;
             v.bits_per_sample = t.bits_per_sample;
@@ -1709,10 +1717,17 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                 v.audio_codec = t.bits_per_sample == 64u ? AudioCodec::PcmFloat64
                                                          : AudioCodec::PcmFloat32;
             }
+            v.codec = v.audio_codec; // unified concrete codec identity
         } else if (t.track_type == 0x11u || t.track_type == 0x12u) {
             v.is_subtitle = true;
             v.framing = NalFramingMode::RawFrame;
             v.subtitle_codec = t.codec_id; // e.g. S_TEXT/UTF8, S_TEXT/WEBVTT
+            v.codec = Codec::Unknown;
+            if (t.codec_id == "S_TEXT/UTF8" || t.codec_id == "S_TEXT/ASCII") {
+                v.codec = Codec::Subrip;
+            } else if (t.codec_id == "S_TEXT/WEBVTT") {
+                v.codec = Codec::Webvtt;
+            }
         } else if (t.codec_id == "V_MPEG4/ISO/AVC") {
             v.is_video = true;
             v.codec = Codec::Avc;
@@ -1746,7 +1761,16 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
             v.is_video = true;
             v.codec = Codec::Vp8;
             v.framing = NalFramingMode::RawFrame;
+        } else if (t.track_type == 1u || t.codec_id.rfind("V_", 0) == 0) {
+            // Unknown video codec: still expose the track with a concrete
+            // CodecID name and whole-sample framing.
+            v.is_video = true;
+            v.codec = Codec::Unknown;
+            v.framing = NalFramingMode::RawFrame;
         } else {
+            // Genuinely non-media track entry: skip it from the index so it
+            // does not become a phantom default track.
+            out.tracks[i] = TrackView{};
             continue;
         }
 
@@ -3331,6 +3355,110 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
     out.tracks[0].sample_count = out.samples[0].size();
 
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* WAV / RIFF PCM                                                      */
+/* ------------------------------------------------------------------ */
+
+inline bool build_wav(FileSource& src, IndexBuildResult& out) {
+    const auto data = src.data();
+    if (data.size() < 44 || std::memcmp(data.data(), "RIFF", 4) != 0 ||
+        std::memcmp(data.data() + 8, "WAVE", 4) != 0) {
+        return false;
+    }
+
+    // Locate fmt and data chunks.
+    std::size_t fmt_pos = 0;
+    std::size_t data_pos = 0;
+    std::uint32_t data_size = 0;
+    std::uint16_t format_tag = 0, channels = 0, bits = 0;
+    std::uint32_t rate = 0, block_align = 0;
+
+    std::size_t p = 12;
+    while (p + 8 <= data.size()) {
+        const std::uint32_t chunk_size = static_cast<std::uint32_t>(data[p + 4]) |
+            (static_cast<std::uint32_t>(data[p + 5]) << 8) |
+            (static_cast<std::uint32_t>(data[p + 6]) << 16) |
+            (static_cast<std::uint32_t>(data[p + 7]) << 24);
+        if (p + 8 + chunk_size > data.size()) {
+            break;
+        }
+        if (std::memcmp(data.data() + p, "fmt ", 4) == 0 && chunk_size >= 16) {
+            fmt_pos = p;
+            format_tag = static_cast<std::uint16_t>(data[p + 8] | (data[p + 9] << 8));
+            channels = static_cast<std::uint16_t>(data[p + 10] | (data[p + 11] << 8));
+            rate = static_cast<std::uint32_t>(data[p + 12]) |
+                   (static_cast<std::uint32_t>(data[p + 13]) << 8) |
+                   (static_cast<std::uint32_t>(data[p + 14]) << 16) |
+                   (static_cast<std::uint32_t>(data[p + 15]) << 24);
+            block_align = static_cast<std::uint16_t>(data[p + 20] | (data[p + 21] << 8));
+            bits = static_cast<std::uint16_t>(data[p + 22] | (data[p + 23] << 8));
+        } else if (std::memcmp(data.data() + p, "data", 4) == 0) {
+            data_pos = p + 8;
+            data_size = chunk_size;
+        }
+        p += 8 + chunk_size + (chunk_size & 1u);
+    }
+
+    if (fmt_pos == 0 || data_pos == 0 || channels == 0u) {
+        return false;
+    }
+
+    AudioCodec codec = AudioCodec::Unknown;
+    if (format_tag == 1) {
+        codec = bits == 8u ? Codec::Pcm8 : bits == 24u ? Codec::Pcm24
+              : bits == 32u ? Codec::Pcm32 : Codec::Pcm16;
+    } else if (format_tag == 3) {
+        codec = bits == 64u ? Codec::PcmFloat64 : Codec::PcmFloat32;
+    } else if (format_tag == 0xFFFE) {
+        // Extensible: read the subformat GUID from the fmt payload.
+        const std::size_t sub = fmt_pos + 8 + 24;
+        if (sub + 2 <= data.size() && data[sub] == 1 && data[sub + 1] == 0) {
+            codec = bits == 8u ? Codec::Pcm8 : bits == 24u ? Codec::Pcm24
+                  : bits == 32u ? Codec::Pcm32 : Codec::Pcm16;
+        } else {
+            codec = bits == 64u ? Codec::PcmFloat64 : Codec::PcmFloat32;
+        }
+    }
+    if (codec == AudioCodec::Unknown) {
+        return false;
+    }
+
+    out.tracks.resize(1);
+    out.samples.resize(1);
+    out.param_sets.resize(1);
+    TrackView& v = out.tracks[0];
+    v.id = 1;
+    v.is_audio = true;
+    v.framing = NalFramingMode::RawFrame;
+    v.codec = codec;
+    v.audio_codec = codec;
+    v.codec_name = codec_name(codec);
+    v.sample_rate = rate;
+    v.channels = channels;
+    v.bits_per_sample = bits;
+    v.timescale = rate != 0u ? rate : 1000u;
+    v.mmap_backed = src.mmap_backed();
+
+    // Emit one sample per block-aligned frame.
+    const std::size_t align = block_align != 0u ? block_align
+                                                : static_cast<std::size_t>(channels) * (bits / 8u);
+    if (align == 0u) {
+        return false;
+    }
+    const std::size_t limit = std::min<std::size_t>(data_size, data.size() - data_pos);
+    for (std::size_t off = 0; off + align <= limit; off += align) {
+        SampleEntry e;
+        e.offset = data_pos + off;
+        e.size = align;
+        e.duration = align;
+        e.is_key = true;
+        e.framing = NalFramingMode::RawFrame;
+        out.samples[0].push_back(e);
+    }
+    v.sample_count = out.samples[0].size();
+    return !out.samples[0].empty();
 }
 
 }  // namespace detail

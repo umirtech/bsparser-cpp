@@ -82,6 +82,9 @@ class DemuxerImpl {
                 case Container::Ps:
                     ok = build_ps(source_, index_);
                     break;
+                case Container::Wav:
+                    ok = build_wav(source_, index_);
+                    break;
                 default:
                     return false;
             }

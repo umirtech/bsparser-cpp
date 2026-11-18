@@ -151,9 +151,14 @@ inline VideoEntry parse_stsd(std::span<const std::uint8_t> d, std::size_t stsd_p
 
         const std::string type = std::string(reinterpret_cast<const char*>(d.data() + p + 4), 4);
 
-        const bool is_video = type == "avc1" || type == "hvc1" || type == "hev1" ||
-                              type == "vvc1" || type == "vvcC" || type == "av01" ||
-                              type == "vp09" || type == "vp08";
+        /* Any sample entry that is not a known audio/subtitle entry is
+         * treated as video so unknown video codecs are still exposed. */
+        const bool is_audio = type == "mp4a" || type == ".mp3" || type == "sowt" ||
+                              type == "twos" || type == "in24" || type == "in32" ||
+                              type == "fl32" || type == "fl64" || type == "Opus" ||
+                              type == "fLaC" || type == "ac-3" || type == "ec-3";
+        const bool is_subtitle = type == "tx3g" || type == "wvtt" || type == "sbtl";
+        const bool is_video = !is_audio && !is_subtitle;
 
         if (is_video) {
             e.found = true;
