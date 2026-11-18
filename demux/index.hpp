@@ -1716,7 +1716,13 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
             } else if (t.codec_id == "A_PCM/FLOAT/IEEE") {
                 v.audio_codec = t.bits_per_sample == 64u ? AudioCodec::PcmFloat64
                                                          : AudioCodec::PcmFloat32;
+            } else if (t.codec_id == "A_MPEG/L3" || t.codec_id == "A_MPEG/L2") {
+                v.audio_codec = Codec::Mp3;
+            } else if (t.codec_id.rfind("A_AAC", 0) == 0) {
+                v.audio_codec = Codec::Aac;
             }
+            // Other CodecIDs (A_TTA1, A_REAL/COOK, A_AAC/MPEG4/LC) keep
+            // Unknown but remain identified by codec_name / subtitle_codec.
             v.codec = v.audio_codec; // unified concrete codec identity
         } else if (t.track_type == 0x11u || t.track_type == 0x12u) {
             v.is_subtitle = true;
@@ -1763,10 +1769,30 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
             v.framing = NalFramingMode::RawFrame;
         } else if (t.track_type == 1u || t.codec_id.rfind("V_", 0) == 0) {
             // Unknown video codec: still expose the track with a concrete
-            // CodecID name and whole-sample framing.
+            // CodecID name and whole-sample framing.  V_MS/VFW/FOURCC carries
+            // a BITMAPINFOHEADER in CodecPrivate with biCompression at +16.
             v.is_video = true;
             v.codec = Codec::Unknown;
             v.framing = NalFramingMode::RawFrame;
+            if (t.codec_id == "V_MS/VFW/FOURCC" && t.codec_private.size() >= 20u) {
+                const std::string fourcc(
+                    reinterpret_cast<const char*>(t.codec_private.data() + 16), 4
+                );
+                v.codec = avi_codec_from_fourcc(fourcc);
+                v.width = static_cast<std::uint32_t>(
+                    static_cast<std::uint32_t>(t.codec_private[4]) |
+                    (static_cast<std::uint32_t>(t.codec_private[5]) << 8) |
+                    (static_cast<std::uint32_t>(t.codec_private[6]) << 16) |
+                    (static_cast<std::uint32_t>(t.codec_private[7]) << 24));
+                v.height = static_cast<std::uint32_t>(
+                    static_cast<std::uint32_t>(t.codec_private[8]) |
+                    (static_cast<std::uint32_t>(t.codec_private[9]) << 8) |
+                    (static_cast<std::uint32_t>(t.codec_private[10]) << 16) |
+                    (static_cast<std::uint32_t>(t.codec_private[11]) << 24));
+                v.codec_name = fourcc_is_blank(fourcc) ? t.codec_id : fourcc;
+            } else {
+                v.codec_name = t.codec_id;
+            }
         } else {
             // Genuinely non-media track entry: skip it from the index so it
             // does not become a phantom default track.
