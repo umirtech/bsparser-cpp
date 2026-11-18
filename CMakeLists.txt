@@ -983,6 +983,23 @@ foreach(pair IN ITEMS
 endforeach()
 
 add_executable(
+    bs_demux_features_test
+    tests/demux_features_test.cpp
+)
+
+target_link_libraries(
+    bs_demux_features_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_demux_features_test
+    COMMAND bs_demux_features_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_executable(
     bs_demux_stream_test
     tests/demux_stream_test.cpp
 )

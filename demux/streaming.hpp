@@ -277,6 +277,51 @@ class Track : public TrackView {
         return i < samples.size();
     }
 
+    /* Keyframe-aware seek: find the last sample with pts <= target that is
+     * marked as a keyframe, so decoding can start there.  Falls back to the
+     * first sample when no keyframe precedes the target. */
+    bool seek_time_keyframe(std::int64_t pts) {
+        if (!valid()) {
+            return false;
+        }
+        const auto& samples = impl_->index_.samples[index_];
+        if (samples.empty()) {
+            position_ = 0;
+            return false;
+        }
+
+        // Binary search for the first sample with pts > target.
+        std::size_t lo = 0;
+        std::size_t hi = samples.size();
+        while (lo < hi) {
+            const std::size_t mid = lo + (hi - lo) / 2u;
+            if (samples[mid].pts <= pts) {
+                lo = mid + 1u;
+            } else {
+                hi = mid;
+            }
+        }
+        std::size_t candidate = lo != 0u ? lo - 1u : 0u;
+
+        // Walk back to the nearest keyframe at or before the target.
+        while (candidate > 0u && !samples[candidate].is_key) {
+            --candidate;
+        }
+        if (!samples[candidate].is_key) {
+            // No keyframe at/before target: use the first keyframe, if any.
+            candidate = 0u;
+            while (candidate < samples.size() && !samples[candidate].is_key) {
+                ++candidate;
+            }
+            if (candidate == samples.size()) {
+                position_ = 0;
+                return false;
+            }
+        }
+        position_ = candidate;
+        return true;
+    }
+
     [[nodiscard]]
     std::size_t position() const noexcept {
         return position_;
@@ -291,6 +336,89 @@ class Track : public TrackView {
     std::shared_ptr<detail::DemuxerImpl> impl_{};
     std::size_t index_ = 0;
     std::size_t position_ = 0;
+};
+
+/*
+ * InterleavedReader walks all tracks at once and returns the next sample in
+ * decode (DTS) order.  Each track keeps its own cursor, so consumers do not
+ * have to implement A/V synchronization themselves.
+ */
+class InterleavedReader {
+   public:
+    explicit InterleavedReader(std::shared_ptr<detail::DemuxerImpl> impl)
+        : impl_(std::move(impl)) {
+        if (impl_) {
+            cursors_.assign(impl_->index_.samples.size(), 0u);
+        }
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        return impl_ != nullptr;
+    }
+
+    [[nodiscard]] bool hasNext() const noexcept {
+        if (!impl_) {
+            return false;
+        }
+        for (std::size_t i = 0; i < cursors_.size(); ++i) {
+            if (cursors_[i] < impl_->index_.samples[i].size()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool next(SampleView& out) {
+        if (!hasNext()) {
+            return false;
+        }
+        // Pick the track whose next sample has the smallest DTS
+        // (fall back to PTS when DTS is unavailable).
+        std::size_t best = cursors_.size();
+        std::int64_t best_time = 0;
+        for (std::size_t i = 0; i < cursors_.size(); ++i) {
+            if (cursors_[i] >= impl_->index_.samples[i].size()) {
+                continue;
+            }
+            const auto& s = impl_->index_.samples[i][cursors_[i]];
+            const std::int64_t time = s.dts != 0 ? s.dts : s.pts;
+            if (best == cursors_.size() || time < best_time) {
+                best = i;
+                best_time = time;
+            }
+        }
+        if (best == cursors_.size()) {
+            return false;
+        }
+        const auto& e = impl_->index_.samples[best][cursors_[best]++];
+        SampleView sv;
+        sv.track_id = impl_->index_.tracks[best].id;
+        sv.index = cursors_[best] - 1u;
+        sv.pts = e.pts;
+        sv.dts = e.dts;
+        sv.duration = e.duration;
+        sv.is_key = e.is_key;
+        sv.framing = e.framing;
+        if (e.is_param_set) {
+            const auto& ps = impl_->index_.param_sets[best];
+            sv.data = std::span<const std::uint8_t>(ps.data(), e.size);
+            sv.mmap_backed = false;
+        } else {
+            sv.data = impl_->source_.data().subspan(e.offset, e.size);
+            sv.mmap_backed = impl_->source_.mmap_backed();
+        }
+        out = sv;
+        return true;
+    }
+
+    SampleView next() {
+        SampleView sv;
+        return next(sv) ? sv : SampleView{};
+    }
+
+   private:
+    std::shared_ptr<detail::DemuxerImpl> impl_{};
+    std::vector<std::size_t> cursors_{};
 };
 
 /*
@@ -408,6 +536,11 @@ class Demuxer {
     [[nodiscard]]
     Track track(std::size_t index) const {
         return Track(impl_, index);
+    }
+
+    [[nodiscard]]
+    InterleavedReader interleaved() const {
+        return InterleavedReader(impl_);
     }
 
     [[nodiscard]]
