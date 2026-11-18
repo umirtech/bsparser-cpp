@@ -174,6 +174,12 @@ struct TrackConfig {
     std::uint16_t channels = 2;
     std::vector<std::uint8_t> audio_config; /* AAC AudioSpecificConfig */
 
+    /* Video codec private data (avcC / hvcC / vvcC).  When empty, the MKV
+     * file writer derives an avcC from the first keyframe's SPS/PPS (or a
+     * minimal hvcC/vvcC).  Streaming writers cannot inspect future samples,
+     * so they rely on the caller supplying this for H.26x tracks. */
+    std::vector<std::uint8_t> codec_config;
+
     Metadata metadata; /* per-track tags (MP4 trak/udta, MKV TrackEntry) */
 };
 

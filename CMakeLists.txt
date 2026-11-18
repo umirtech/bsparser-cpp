@@ -1118,6 +1118,22 @@ add_test(
 )
 
 add_executable(
+    bs_mux_conformance_test
+    tests/mux_conformance_test.cpp
+)
+
+target_link_libraries(
+    bs_mux_conformance_test
+    PRIVATE
+        bs
+)
+
+add_test(
+    NAME bs_mux_conformance_test
+    COMMAND bs_mux_conformance_test
+)
+
+add_executable(
     bs_mux_wav_test
     tests/mux_wav_test.cpp
 )

@@ -561,6 +561,57 @@ inline Mp4Bytes make_smhd() {
     return box("smhd", b);
 }
 
+/* VideoMediaHeader: version/flags + graphicsmode(0) + opcolor(0,0,0). */
+inline Mp4Bytes make_vmhd() {
+    Mp4Bytes b;
+    put_zeros(b, 4u);  // version + flags
+    be16(b, 0u);       // graphicsmode
+    be16(b, 0u);       // opcolor[0]
+    be16(b, 0u);       // opcolor[1]
+    be16(b, 0u);       // opcolor[2]
+    return box("vmhd", b);
+}
+
+/* DataInformation + DataReference with one self-contained 'url ' entry.
+ * Required by ISO-BMFF: every sample entry's data_reference_index=1 must
+ * resolve to a data reference. */
+inline Mp4Bytes make_dinf() {
+    Mp4Bytes url;
+    put_zeros(url, 4u); // version + flags=1 (self-contained, media in this file)
+    url[3] = 1u;
+    Mp4Bytes dref;
+    put_zeros(dref, 4u); // version + flags
+    be32(dref, 1u);      // entry_count
+    append_box_bytes(dref, box("url ", url));
+    Mp4Bytes dinf;
+    append_box_bytes(dinf, box("dref", dref));
+    return box("dinf", dinf);
+}
+
+/* CompositionTimeToSample: signed PTS-DTS offsets, version 1. */
+inline Mp4Bytes make_ctts(const std::vector<std::int64_t>& offsets) {
+    bool any = false;
+    for (const auto v : offsets) {
+        if (v != 0) {
+            any = true;
+            break;
+        }
+    }
+    if (!any) {
+        return {};
+    }
+    Mp4Bytes b;
+    b.push_back(1u);      // version 1 (signed offsets)
+    put_zeros(b, 3u);     // flags
+    be32(b, static_cast<std::uint32_t>(offsets.size()));
+    for (const auto v : offsets) {
+        const std::uint32_t u = static_cast<std::uint32_t>(v);
+        be32(b, u);
+        be32(b, 1u);      // sample_count per entry
+    }
+    return box("ctts", b);
+}
+
 /* Minimal pcmC box for integer PCM sample entries. */
 inline Mp4Bytes make_pcmc() {
     Mp4Bytes b;
@@ -630,8 +681,14 @@ inline Mp4Bytes make_tkhd(
     be16(b, is_audio ? 0x0100u : 0u); // volume
     be16(b, 0u);                      // reserved
     b.insert(b.end(), identity.begin(), identity.end());
-    be32(b, static_cast<std::uint32_t>(dim16(width)) << 16u);
-    be32(b, static_cast<std::uint32_t>(dim16(height)) << 16u);
+    if (is_audio) {
+        // Audio tracks have no spatial dimensions (0.16 fixed-point).
+        be32(b, 0u);
+        be32(b, 0u);
+    } else {
+        be32(b, static_cast<std::uint32_t>(dim16(width)) << 16u);
+        be32(b, static_cast<std::uint32_t>(dim16(height)) << 16u);
+    }
     return box("tkhd", b);
 }
 
@@ -968,6 +1025,19 @@ inline bool write_mp4(
             Mp4Bytes stbl;
             append_box_bytes(stbl, make_stsd_for_track(cfg, ss));
             append_box_bytes(stbl, make_stts(durations[i]));
+            // ctts: PTS-DTS offsets (B-frames / reordering).
+            {
+                std::vector<std::int64_t> offsets;
+                offsets.reserve(ss.size());
+                for (const auto& s : ss) {
+                    offsets.push_back(static_cast<std::int64_t>(std::clamp<std::int64_t>(
+                        s.pts - s.dts, -0x80000000LL, 0x7FFFFFFFLL)));
+                }
+                const Mp4Bytes ctts = make_ctts(offsets);
+                if (!ctts.empty()) {
+                    append_box_bytes(stbl, ctts);
+                }
+            }
             append_box_bytes(stbl, make_stsc(sample_count));
             append_box_bytes(stbl, make_stsz(sizes[i]));
 
@@ -998,7 +1068,10 @@ inline bool write_mp4(
             Mp4Bytes minf;
             if (cfg.is_audio && !cfg.is_video) {
                 append_box_bytes(minf, make_smhd());
+            } else {
+                append_box_bytes(minf, make_vmhd());
             }
+            append_box_bytes(minf, make_dinf());
             append_box_bytes(minf, box("stbl", stbl));
 
             Mp4Bytes mdia;
@@ -1326,7 +1399,10 @@ inline bool finish_mp4_stream(
             Mp4Bytes minf;
             if (cfg.is_audio && !cfg.is_video) {
                 append_box_bytes(minf, make_smhd());
+            } else {
+                append_box_bytes(minf, make_vmhd());
             }
+            append_box_bytes(minf, make_dinf());
             append_box_bytes(minf, box("stbl", stbl));
             append_box_bytes(mdia, box("minf", minf));
             append_box_bytes(trak, box("mdia", mdia));

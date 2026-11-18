@@ -29,6 +29,12 @@ namespace detail {
  * FileSink is a pure append buffer, so the frame block is assembled first
  * (allowing an accurate frame count) and the header is emitted just before
  * it in a second write().
+ *
+ * Timebase: the header's framerate field carries the tick rate -- the
+ * caller's TrackConfig::timescale, defaulting to 1000 -- and the timescale
+ * field is 1.  Frame timestamps are stored verbatim from Sample::pts, in
+ * those ticks (seconds = pts / framerate).  The caller is responsible for
+ * supplying pts in that unit; the sidecar index records the same values.
  */
 
 /* Append a little-endian integer to the sidecar index buffer. */
@@ -177,10 +183,19 @@ inline bool write_ivf(FileSink& sink,
     header[14] = static_cast<std::uint8_t>(height);
     header[15] = static_cast<std::uint8_t>(height >> 8);
 
-    // bytes 16..19: framerate = 30
+    // Timebase: framerate = tick rate (track.timescale, default 1000),
+    // timescale = 1 => each frame pts below is in 1/framerate-second ticks.
+    const std::uint32_t framerate =
+        track.timescale != 0u ? track.timescale : 1000u;
+    const std::uint32_t timescale = 1u;
+    // bytes 16..19: framerate (ticks per second)
+    for (unsigned i = 0; i < 4u; ++i) {
+        header[16u + i] = static_cast<std::uint8_t>(framerate >> (8u * i));
+    }
     // bytes 20..23: timescale = 1
-    header[16] = static_cast<std::uint8_t>(30);
-    header[20] = static_cast<std::uint8_t>(1);
+    for (unsigned i = 0; i < 4u; ++i) {
+        header[20u + i] = static_cast<std::uint8_t>(timescale >> (8u * i));
+    }
 
     // bytes 24..27: frame count
     header[24] = static_cast<std::uint8_t>(frame_count);
@@ -229,11 +244,22 @@ inline void start_ivf_stream(FileSink& sink, const TrackConfig& track) {
     header[13] = static_cast<std::uint8_t>(width >> 8u);
     header[14] = static_cast<std::uint8_t>(height);
     header[15] = static_cast<std::uint8_t>(height >> 8u);
-    header[16] = static_cast<std::uint8_t>(30); // framerate
-    header[20] = static_cast<std::uint8_t>(1);  // timescale
+    // Timebase: framerate = tick rate (track.timescale, default 1000),
+    // timescale = 1 => frame pts written below are in 1/framerate-second ticks.
+    const std::uint32_t framerate =
+        track.timescale != 0u ? track.timescale : 1000u;
+    const std::uint32_t timescale = 1u;
+    for (unsigned i = 0; i < 4u; ++i) {
+        header[16u + i] = static_cast<std::uint8_t>(framerate >> (8u * i));
+    }
+    for (unsigned i = 0; i < 4u; ++i) {
+        header[20u + i] = static_cast<std::uint8_t>(timescale >> (8u * i));
+    }
     sink.write(header);
 }
 
+/* Frame timestamps are copied verbatim from Sample::pts, in the header's
+ * tick unit (see start_ivf_stream()). */
 inline void append_ivf_stream_sample(FileSink& sink, const Sample& sample) {
     if (sample.data.empty() || sample.data.size() > 0xFFFFFFFFull) {
         return;

@@ -172,6 +172,19 @@ class MuxerImpl {
         }
 
         if (sink_.streaming() && !stream_started_) {
+            /* MKV streaming writes TrackEntry headers up front, before any
+             * samples are seen.  Derive H.26x CodecPrivate from the first
+             * keyframe now so the header carries the parameter sets. */
+            if (container_ == Container::Mkv && index < tracks_.size() &&
+                tracks_[index].codec_config.empty() &&
+                is_h26x(tracks_[index].codec) && sample.is_key && !sample.data.empty()) {
+                std::vector<std::vector<Sample>> one(tracks_.size());
+                one[index].push_back(sample);
+                const auto cfg = detail::mkv_derive_codec_config(tracks_[index], one[index]);
+                if (!cfg.empty()) {
+                    tracks_[index].codec_config = cfg;
+                }
+            }
             start_stream();
         }
 
@@ -229,6 +242,15 @@ class MuxerImpl {
                     break;
                 }
                 case Container::Mkv: {
+                    /* A parameter-set-only sample was already written into
+                     * this track's CodecPrivate at stream start; emitting it
+                     * again as an in-band block would make the demuxer add a
+                     * duplicate synthetic sample. */
+                    if (detail::is_param_set_only_sample(
+                            tracks_[index].codec, sample.data) &&
+                        !tracks_[index].codec_config.empty()) {
+                        return;
+                    }
                     /* Fold a leading parameter-set pseudo-sample into the
                      * next real sample.  Normalise both to length-prefixed
                      * NALs so mkv_to_annex_b() can convert the merged data. */
@@ -343,6 +365,7 @@ class MuxerImpl {
                     written = detail::finish_ivf_stream(sink_, stream_frame_count_);
                     break;
                 case Container::Wav:
+                    detail::append_wav_stream_pad(sink_, stream_data_bytes_);
                     written = detail::finish_wav_stream(sink_, stream_data_bytes_);
                     break;
                 default:
