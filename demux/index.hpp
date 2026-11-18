@@ -1489,35 +1489,71 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
         v.codec_name = t.codec_id;
         v.width = static_cast<std::uint32_t>(t.width);
         v.height = static_cast<std::uint32_t>(t.height);
-        v.is_video = true;
         v.timescale = 1000;
         v.mmap_backed = src.mmap_backed();
 
-        if (t.codec_id == "V_MPEG4/ISO/AVC") {
+        if (t.track_type == 2u) {
+            // Audio track.
+            v.is_audio = true;
+            v.framing = NalFramingMode::RawFrame;
+            v.sample_rate = t.sample_rate;
+            v.channels = t.channels;
+            v.bits_per_sample = t.bits_per_sample;
+            v.audio_config = t.codec_private;
+            if (t.codec_id == "A_AAC") v.audio_codec = AudioCodec::Aac;
+            else if (t.codec_id == "A_OPUS") v.audio_codec = AudioCodec::Opus;
+            else if (t.codec_id == "A_VORBIS") v.audio_codec = AudioCodec::Vorbis;
+            else if (t.codec_id == "A_FLAC") v.audio_codec = AudioCodec::Flac;
+            else if (t.codec_id == "A_AC3") v.audio_codec = AudioCodec::Ac3;
+            else if (t.codec_id == "A_EAC3") v.audio_codec = AudioCodec::Ec3;
+            else if (t.codec_id == "A_DTS") v.audio_codec = AudioCodec::Dts;
+            else if (t.codec_id == "A_PCM/INT/LIT" || t.codec_id == "A_PCM/INT/BIG") {
+                v.audio_codec = t.bits_per_sample == 8u ? AudioCodec::Pcm8
+                              : t.bits_per_sample == 24u ? AudioCodec::Pcm24
+                              : t.bits_per_sample == 32u ? AudioCodec::Pcm32
+                                                         : AudioCodec::Pcm16;
+                if (v.bits_per_sample == 0u) {
+                    v.bits_per_sample = audio_bits_per_sample(v.audio_codec);
+                }
+            } else if (t.codec_id == "A_PCM/FLOAT/IEEE") {
+                v.audio_codec = t.bits_per_sample == 64u ? AudioCodec::PcmFloat64
+                                                         : AudioCodec::PcmFloat32;
+            }
+        } else if (t.track_type == 0x11u || t.track_type == 0x12u) {
+            v.is_subtitle = true;
+            v.framing = NalFramingMode::RawFrame;
+            v.subtitle_codec = t.codec_id; // e.g. S_TEXT/UTF8, S_TEXT/WEBVTT
+        } else if (t.codec_id == "V_MPEG4/ISO/AVC") {
+            v.is_video = true;
             v.codec = Codec::Avc;
             v.framing = NalFramingMode::LengthPrefixed;
             v.length_size = t.codec_private.size() > 4
                                 ? static_cast<unsigned>(t.codec_private[4] & 3u) + 1u
                                 : 4u;
         } else if (t.codec_id == "V_MPEGH/ISO/HEVC") {
+            v.is_video = true;
             v.codec = Codec::Hevc;
             v.framing = NalFramingMode::LengthPrefixed;
             v.length_size = t.codec_private.size() > 18
                                 ? static_cast<unsigned>(t.codec_private[18] & 3u) + 1u
                                 : 4u;
         } else if (t.codec_id == "V_VVC") {
+            v.is_video = true;
             v.codec = Codec::Vvc;
             v.framing = NalFramingMode::LengthPrefixed;
             v.length_size = t.codec_private.size() > 14
                                 ? static_cast<unsigned>(t.codec_private[14] & 3u) + 1u
                                 : 4u;
         } else if (t.codec_id == "V_AV1") {
+            v.is_video = true;
             v.codec = Codec::Av1;
             v.framing = NalFramingMode::Obu;
         } else if (t.codec_id == "V_VP9") {
+            v.is_video = true;
             v.codec = Codec::Vp9;
             v.framing = NalFramingMode::RawFrame;
         } else if (t.codec_id == "V_VP8") {
+            v.is_video = true;
             v.codec = Codec::Vp8;
             v.framing = NalFramingMode::RawFrame;
         } else {
@@ -1526,7 +1562,8 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
 
         out.tracks[i] = v;
 
-        if (v.codec == Codec::Avc || v.codec == Codec::Hevc || v.codec == Codec::Vvc) {
+        if (v.is_video &&
+            (v.codec == Codec::Avc || v.codec == Codec::Hevc || v.codec == Codec::Vvc)) {
             out.param_sets[i] = mkv_index::extract_mkv_param_sets(t);
             if (!out.param_sets[i].empty()) {
                 SampleEntry e;
@@ -1633,9 +1670,10 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                             e.duration = 0;
                             e.is_key = (flags & 0x80u) != 0;
 
-                            if (out.tracks[i].codec == Codec::Avc ||
-                                out.tracks[i].codec == Codec::Hevc ||
-                                out.tracks[i].codec == Codec::Vvc) {
+                            if (out.tracks[i].is_video &&
+                                (out.tracks[i].codec == Codec::Avc ||
+                                 out.tracks[i].codec == Codec::Hevc ||
+                                 out.tracks[i].codec == Codec::Vvc)) {
                                 const bool starts_annex_b =
                                     frame.size() >= 4 && frame[0] == 0x00 && frame[1] == 0x00 &&
                                     (frame[2] == 0x01 || (frame[2] == 0x00 && frame[3] == 0x01));

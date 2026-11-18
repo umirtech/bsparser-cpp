@@ -6,6 +6,7 @@
 #include "es_reconstruct.hpp"
 #include "stream.hpp"
 
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <span>
@@ -45,6 +46,11 @@ constexpr std::uint64_t kCodecPrivate = 0x63A2ull;
 constexpr std::uint64_t kVideo = 0xE0ull;
 constexpr std::uint64_t kPixelWidth = 0xB0ull;
 constexpr std::uint64_t kPixelHeight = 0xBAull;
+constexpr std::uint64_t kAudio = 0xE1ull;
+constexpr std::uint64_t kSamplingFrequency = 0xB5ull;
+constexpr std::uint64_t kChannels = 0x9Full;
+constexpr std::uint64_t kBitDepth = 0x6264ull;
+constexpr std::uint64_t kLanguage = 0x22B59Cull;
 constexpr std::uint64_t kCluster = 0x1F43B675ull;
 constexpr std::uint64_t kSimpleBlock = 0xA3ull;
 constexpr std::uint64_t kBlockGroup = 0xA0ull;
@@ -119,10 +125,15 @@ inline bool read_id(std::span<const std::uint8_t> d, std::size_t& pos, std::uint
 struct VideoTrack {
     bool found = false;
     std::uint64_t number = 0;
+    std::uint64_t track_type = 0; /* 1=video, 2=audio, 0x11/0x12=subtitle */
     std::string codec_id;
     std::vector<std::uint8_t> codec_private;
     std::uint64_t width = 0;
     std::uint64_t height = 0;
+    std::uint32_t sample_rate = 0;
+    std::uint16_t channels = 0;
+    std::uint16_t bits_per_sample = 0;
+    std::string language;
     std::uint32_t length_size = 4;
 };
 
@@ -156,7 +167,9 @@ inline void parse_track_entry(std::span<const std::uint8_t> d, VideoTrack& track
 
             case kTrackType:
                 if (!data.empty()) {
-                    track.found = data[0] == 1u; /* video */
+                    track.track_type = data[0];
+                    track.found = (data[0] == 1u || data[0] == 2u ||
+                                   data[0] == 0x11u || data[0] == 0x12u);
                 }
                 break;
 
@@ -190,6 +203,41 @@ inline void parse_track_entry(std::span<const std::uint8_t> d, VideoTrack& track
                 }
                 break;
             }
+
+            case kAudio: {
+                std::size_t q = 0;
+                while (q < data.size()) {
+                    std::uint64_t aid, asize, alen;
+                    if (!read_vint(data, q, aid, alen, true)) break;
+                    if (!read_size(data, q, asize)) break;
+                    if (q + asize > data.size() || asize == 0) break;
+                    if ((aid == kSamplingFrequency || aid == kBitDepth) && asize >= 4) {
+                        std::uint64_t v = 0;
+                        for (std::size_t k = 0; k < asize && k < 8; ++k) {
+                            v = (v << 8) | data[q + k];
+                        }
+                        if (aid == kSamplingFrequency) {
+                            const double dbl = std::bit_cast<double>(v);
+                            if (dbl > 0.0 && dbl < 1000000.0) {
+                                track.sample_rate = static_cast<std::uint32_t>(dbl);
+                            }
+                        } else if (v <= 0xFFFFu) {
+                            track.bits_per_sample = static_cast<std::uint16_t>(v);
+                        }
+                    } else if (aid == kChannels && asize >= 1) {
+                        std::uint64_t ch = 0;
+                        for (std::size_t k = 0; k < asize && k < 4; ++k) {
+                            ch = (ch << 8) | data[q + k];
+                        }
+                        if (ch <= 0xFFFFu) track.channels = static_cast<std::uint16_t>(ch);
+                    }
+                    q += asize;
+                }
+                break;
+            }
+            case kLanguage:
+                track.language.assign(reinterpret_cast<const char*>(data.data()), data.size());
+                break;
 
             default:
                 break;
