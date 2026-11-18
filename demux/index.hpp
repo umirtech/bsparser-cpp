@@ -1539,6 +1539,106 @@ inline bool parse_block_header(
     return true;
 }
 
+/* One frame of a (possibly laced) Block.  `time_delta` is added to the
+ * Block's own relative timecode. */
+struct LacedFrame {
+    std::span<const std::uint8_t> data;
+    std::int16_t time_delta = 0;
+};
+
+/* Split a Block payload into its frames according to flags bits 0..1.
+ * Returns a single frame for unlaced blocks. */
+inline std::vector<LacedFrame> mkv_decode_lacing(
+    std::span<const std::uint8_t> frame, std::uint8_t flags
+) {
+    std::vector<LacedFrame> result;
+    if (frame.empty()) {
+        return result;
+    }
+
+    const unsigned lacing = (flags >> 1u) & 3u;
+    if (lacing == 0u) {
+        result.push_back({frame, 0});
+        return result;
+    }
+
+    std::size_t p = 0;
+    const std::size_t count = static_cast<std::size_t>(frame[p++]) + 1u;
+    if (count > 256u || p >= frame.size()) {
+        return result;
+    }
+
+    std::vector<std::size_t> sizes(count, 0u);
+    if (lacing == 1u) { // Xiph-style: byte runs summing to each frame size.
+        for (std::size_t i = 0; i + 1u < count; ++i) {
+            std::size_t sz = 0;
+            while (p < frame.size()) {
+                const std::uint8_t b = frame[p++];
+                sz += b;
+                if (b != 0xFFu) {
+                    break;
+                }
+            }
+            sizes[i] = sz;
+        }
+    } else {
+        // Fixed-size and EBML lacing both use vints; EBML lacing stores a
+        // size *delta* relative to the previous frame.
+        std::size_t prev = 0;
+        for (std::size_t i = 0; i + 1u < count; ++i) {
+            if (p >= frame.size()) {
+                return result;
+            }
+            const std::uint8_t first = frame[p++];
+            unsigned bytes = 1;
+            std::uint8_t marker = 0x80u;
+            while (bytes < 8u && (first & marker) == 0) {
+                marker >>= 1;
+                ++bytes;
+            }
+            std::size_t value = first & (marker - 1u);
+            for (unsigned k = 1u; k < bytes && p < frame.size(); ++k) {
+                value = (value << 8) | frame[p++];
+            }
+            prev = (lacing == 2u) ? value : prev + value;
+            sizes[i] = prev;
+        }
+    }
+
+    std::size_t off = p;
+    std::size_t cumulative = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const std::size_t sz = (i + 1u < count)
+            ? sizes[i]
+            : (frame.size() > off ? frame.size() - off : 0u);
+        if (sz == 0u || off + sz > frame.size()) {
+            return result;
+        }
+        LacedFrame lf;
+        lf.data = frame.subspan(off, sz);
+        // Xiph lacing advances each frame's timestamp by the accumulated
+        // byte count; fixed/EBML laced frames share the Block timecode.
+        lf.time_delta = (lacing == 1u)
+            ? static_cast<std::int16_t>(std::min<std::size_t>(cumulative, 32767u))
+            : 0;
+        result.push_back(lf);
+        off += sz;
+        cumulative += sz;
+    }
+    return result;
+}
+
+/* True when an EBML size vint carries the all-ones "unknown size" value. */
+inline bool mkv_size_unknown(std::uint64_t value, std::uint64_t vint_len) noexcept {
+    if (vint_len == 0 || vint_len > 8) {
+        return false;
+    }
+    const std::uint64_t max = (vint_len == 8)
+        ? 0x00FFFFFFFFFFFFFFull
+        : ((std::uint64_t{1} << (7u * vint_len)) - 1u);
+    return value == max;
+}
+
 inline std::vector<std::uint8_t> extract_mkv_param_sets(const VideoTrack& track) {
     std::vector<std::uint8_t> out;
 
@@ -1835,33 +1935,51 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
         std::uint64_t id = 0;
         std::uint64_t size = 0;
         std::uint64_t id_len = 0;
+        std::uint64_t size_len = 0;
 
         if (!mkv::detail::read_vint(data, p, id, id_len, true)) {
             break;
         }
-        if (!mkv::detail::read_size(data, p, size)) {
+        if (!mkv::detail::read_vint(data, p, size, size_len, false)) {
             break;
+        }
+        bool unknown_size = mkv_index::mkv_size_unknown(size, size_len);
+        if (unknown_size) {
+            size = seg_end - p;
         }
         if (size > seg_end - p || size == 0) {
             break;
         }
 
+        const std::size_t element_offset = p;
         const auto element = data.subspan(p, static_cast<std::size_t>(size));
 
         if (id == mkv::detail::kCluster) {
             std::int64_t cluster_time = 0;
             std::size_t q = 0;
+            bool next_cluster = false;
 
             while (q + 4 <= element.size()) {
+                const std::size_t child_id_offset = q;
                 std::uint64_t cid = 0;
                 std::uint64_t csize = 0;
                 std::uint64_t clen = 0;
+                std::uint64_t csize_len = 0;
 
                 if (!mkv::detail::read_vint(element, q, cid, clen, true)) {
                     break;
                 }
-                if (!mkv::detail::read_size(element, q, csize)) {
+                if (!mkv::detail::read_vint(element, q, csize, csize_len, false)) {
                     break;
+                }
+                if (unknown_size && cid == mkv::detail::kCluster) {
+                    // The next Cluster starts here; resume the outer loop.
+                    p = element_offset + child_id_offset;
+                    next_cluster = true;
+                    break;
+                }
+                if (mkv_index::mkv_size_unknown(csize, csize_len)) {
+                    csize = element.size() - q;
                 }
                 if (q + csize > element.size() || csize == 0) {
                     break;
@@ -1878,19 +1996,44 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                 }
 
                 std::span<const std::uint8_t> block_data;
+                bool from_block_group = false;
+                bool has_reference = false;
+                std::int64_t block_duration = 0;
 
                 if (cid == mkv::detail::kSimpleBlock) {
                     block_data = child;
                 } else if (cid == mkv::detail::kBlockGroup) {
+                    from_block_group = true;
                     std::size_t b = 0;
-                    std::uint64_t bid = 0;
-                    std::uint64_t bsize = 0;
-                    std::uint64_t blen = 0;
+                    while (b + 2 <= child.size()) {
+                        std::uint64_t bid = 0;
+                        std::uint64_t bsize = 0;
+                        std::uint64_t blen = 0;
+                        std::uint64_t bsize_len = 0;
 
-                    if (mkv::detail::read_vint(child, b, bid, blen, true) &&
-                        mkv::detail::read_size(child, b, bsize) && bid == mkv::detail::kBlock &&
-                        b + bsize <= child.size()) {
-                        block_data = child.subspan(b, static_cast<std::size_t>(bsize));
+                        if (!mkv::detail::read_vint(child, b, bid, blen, true) ||
+                            !mkv::detail::read_vint(child, b, bsize, bsize_len, false)) {
+                            break;
+                        }
+                        if (mkv_index::mkv_size_unknown(bsize, bsize_len)) {
+                            bsize = child.size() - b;
+                        }
+                        if (b + bsize > child.size()) {
+                            break;
+                        }
+                        const auto field = child.subspan(b, static_cast<std::size_t>(bsize));
+                        if (bid == mkv::detail::kBlock && block_data.empty()) {
+                            block_data = field;
+                        } else if (bid == 0xFBu) { // ReferenceBlock
+                            has_reference = true;
+                        } else if (bid == 0x9Bu) { // BlockDuration
+                            std::uint64_t v = 0;
+                            for (std::uint8_t byte : field) {
+                                v = (v << 8) | byte;
+                            }
+                            block_duration = static_cast<std::int64_t>(v);
+                        }
+                        b += static_cast<std::size_t>(bsize);
                     }
                 }
 
@@ -1898,47 +2041,58 @@ inline bool build_mkv(FileSource& src, IndexBuildResult& out) {
                     std::uint64_t track_number = 0;
                     std::int16_t block_time = 0;
                     std::uint8_t flags = 0;
-                    std::span<const std::uint8_t> frame;
+                    std::span<const std::uint8_t> payload;
 
                     if (mkv_index::parse_block_header(
-                            block_data, track_number, block_time, flags, frame
+                            block_data, track_number, block_time, flags, payload
                         )) {
                         for (std::size_t i = 0; i < tracks.size(); ++i) {
                             if (static_cast<std::uint64_t>(tracks[i].number) != track_number) {
                                 continue;
                             }
 
-                            SampleEntry e;
-                            e.offset = static_cast<std::size_t>(frame.data() - data.data());
-                            e.size = frame.size();
-                            e.pts = cluster_time + block_time;
-                            e.dts = e.pts;
-                            e.duration = 0;
-                            e.is_key = (flags & 0x80u) != 0;
+                            for (const auto& lf : mkv_index::mkv_decode_lacing(payload, flags)) {
+                                SampleEntry e;
+                                e.offset = static_cast<std::size_t>(lf.data.data() - data.data());
+                                e.size = lf.data.size();
+                                e.pts = cluster_time + block_time + lf.time_delta;
+                                e.dts = e.pts;
+                                e.duration = block_duration;
+                                // SimpleBlock flags its keyframes directly; a
+                                // BlockGroup Block is a keyframe iff it has no
+                                // ReferenceBlock.
+                                e.is_key = from_block_group ? !has_reference
+                                                            : ((flags & 0x80u) != 0);
 
-                            if (out.tracks[i].is_video &&
-                                (out.tracks[i].codec == Codec::Avc ||
-                                 out.tracks[i].codec == Codec::Hevc ||
-                                 out.tracks[i].codec == Codec::Vvc)) {
-                                const bool starts_annex_b =
-                                    frame.size() >= 4 && frame[0] == 0x00 && frame[1] == 0x00 &&
-                                    (frame[2] == 0x01 || (frame[2] == 0x00 && frame[3] == 0x01));
-                                const bool annex_b =
-                                    starts_annex_b &&
-                                    !es::fully_length_prefixed(frame, out.tracks[i].length_size);
-                                e.framing = annex_b ? NalFramingMode::AnnexB
-                                                     : NalFramingMode::LengthPrefixed;
-                            } else {
-                                e.framing = out.tracks[i].framing;
+                                if (out.tracks[i].is_video &&
+                                    (out.tracks[i].codec == Codec::Avc ||
+                                     out.tracks[i].codec == Codec::Hevc ||
+                                     out.tracks[i].codec == Codec::Vvc)) {
+                                    const bool starts_annex_b =
+                                        lf.data.size() >= 4 && lf.data[0] == 0x00 &&
+                                        lf.data[1] == 0x00 &&
+                                        (lf.data[2] == 0x01 ||
+                                         (lf.data[3] == 0x01 && lf.data[2] == 0x00));
+                                    const bool annex_b =
+                                        starts_annex_b &&
+                                        !es::fully_length_prefixed(lf.data, out.tracks[i].length_size);
+                                    e.framing = annex_b ? NalFramingMode::AnnexB
+                                                        : NalFramingMode::LengthPrefixed;
+                                } else {
+                                    e.framing = out.tracks[i].framing;
+                                }
+
+                                out.samples[i].push_back(e);
                             }
-
-                            out.samples[i].push_back(e);
                             break;
                         }
                     }
                 }
 
                 q += csize;
+            }
+            if (next_cluster) {
+                continue;
             }
         }
 
@@ -2107,24 +2261,81 @@ inline std::vector<TsStream> collect_streams(std::span<const std::uint8_t> data)
 }
 
 
-inline bool parse_pes_pts(std::span<const std::uint8_t> payload, std::int64_t& pts) {
+/* Decode a 33-bit PTS/DTS field starting at `p`. */
+inline std::int64_t decode_pes_timestamp(const std::uint8_t* p) {
+    const std::uint64_t v = (static_cast<std::uint64_t>(p[0] & 0x0E) << 29) |
+                            (static_cast<std::uint64_t>(p[1]) << 22) |
+                            (static_cast<std::uint64_t>(p[2] & 0xFE) << 14) |
+                            (static_cast<std::uint64_t>(p[3]) << 7) |
+                            (static_cast<std::uint64_t>(p[4]) >> 1);
+    return static_cast<std::int64_t>(v);
+}
+
+/* Parse PTS and (when present) DTS from a PES packet payload. */
+inline bool parse_pes_timing(
+    std::span<const std::uint8_t> payload, std::int64_t& pts, std::int64_t& dts
+) {
     if (payload.size() < 14) {
         return false;
     }
     if (payload[0] != 0x00 || payload[1] != 0x00 || payload[2] != 0x01) {
         return false;
     }
-    if ((payload[7] & 0x80u) == 0) {
+    const std::uint8_t flags = payload[7];
+    if ((flags & 0x80u) == 0) {
         return false;
     }
 
-    const std::uint8_t* p = payload.data() + 9;
-    const std::uint64_t v = (static_cast<std::uint64_t>(p[0] & 0x0E) << 29) |
-                            (static_cast<std::uint64_t>(p[1]) << 22) |
-                            (static_cast<std::uint64_t>(p[2] & 0xFE) << 14) |
-                            (static_cast<std::uint64_t>(p[3]) << 7) |
-                            (static_cast<std::uint64_t>(p[4]) >> 1);
-    pts = static_cast<std::int64_t>(v);
+    pts = decode_pes_timestamp(payload.data() + 9);
+    dts = pts;
+    if ((flags & 0x40u) != 0 && payload.size() >= 19) {
+        dts = decode_pes_timestamp(payload.data() + 14);
+    }
+    return true;
+}
+
+inline bool parse_pes_pts(std::span<const std::uint8_t> payload, std::int64_t& pts) {
+    std::int64_t dts = 0;
+    return parse_pes_timing(payload, pts, dts);
+}
+
+/* Byte offset of the first ES byte of a PES packet: 9 + the
+ * PES_header_data_length field.  Returns 0 for malformed headers. */
+inline std::size_t pes_payload_offset(std::span<const std::uint8_t> payload) {
+    if (payload.size() < 9) {
+        return 0;
+    }
+    const std::size_t offset = 9u + payload[8];
+    return offset < payload.size() ? offset : 0;
+}
+
+/* Heuristic keyframe detection from the first NAL of a sample. */
+inline bool ts_sample_is_key(
+    std::span<const std::uint8_t> data, std::size_t offset, std::size_t size, Codec codec,
+    bool is_audio
+) {
+    if (is_audio || size == 0 || offset + size > data.size()) {
+        return true; // every audio access unit is independently decodable
+    }
+    const auto p = data.subspan(offset, size);
+    std::size_t i = 0;
+    while (i + 3 < p.size() && !(p[i] == 0 && p[i+1] == 0 && p[i+2] == 1)) {
+        ++i;
+    }
+    std::size_t nal = (i + 3 < p.size()) ? i + 3 : 0;
+    if (i + 4 < p.size() && p[i+3] == 0 && p[i+4] == 1) {
+        nal = i + 4;
+    }
+    if (nal >= p.size()) {
+        return false;
+    }
+    if (codec == Codec::Hevc) {
+        const unsigned type = (p[nal] >> 1) & 0x3Fu;
+        return type == 19u || type == 20u || type == 21u; // IDR_W_RADL/IDR_N_LP/CRA
+    }
+    if (codec == Codec::Avc) {
+        return (p[nal] & 0x1Fu) == 5u; // IDR
+    }
     return true;
 }
 
@@ -2201,7 +2412,25 @@ inline bool build_ts(FileSource& src, IndexBuildResult& out) {
         std::size_t start = 0;
         std::size_t size = 0;
         std::int64_t first_pts = 0;
+        std::int64_t first_dts = 0;
         bool have_pts = false;
+
+        const auto emit = [&]() {
+            if (!open || size == 0 || start + size > data.size()) {
+                return;
+            }
+            SampleEntry e;
+            e.offset = start;
+            e.size = size;
+            e.pts = have_pts ? first_pts : static_cast<std::int64_t>(samples.size()) * 1000;
+            e.dts = have_pts ? first_dts : e.pts;
+            e.duration = 0;
+            e.is_key = ts_index::ts_sample_is_key(
+                data, start, size, out.tracks[s].codec, out.tracks[s].is_audio
+            );
+            e.framing = out.tracks[s].framing;
+            samples.push_back(e);
+        };
 
         for (std::size_t i = 0; i < packet_count; ++i) {
             const auto packet = data.subspan(i * ts::detail::kPacketSize, ts::detail::kPacketSize);
@@ -2219,45 +2448,26 @@ inline bool build_ts(FileSource& src, IndexBuildResult& out) {
             }
 
             if (ts::detail::payload_start(packet)) {
-                if (open && size > 0 && start + size <= data.size()) {
-                    SampleEntry e;
-                    e.offset = start;
-                    e.size = size;
-                    e.pts = have_pts ? first_pts : static_cast<std::int64_t>(samples.size()) * 1000;
-                    e.dts = e.pts;
-                    e.duration = 0;
-                    e.is_key = samples.empty();
-                    e.framing = out.tracks[s].framing;
-                    samples.push_back(e);
-                }
+                emit();
 
                 open = true;
                 size = 0;
                 have_pts = false;
 
-                std::size_t skip = 0;
-                if (payload.size() >= 4 && payload[0] == 0x00 && payload[1] == 0x00 &&
-                    payload[2] == 0x01) {
-                    std::size_t j = 4;
-                    for (; j + 3 <= payload.size(); ++j) {
-                        if (payload[j] == 0x00 && payload[j + 1] == 0x00 &&
-                            payload[j + 2] == 0x01) {
-                            skip = j;
-                            break;
-                        }
-                    }
-                    if (j + 3 > payload.size()) {
-                        skip = payload.size();
-                    }
-                }
-
+                // PES header: 6-byte prefix + optional header data.  The
+                // old heuristic scanned for 00 00 01 inside the payload and
+                // dropped the first packet of multi-packet PES (fatal for
+                // audio).  Use the spec-defined length instead.
+                const std::size_t skip = ts_index::pes_payload_offset(payload);
                 start = i * ts::detail::kPacketSize +
                        static_cast<std::size_t>(payload.data() - packet.data()) + skip;
                 size = payload.size() - skip;
 
                 std::int64_t pts = 0;
-                if (ts_index::parse_pes_pts(payload, pts)) {
+                std::int64_t dts = 0;
+                if (ts_index::parse_pes_timing(payload, pts, dts)) {
                     first_pts = pts;
+                    first_dts = dts;
                     have_pts = true;
                 }
             } else if (open) {
@@ -2265,17 +2475,7 @@ inline bool build_ts(FileSource& src, IndexBuildResult& out) {
             }
         }
 
-        if (open && size > 0 && start + size <= data.size()) {
-            SampleEntry e;
-            e.offset = start;
-            e.size = size;
-            e.pts = have_pts ? first_pts : static_cast<std::int64_t>(samples.size()) * 1000;
-            e.dts = e.pts;
-            e.duration = 0;
-            e.is_key = samples.empty();
-            e.framing = out.tracks[s].framing;
-            samples.push_back(e);
-        }
+        emit();
 
         out.tracks[s].sample_count = samples.size();
     }
@@ -2336,10 +2536,26 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
 
     enum class Kind { None, Avc, Hevc, Av1, Vp8, Vp9, H263, Screen };
     Kind kind = Kind::None;
-    bool have_params = false;
 
-    std::vector<SampleEntry> samples;
-    std::vector<std::uint8_t> param_sets;
+    /* Each distinct video codec gets its own track.  The old single `kind`
+     * variable collapsed mixed-codec FLV files into one mislabeled track. */
+    struct VideoStream {
+        Kind kind = Kind::None;
+        std::vector<SampleEntry> samples;
+        std::vector<std::uint8_t> param_sets;
+    };
+    std::vector<VideoStream> videos;
+
+    const auto video_for = [&](Kind k) -> VideoStream& {
+        for (auto& v : videos) {
+            if (v.kind == k) {
+                return v;
+            }
+        }
+        videos.push_back(VideoStream{});
+        videos.back().kind = k;
+        return videos.back();
+    };
 
     /* Audio is collected independently; it becomes a second track. */
     struct AudioInfo {
@@ -2398,22 +2614,35 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
                 if (packet_type == 0) {
                     kind = codec_id == 7 ? Kind::Avc
                                          : (codec_id == 12 ? Kind::Hevc : Kind::Av1);
-                    param_sets = flv_index::extract_flv_param_sets(body, codec_id);
-                    have_params = !param_sets.empty();
+                    video_for(kind).param_sets =
+                        flv_index::extract_flv_param_sets(body, codec_id);
                 } else if (packet_type == 1) {
                     kind = codec_id == 7 ? Kind::Avc
                                          : (codec_id == 12 ? Kind::Hevc : Kind::Av1);
 
+                    // AVC/HEVC tag header: byte 0 = FrameType<<4 | CodecID,
+                    // bytes 2..4 = signed 24-bit composition time offset.
+                    std::int64_t cto = 0;
+                    if ((codec_id == 7 || codec_id == 12) && tag.size() >= 5) {
+                        std::int32_t v = (static_cast<std::int32_t>(tag[2]) << 16) |
+                                         (static_cast<std::int32_t>(tag[3]) << 8) |
+                                         static_cast<std::int32_t>(tag[4]);
+                        if (v & 0x00800000) {
+                            v |= static_cast<std::int32_t>(0xFF000000u);
+                        }
+                        cto = v;
+                    }
+
                     SampleEntry e;
                     e.offset = static_cast<std::size_t>(body.data() - data.data());
                     e.size = body.size();
-                    e.pts = ts;
+                    e.pts = ts + cto;
                     e.dts = ts;
                     e.duration = 0;
-                    e.is_key = samples.empty();
+                    e.is_key = (tag[0] >> 4) == 1u; // FrameType 1 = keyframe
                     e.framing = kind == Kind::Av1 ? NalFramingMode::Obu
                                                   : NalFramingMode::LengthPrefixed;
-                    samples.push_back(e);
+                    video_for(kind).samples.push_back(e);
                 }
             } else if (codec_id == 10 || codec_id == 11) {
                 kind = codec_id == 10 ? Kind::Vp8 : Kind::Vp9;
@@ -2426,9 +2655,9 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
                 e.pts = ts;
                 e.dts = ts;
                 e.duration = 0;
-                e.is_key = samples.empty();
+                e.is_key = (tag[0] >> 4) == 1u;
                 e.framing = NalFramingMode::RawFrame;
-                samples.push_back(e);
+                video_for(kind).samples.push_back(e);
             } else if (codec_id == 2 || codec_id == 3) {
                 /* 2 = H.263, 3 = Screen video (not parser-supported). */
                 kind = codec_id == 2 ? Kind::H263 : Kind::Screen;
@@ -2440,9 +2669,9 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
                 e.pts = ts;
                 e.dts = ts;
                 e.duration = 0;
-                e.is_key = samples.empty();
+                e.is_key = (tag[0] >> 4) == 1u;
                 e.framing = NalFramingMode::RawFrame;
-                samples.push_back(e);
+                video_for(kind).samples.push_back(e);
             }
         } else if (tag_type == 8 && tag_size >= 1) {
             const std::uint8_t format = static_cast<std::uint8_t>(tag[0] >> 4);
@@ -2512,28 +2741,36 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
         pos += 11 + tag_size + 4;
     }
 
-    const bool have_video = kind != Kind::None && (!samples.empty() || have_params);
+    std::size_t video_count = 0;
+    for (const auto& vs : videos) {
+        if (vs.kind != Kind::None && (!vs.samples.empty() || !vs.param_sets.empty())) {
+            ++video_count;
+        }
+    }
     const bool have_audio = audio.found && !audio_samples.empty();
 
-    if (!have_video && !have_audio) {
+    if (video_count == 0 && !have_audio) {
         return false;
     }
 
-    const std::size_t track_count = (have_video ? 1u : 0u) + (have_audio ? 1u : 0u);
+    const std::size_t track_count = video_count + (have_audio ? 1u : 0u);
     out.tracks.resize(track_count);
     out.samples.resize(track_count);
     out.param_sets.resize(track_count);
 
     std::size_t vi = 0;
 
-    if (have_video) {
+    for (const auto& vs : videos) {
+        if (vs.kind == Kind::None || (vs.samples.empty() && vs.param_sets.empty())) {
+            continue;
+        }
         TrackView v;
         v.id = static_cast<std::uint32_t>(vi + 1);
         v.is_video = true;
         v.timescale = 1000;
         v.mmap_backed = src.mmap_backed();
 
-        switch (kind) {
+        switch (vs.kind) {
             case Kind::Avc:
                 v.codec = Codec::Avc;
                 v.framing = NalFramingMode::LengthPrefixed;
@@ -2576,7 +2813,7 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
         }
 
         out.tracks[vi] = v;
-        out.param_sets[vi] = std::move(param_sets);
+        out.param_sets[vi] = vs.param_sets;
 
         if (!out.param_sets[vi].empty()) {
             SampleEntry e;
@@ -2588,8 +2825,8 @@ inline bool build_flv(FileSource& src, IndexBuildResult& out) {
             out.samples[vi].push_back(e);
         }
 
-        for (auto& e : samples) {
-            out.samples[vi].push_back(std::move(e));
+        for (const auto& e : vs.samples) {
+            out.samples[vi].push_back(e);
         }
         out.tracks[vi].sample_count = out.samples[vi].size();
         ++vi;
@@ -3012,6 +3249,18 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         std::uint32_t sample_rate = 0;
         std::uint16_t channels = 0;
         std::uint16_t bits_per_sample = 0;
+        int header_packets = 1; // BOS identification header
+        std::uint64_t last_granule = 0;
+        bool have_granule = false;
+    };
+
+    const auto read_le64 = [](std::span<const std::uint8_t> d, std::size_t p) -> std::uint64_t {
+        std::uint64_t v = 0;
+        for (unsigned i = 0; i < 8; ++i) {
+            if (p + i >= d.size()) return 0;
+            v |= static_cast<std::uint64_t>(d[p + i]) << (8u * i);
+        }
+        return v;
     };
 
     const auto read_le32 = [](std::span<const std::uint8_t> d, std::size_t p) -> std::uint32_t {
@@ -3092,7 +3341,8 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
                 } else if (n >= 7 && std::memcmp(sig, "\x01vorbis", 7) == 0) {
                     info.codec = Codec::Vorbis;
                     info.is_audio = true;
-                    /* Vorbis identification header: channels @11, rate @12. */
+                    /* Vorbis identification header: byte 0 = 1, "vorbis" @1..6,
+                     * version @7..10, channels @11, sample rate @12..15. */
                     if (n >= 16) {
                         info.channels = static_cast<std::uint16_t>(sig[11]);
                         info.sample_rate = read_le32(page_data, 12);
@@ -3100,28 +3350,26 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
                 } else if (n >= 8 && std::memcmp(sig, "OpusHead", 8) == 0) {
                     info.codec = Codec::Opus;
                     info.is_audio = true;
+                    /* OpusHead: version @8, channels @9, pre-skip @10..11,
+                     * input sample rate @12..15. */
                     if (n >= 16) {
-                        /* Per the identification header layout the channel
-                         * count sits at byte 11; fall back to the standard
-                         * OpusHead position (byte 9) when it is unset. */
-                        info.channels = static_cast<std::uint16_t>(sig[11]);
-                        if (info.channels == 0u) {
-                            info.channels = static_cast<std::uint16_t>(sig[9]);
-                        }
+                        info.channels = static_cast<std::uint16_t>(sig[9]);
                         info.sample_rate = read_le32(page_data, 12);
                     }
                 } else if (n >= 4 && std::memcmp(sig, "fLaC", 4) == 0) {
                     info.codec = Codec::Flac;
                     info.is_audio = true;
-                    if (n >= 14) {
+                    /* fLaC marker + 4-byte metadata block header precede the
+                     * STREAMINFO payload at byte 8. */
+                    if (n >= 18) {
                         /* STREAMINFO: 20-bit rate, 3-bit channels-1,
                          * 5-bit bits-per-sample-1. */
-                        info.sample_rate = (static_cast<std::uint32_t>(sig[10]) << 12) |
-                                           (static_cast<std::uint32_t>(sig[11]) << 4) |
-                                           (static_cast<std::uint32_t>(sig[12]) >> 4);
-                        info.channels = static_cast<std::uint16_t>(((sig[12] >> 1) & 0x07u) + 1u);
+                        info.sample_rate = (static_cast<std::uint32_t>(sig[18]) << 12) |
+                                           (static_cast<std::uint32_t>(sig[19]) << 4) |
+                                           (static_cast<std::uint32_t>(sig[20]) >> 4);
+                        info.channels = static_cast<std::uint16_t>(((sig[20] >> 1) & 0x07u) + 1u);
                         info.bits_per_sample = static_cast<std::uint16_t>(
-                            (((sig[12] & 0x01u) << 4) | (sig[13] >> 4)) + 1u
+                            (((sig[20] & 0x01u) << 4) | (sig[21] >> 4)) + 1u
                         );
                     }
                 } else {
@@ -3132,6 +3380,15 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
                     if (info.codec_name.empty()) info.codec_name = "unknown";
                 }
 
+                // Vorbis and Theora carry three header packets, Opus two;
+                // these must not be surfaced as media samples.
+                if (info.codec == Codec::Vorbis || info.codec == Codec::Theora) {
+                    info.header_packets = 3;
+                } else if (info.codec == Codec::Opus) {
+                    info.header_packets = 2;
+                } else if (info.codec == Codec::Flac) {
+                    info.header_packets = 8; // STREAMINFO + common metadata blocks
+                }
                 if (info.codec != Codec::Unknown) {
                     info.codec_name = codec_name(info.codec);
                 }
@@ -3158,7 +3415,18 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         v.codec_name = s.codec_name;
         v.is_video = s.is_video;
         v.is_audio = s.is_audio;
-        v.timescale = 1000;
+        // Granule positions are in codec-native units: PCM samples for the
+        // audio codecs and frame counts for video.  Expose a matching
+        // timescale so the granule can be used as pts verbatim.
+        if (s.codec == Codec::Vorbis || s.codec == Codec::Flac) {
+            v.timescale = s.sample_rate != 0u ? s.sample_rate : 1000u;
+        } else if (s.codec == Codec::Opus) {
+            v.timescale = 48000u;
+        } else if (s.is_video) {
+            v.timescale = 30u;
+        } else {
+            v.timescale = 1000u;
+        }
         v.mmap_backed = src.mmap_backed();
 
         if (s.is_audio) {
@@ -3185,7 +3453,10 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
         return streams.size();
     };
 
-    std::vector<std::size_t> counters(streams.size(), 0);
+    std::vector<int> header_remaining(streams.size(), 0);
+    for (std::size_t i = 0; i < streams.size(); ++i) {
+        header_remaining[i] = streams[i].header_packets;
+    }
     std::size_t p2 = 0;
 
     while (p2 + 27 <= data.size()) {
@@ -3214,20 +3485,66 @@ inline bool build_ogg(FileSource& src, IndexBuildResult& out) {
             break;
         }
 
-        const bool bos = (data[p2 + 5] & 0x02u) != 0;
         const std::size_t si = find_stream(serial);
+        if (si < streams.size()) {
+            StreamInfo& s = streams[si];
 
-        if (si < streams.size() && !bos && total > 0) {
-            SampleEntry e;
-            e.offset = data_off;
-            e.size = total;
-            e.pts = static_cast<std::int64_t>(counters[si]) * 1000;
-            e.dts = e.pts;
-            e.duration = 1000;
-            e.is_key = counters[si] == 0;
-            e.framing = out.tracks[si].framing;
-            out.samples[si].push_back(e);
-            ++counters[si];
+            // Granule position is the codec-native timestamp of the final
+            // completed packet on this page.
+            const std::uint64_t granule = read_le64(data, p2 + 6);
+            // All-ones is Ogg's "no completed packet on this page" marker.
+            const bool granule_valid = granule != 0xFFFFFFFFFFFFFFFFull;
+            const std::uint64_t delta =
+                (granule_valid && s.have_granule) ? granule - s.last_granule : 0u;
+
+            // Split the page into packets via the lacing values.  A packet
+            // whose final lacing value is 255 continues on the next page;
+            // its first fragment is still emitted so no bytes are lost.
+            struct Packet { std::size_t offset; std::size_t size; };
+            std::vector<Packet> packets;
+            std::size_t packet_off = 0;
+            std::size_t fragment = 0;
+            for (std::uint8_t k = 0; k < segments; ++k) {
+                fragment += data[seg_table + k];
+                if (data[seg_table + k] < 255u) {
+                    if (fragment != 0u) {
+                        packets.push_back({data_off + packet_off, fragment});
+                    }
+                    packet_off += fragment;
+                    fragment = 0u;
+                }
+            }
+            if (fragment != 0u) {
+                packets.push_back({data_off + packet_off, fragment});
+            }
+
+            const std::size_t skip = std::min<std::size_t>(header_remaining[si], packets.size());
+            header_remaining[si] -= static_cast<int>(skip);
+            const std::size_t media_count = packets.size() - skip;
+            const std::uint64_t step = media_count != 0u ? delta / media_count : 0u;
+
+            std::size_t media = 0;
+            for (std::size_t idx = skip; idx < packets.size(); ++idx) {
+                const auto& p = packets[idx];
+                SampleEntry e;
+                e.offset = p.offset;
+                e.size = p.size;
+                e.pts = static_cast<std::int64_t>(
+                    (granule_valid && s.have_granule)
+                        ? s.last_granule + step * (media + 1u)
+                        : (s.have_granule ? s.last_granule : 0u)
+                );
+                e.dts = e.pts;
+                e.duration = static_cast<std::int64_t>(step);
+                e.is_key = true;
+                e.framing = out.tracks[si].framing;
+                out.samples[si].push_back(e);
+                ++media;
+            }
+            if (granule_valid) {
+                s.last_granule = granule;
+                s.have_granule = true;
+            }
         }
 
         p2 = data_off + total;
@@ -3494,14 +3811,21 @@ inline bool build_wav(FileSource& src, IndexBuildResult& out) {
         return false;
     }
     const std::size_t limit = std::min<std::size_t>(data_size, data.size() - data_pos);
+    std::uint64_t frame_index = 0;
     for (std::size_t off = 0; off + align <= limit; off += align) {
         SampleEntry e;
         e.offset = data_pos + off;
         e.size = align;
-        e.duration = align;
+        // One block-aligned frame is one sample period.  The track timescale
+        // is the sample rate, so pts/dts advance by 1 tick per frame (not by
+        // a byte count), and duration is a single tick.
+        e.pts = static_cast<std::int64_t>(frame_index);
+        e.dts = e.pts;
+        e.duration = 1;
         e.is_key = true;
         e.framing = NalFramingMode::RawFrame;
         out.samples[0].push_back(e);
+        ++frame_index;
     }
     v.sample_count = out.samples[0].size();
     return !out.samples[0].empty();
