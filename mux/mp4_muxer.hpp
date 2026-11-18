@@ -324,6 +324,35 @@ inline std::vector<std::span<const std::uint8_t>> split_annexb(std::span<const s
     return nals;
 }
 
+/* True when an Annex-B sample contains only parameter-set NALs (no VCL).
+ * Such samples are produced by demux::Demuxer as a leading pseudo-sample and
+ * must be folded into the next real access unit, not written standalone. */
+[[nodiscard]]
+inline bool is_param_set_only_sample(Codec codec, std::span<const std::uint8_t> data) {
+    if (!is_h26x(codec) || data.empty()) {
+        return false;
+    }
+    const auto nals = split_annexb(data);
+    if (nals.empty()) {
+        return false;
+    }
+    for (const auto nal : nals) {
+        if (nal.empty()) {
+            continue;
+        }
+        const unsigned type = codec == Codec::Avc
+            ? (static_cast<unsigned>(nal[0]) & 0x1Fu)
+            : ((static_cast<unsigned>(nal[0]) >> 1u) & 0x3Fu);
+        const bool is_param = codec == Codec::Avc
+            ? (type == 7u || type == 8u)
+            : (type == 32u || type == 33u || type == 34u);
+        if (!is_param) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /*
  * Convert an Annex-B sample to 4-byte-length-prefixed NALs.  If no start
  * code is present the bytes are copied verbatim (already framed).
@@ -1164,30 +1193,46 @@ inline bool finish_mp4_stream(
         movie_duration_ms = std::max(movie_duration_ms, ms);
     }
 
-    // 3. Chunk tables from the physical write order.
-    std::vector<std::uint32_t> chunk_offsets32;
-    std::vector<std::uint64_t> chunk_offsets64;
-    bool any_large_offset = false;
+    // 3. Chunk tables from the physical write order.  stco/co64 is PER
+    // TRACK: each track lists only its own chunks, while stsc.first_chunk
+    // is a 1-based index into that track's own chunk list.
+    std::vector<std::vector<std::uint32_t>> chunk_offsets32(n);
+    std::vector<std::vector<std::uint64_t>> chunk_offsets64(n);
+    std::vector<bool> any_large_offset(n, false);
     for (const auto& c : chunks) {
-        if (c.offset > 0xFFFFFFFFull) {
-            any_large_offset = true;
+        if (c.track >= n) {
+            continue;
         }
-        chunk_offsets64.push_back(c.offset);
-        chunk_offsets32.push_back(static_cast<std::uint32_t>(std::min<std::uint64_t>(c.offset, 0xFFFFFFFFull)));
+        if (c.offset > 0xFFFFFFFFull) {
+            any_large_offset[c.track] = true;
+        }
+        chunk_offsets64[c.track].push_back(c.offset);
+        chunk_offsets32[c.track].push_back(
+            static_cast<std::uint32_t>(std::min<std::uint64_t>(c.offset, 0xFFFFFFFFull))
+        );
     }
 
-    // stsc entries: (first_chunk, samples_per_chunk) per track, coalesced.
-    std::vector<std::vector<std::pair<std::uint32_t, std::uint32_t>>> stsc(n);
+    // stsc entries: first_chunk / samples_per_chunk / run length, per track.
+    struct StscRun {
+        std::uint32_t first_chunk;
+        std::uint32_t samples_per_chunk;
+        std::uint32_t chunks;
+    };
+    std::vector<std::vector<StscRun>> stsc(n);
     std::vector<std::uint32_t> per_track_chunk_count(n, 0u);
     for (const auto& c : chunks) {
+        if (c.track >= n) {
+            continue;
+        }
         const std::uint32_t first = per_track_chunk_count[c.track] + 1u;
         const std::uint32_t spc = static_cast<std::uint32_t>(c.sample_count);
         auto& entries = stsc[c.track];
-        if (!entries.empty() && entries.back().second == spc &&
-            entries.back().first + 1u == first) {
-            // consecutive same-size run: keep single entry
+        if (!entries.empty() && entries.back().samples_per_chunk == spc &&
+            entries.back().first_chunk + entries.back().chunks == first) {
+            // extend the previous run
+            entries.back().chunks += 1u;
         } else {
-            entries.emplace_back(first, spc);
+            entries.emplace_back(first, spc, spc);
         }
         ++per_track_chunk_count[c.track];
     }
@@ -1221,7 +1266,9 @@ inline bool finish_mp4_stream(
         } else {
             be32(stsc_payload, static_cast<std::uint32_t>(stsc[i].size()));
             for (const auto& e : stsc[i]) {
-                be32(stsc_payload, e.first); be32(stsc_payload, e.second); be32(stsc_payload, 1u);
+                be32(stsc_payload, e.first_chunk);
+                be32(stsc_payload, e.samples_per_chunk);
+                be32(stsc_payload, 1u);
             }
         }
         append_box_bytes(stbl, box("stsc", stsc_payload));
@@ -1247,19 +1294,19 @@ inline bool finish_mp4_stream(
             }
         }
 
-        if (any_large_offset) {
+        if (any_large_offset[i]) {
             Mp4Bytes cp;
             put_zeros(cp, 4u);
-            be32(cp, static_cast<std::uint32_t>(chunk_offsets64.size()));
-            for (const auto v : chunk_offsets64) {
+            be32(cp, static_cast<std::uint32_t>(chunk_offsets64[i].size()));
+            for (const auto v : chunk_offsets64[i]) {
                 be64(cp, v);
             }
             append_box_bytes(stbl, box("co64", cp));
         } else {
             Mp4Bytes cp;
             put_zeros(cp, 4u);
-            be32(cp, static_cast<std::uint32_t>(chunk_offsets32.size()));
-            for (const auto v : chunk_offsets32) {
+            be32(cp, static_cast<std::uint32_t>(chunk_offsets32[i].size()));
+            for (const auto v : chunk_offsets32[i]) {
                 be32(cp, v);
             }
             append_box_bytes(stbl, box("stco", cp));

@@ -156,9 +156,24 @@ class MuxerImpl {
             if (index >= stream_records_.size() || sample.data.empty()) {
                 return;
             }
-            const Mp4Bytes framed = detail::frame_mp4_sample(
+            Mp4Bytes framed = detail::frame_mp4_sample(
                 tracks_[index].codec, sample, tracks_[index]
             );
+            /* A leading parameter-set pseudo-sample from the demuxer is not
+             * an access unit: fold it into the next real sample. */
+            if (detail::is_param_set_only_sample(tracks_[index].codec, sample.data)) {
+                if (pending_param_sets_.size() <= index) {
+                    pending_param_sets_.resize(index + 1u);
+                }
+                auto& pending = pending_param_sets_[index];
+                pending.insert(pending.end(), framed.begin(), framed.end());
+                return;
+            }
+            if (index < pending_param_sets_.size() && !pending_param_sets_[index].empty()) {
+                auto& pending = pending_param_sets_[index];
+                framed.insert(framed.begin(), pending.begin(), pending.end());
+                pending.clear();
+            }
             if (framed.size() > 0xFFFFFFFFull) {
                 return;
             }
@@ -301,6 +316,7 @@ class MuxerImpl {
     std::vector<TrackConfig> tracks_{};
     std::vector<std::vector<Sample>> samples_{};
     std::vector<std::vector<SampleRecord>> stream_records_{};
+    std::vector<Mp4Bytes> pending_param_sets_{};
     std::vector<ChunkRecord> chunks_{};
     std::size_t mdat_header_offset_ = 0;
     std::size_t reserve_offset_ = 0;

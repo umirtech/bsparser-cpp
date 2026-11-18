@@ -29,8 +29,11 @@ int g_failures = 0;
         }                                                                    \
     } while (0)
 
+// One AVC access unit: SPS followed by a minimal IDR slice NAL, so it is
+// not mistaken for a parameter-set-only pseudo-sample.
 const std::vector<std::uint8_t> kAvcNal{
-    0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1E, 0xAA, 0xBB
+    0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1E, 0xAA, 0xBB,
+    0x00, 0x00, 0x01, 0x65, 0x88, 0x84, 0x00, 0x33, 0xFF
 };
 
 bs::mux::TrackConfig avc_cfg(std::uint32_t id) {
@@ -230,6 +233,71 @@ void test_audio_track() {
     (void)std::filesystem::remove(path, ec);
 }
 
+void test_interleaved_av_from_corpus() {
+    auto src = bs::demux::Demuxer::init(
+        std::string("tests/fuzz/corpus/h264.mp4"));
+    if (!src.ok()) {
+        return;
+    }
+
+    const std::string path = "/tmp/opencode/mux_streaming_av.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 20);
+    CHECK(m.ok());
+    auto vt = m.add_track(avc_cfg(1));
+    bs::mux::TrackConfig ac;
+    ac.id = 2; ac.is_audio = true; ac.is_video = false;
+    ac.audio_codec = bs::mux::AudioCodec::Aac;
+    ac.sample_rate = 44100; ac.channels = 2; ac.timescale = 44100;
+    auto at = m.add_track(ac);
+
+    std::size_t video_count = 0, audio_count = 0;
+    for (auto& t : src.tracks()) {
+        if (!t.is_video) continue;
+        std::size_t i = 0;
+        while (t.hasNext()) {
+            auto s = t.next();
+            if (!s) break;
+            vt.add_sample(s.data, s.pts, s.dts,
+                          s.duration ? s.duration : 1000, s.is_key, s.framing);
+            ++video_count;
+            // Interleave one synthetic AAC frame per video sample.
+            const std::vector<std::uint8_t> aac{0x21, 0x10, 0x04, 0x00};
+            at.add_sample(aac, static_cast<std::int64_t>(i) * 1024,
+                          static_cast<std::int64_t>(i) * 1024, 1024, true,
+                          bs::NalFramingMode::RawFrame);
+            ++audio_count;
+            ++i;
+        }
+        break;
+    }
+    CHECK(m.finalize());
+
+    auto d = bs::demux::Demuxer::init(path);
+    CHECK(d.ok());
+    if (d.ok()) {
+        auto ts = d.tracks();
+        CHECK(ts.size() == 2);
+        if (ts.size() == 2) {
+            bool saw_video = false, saw_audio = false;
+            for (const auto& t : ts) {
+                if (t.is_video) {
+                    saw_video = true;
+                    CHECK(t.sampleCount() > 0);
+                }
+                if (t.is_audio) {
+                    saw_audio = true; // demux indexes audio metadata, not samples
+                }
+            }
+            CHECK(saw_video);
+            CHECK(saw_audio);
+        }
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
 void test_remux_from_corpus() {
     auto demuxer = bs::demux::Demuxer::init(
         std::string("tests/fuzz/corpus/h264.mp4"));
@@ -265,7 +333,9 @@ void test_remux_from_corpus() {
         auto bt = back.tracks();
         CHECK(!bt.empty());
         if (!bt.empty()) {
-            CHECK(bt[0].sampleCount() == count);
+            // A leading parameter-set pseudo-sample is folded into the next
+            // real access unit, so the count can be one lower than the source.
+            CHECK(bt[0].sampleCount() == count || bt[0].sampleCount() == count - 1u);
         }
     }
     (void)std::filesystem::remove(path, ec);
@@ -280,6 +350,7 @@ int main() {
     test_interleaved();
     test_fast_start_and_callbacks();
     test_audio_track();
+    test_interleaved_av_from_corpus();
     test_remux_from_corpus();
 
     if (g_failures != 0) {
