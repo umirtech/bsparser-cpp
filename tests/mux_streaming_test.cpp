@@ -443,12 +443,109 @@ void test_remux_from_corpus() {
     (void)std::filesystem::remove(path, ec);
 }
 
+void test_ordered_interleave() {
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_ordered.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 4096);
+    bs::mux::MuxerOptions options;
+    options.reorder_window = 8;
+    m.with_options(options);
+    auto video = m.add_track(avc_cfg(1));
+    bs::mux::TrackConfig audio_cfg;
+    audio_cfg.id = 2;
+    audio_cfg.codec = bs::Codec::Aac;
+    audio_cfg.is_video = false;
+    audio_cfg.is_audio = true;
+    audio_cfg.timescale = 1000;
+    audio_cfg.sample_rate = 48000;
+    audio_cfg.channels = 2;
+    audio_cfg.framing = bs::NalFramingMode::RawFrame;
+    auto audio = m.add_track(audio_cfg);
+    const std::vector<std::uint8_t> aac{0x21, 0x10, 0x05, 0x60};
+
+    // Deliberately out of decode order across the two tracks.
+    video.add_sample(kAvcNal, 0, 0, 0, true, bs::NalFramingMode::AnnexB);
+    video.add_sample(kAvcNal, 4000, 4000, 0, false, bs::NalFramingMode::AnnexB);
+    audio.add_sample(aac, 1000, 1000, 0, true, bs::NalFramingMode::RawFrame);
+    video.add_sample(kAvcNal, 2000, 2000, 0, false, bs::NalFramingMode::AnnexB);
+    audio.add_sample(aac, 3000, 3000, 0, true, bs::NalFramingMode::RawFrame);
+    CHECK(m.finalize());
+
+    auto back = bs::demux::Demuxer::init(path);
+    CHECK(back.ok());
+    if (back.ok()) {
+        auto tracks = back.tracks();
+        CHECK(tracks.size() == 2);
+        bool saw_video = false;
+        bool saw_audio = false;
+        for (auto& track : tracks) {
+            std::int64_t previous_dts = -1;
+            std::size_t samples = 0;
+            while (track.hasNext()) {
+                auto sample = track.next();
+                if (!sample) break;
+                CHECK(sample.dts >= previous_dts);
+                previous_dts = sample.dts;
+                ++samples;
+            }
+            if (track.is_video) {
+                saw_video = true;
+                CHECK(samples == 3);
+            } else if (track.is_audio) {
+                saw_audio = true;
+                CHECK(samples == 2);
+            }
+        }
+        CHECK(saw_video && saw_audio);
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_derived_durations() {
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_durations.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    bs::mux::TrackConfig cfg = avc_cfg(1);
+    cfg.timescale = 1000000;
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 4096);
+    auto track = m.add_track(cfg);
+    for (int i = 0; i < 3; ++i) {
+        const std::int64_t pts = static_cast<std::int64_t>(i) * 40000;
+        track.add_sample(kAvcNal, pts, pts, 0, i == 0, bs::NalFramingMode::AnnexB);
+    }
+    CHECK(m.finalize());
+
+    auto back = bs::demux::Demuxer::init(path);
+    CHECK(back.ok());
+    if (back.ok()) {
+        auto tracks = back.tracks();
+        CHECK(tracks.size() == 1);
+        if (!tracks.empty()) {
+            std::size_t index = 0;
+            while (tracks[0].hasNext()) {
+                auto sample = tracks[0].next();
+                if (!sample) break;
+                CHECK(sample.pts == static_cast<std::int64_t>(index) * 40000);
+                CHECK(sample.duration == 40000);
+                ++index;
+            }
+            CHECK(index == 3);
+        }
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
 }  // namespace
 
 int main() {
     test_mapped_stream();
     test_buffered_fallback();
     test_growth();
+    test_ordered_interleave();
+    test_derived_durations();
     test_interleaved();
     test_fast_start_and_callbacks();
     test_audio_track();

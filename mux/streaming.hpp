@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <deque>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -101,6 +103,7 @@ class MuxerImpl {
         stream_records_.resize(tracks_.size());
         pending_param_sets_.resize(tracks_.size());
         pending_mkv_param_.resize(tracks_.size());
+        ordered_samples_.resize(tracks_.size());
         finalized_ = false;
         return index;
     }
@@ -152,8 +155,69 @@ class MuxerImpl {
         return true;
     }
 
-    /* Each sample is framed and written immediately; only tiny records are
-     * retained.  There is no in-memory/buffered accumulation path. */
+    struct OrderedSample {
+        Sample sample{};
+        std::vector<std::uint8_t> owned{};
+    };
+
+    void queue_ordered(std::size_t index, const Sample& sample) {
+        OrderedSample entry;
+        entry.owned.assign(sample.data.begin(), sample.data.end());
+        entry.sample = sample;
+        entry.sample.data = std::span<const std::uint8_t>(
+                entry.owned.data(), entry.owned.size());
+        auto& queue = ordered_samples_[index];
+        const auto position = std::upper_bound(
+                queue.begin(), queue.end(), entry,
+                [](const OrderedSample& value, const OrderedSample& element) {
+                    if (value.sample.dts != element.sample.dts) {
+                        return value.sample.dts < element.sample.dts;
+                    }
+                    return value.sample.pts < element.sample.pts;
+                });
+        queue.insert(position, std::move(entry));
+        ++ordered_count_;
+        while (ordered_count_ > options_.reorder_window) {
+            flush_ordered_min();
+        }
+    }
+
+    void flush_ordered_min() {
+        std::size_t best_index = std::numeric_limits<std::size_t>::max();
+        std::int64_t best_dts = 0;
+        std::int64_t best_pts = 0;
+        for (std::size_t i = 0; i < ordered_samples_.size(); ++i) {
+            if (ordered_samples_[i].empty()) continue;
+            const Sample& sample = ordered_samples_[i].front().sample;
+            if (best_index == std::numeric_limits<std::size_t>::max() ||
+                sample.dts < best_dts ||
+                (sample.dts == best_dts && sample.pts < best_pts)) {
+                best_index = i;
+                best_dts = sample.dts;
+                best_pts = sample.pts;
+            }
+        }
+        if (best_index == std::numeric_limits<std::size_t>::max()) {
+            return;
+        }
+        auto& queue = ordered_samples_[best_index];
+        OrderedSample entry = std::move(queue.front());
+        queue.pop_front();
+        --ordered_count_;
+        write_sample(best_index, entry.sample);
+    }
+
+    void flush_ordered_all() {
+        while (ordered_count_ > 0) {
+            flush_ordered_min();
+        }
+    }
+
+    /* Each sample is framed and written immediately unless `reorder_window`
+     * is non-zero.  In ordered mode the muxer holds a bounded, dts-sorted
+     * queue and flushes the earliest sample, which gives a live A/V encoder
+     * pair the same small reorder window av_interleaved_write_frame provides.
+     * Ordered samples are copied because the caller's span is borrowed. */
     void add_sample(std::size_t index, Sample sample) {
         if (finalized_ || index >= tracks_.size()) {
             return;
@@ -169,7 +233,18 @@ class MuxerImpl {
         if (sample.framing == NalFramingMode::AnnexB && is_h26x(tracks_[index].codec)) {
             sample.framing = tracks_[index].framing;
         }
+        if (sample.data.empty()) {
+            return;
+        }
 
+        if (options_.reorder_window == 0) {
+            write_sample(index, sample);
+            return;
+        }
+        queue_ordered(index, sample);
+    }
+
+    void write_sample(std::size_t index, const Sample& sample) {
         if (!stream_started_) {
             /* MKV writes TrackEntry headers up front, before any samples are
              * seen.  Derive H.26x CodecPrivate from the first keyframe now. */
@@ -326,6 +401,9 @@ class MuxerImpl {
             );
         }
 
+        // Drain the ordered window in dts order before the trailer is built.
+        flush_ordered_all();
+
         // A stream that never received a sample has no valid container to
         // finish.  Start it now so headers at least exist, then finish.
         if (!stream_started_) {
@@ -394,6 +472,8 @@ class MuxerImpl {
     std::vector<Mp4Bytes> pending_param_sets_{};
     std::vector<ChunkRecord> chunks_{};
     std::vector<std::vector<std::uint8_t>> pending_mkv_param_{};
+    std::vector<std::deque<OrderedSample>> ordered_samples_{};
+    std::size_t ordered_count_ = 0;
     std::uint32_t stream_frame_count_ = 0;
     std::uint64_t stream_data_bytes_ = 0;
     std::uint32_t block_align_ = 0;
@@ -414,8 +494,9 @@ class MuxerImpl {
  * -----------------------------------------------------------
  *
  * A lightweight, copyable handle into a MuxerImpl.  It owns no
- * payload; addSample() only borrows the caller's span until
- * Muxer::finalize() serializes it.
+ * payload.  In the immediate mode addSample() only borrows the caller's span
+ * for the duration of the call; with `MuxerOptions::reorder_window` active the
+ * sample is copied into the bounded ordering queue.
  */
 class Track {
    public:

@@ -930,6 +930,41 @@ inline std::size_t start_mp4_stream(
 }
 
 /*
+ * MP4's stts needs one duration per sample.  A caller that only supplies
+ * pts/dts (the common live-encoder case) leaves duration zero; derive it from
+ * the next sample's dts/pts rather than baking in the old 1000-tick default.
+ * The last sample reuses the previous positive duration so a track does not
+ * end with an arbitrary unit.
+ */
+[[nodiscard]] inline std::vector<std::uint32_t> mp4_sample_durations(
+        const std::vector<SampleRecord>& records) {
+    std::vector<std::int64_t> derived(records.size(), 0);
+    for (std::size_t i = 0; i + 1 < records.size(); ++i) {
+        std::int64_t delta = records[i + 1].dts - records[i].dts;
+        if (delta <= 0) {
+            delta = records[i + 1].pts - records[i].pts;
+        }
+        if (delta > 0) {
+            derived[i] = delta;
+        }
+    }
+    std::int64_t previous = 0;
+    for (std::size_t i = 0; i < derived.size(); ++i) {
+        if (derived[i] <= 0) {
+            derived[i] = previous > 0 ? previous : 1000;
+        } else {
+            previous = derived[i];
+        }
+    }
+    std::vector<std::uint32_t> out;
+    out.reserve(derived.size());
+    for (const std::int64_t duration : derived) {
+        out.push_back(clamp_duration(duration));
+    }
+    return out;
+}
+
+/*
  * Finish a streamed file: patch mdat's largesize in place, then append a
  * moov built from the recorded sample/chunk tables.  `records` is indexed
  * by track; `chunks` is in physical write order (caller-driven interleaving).
@@ -980,10 +1015,12 @@ inline bool finish_mp4_stream(
 
         std::uint64_t total = 0u;
         bool has_non_key = false;
+        const std::vector<std::uint32_t> sample_durations =
+                mp4_sample_durations(rs);
         for (std::size_t j = 0u; j < rs.size(); ++j) {
             sizes[i].push_back(static_cast<std::uint32_t>(std::min<std::size_t>(rs[j].size, 0xFFFFFFFFu)));
-            const std::int64_t d = rs[j].duration > 0 ? rs[j].duration : 1000;
-            durations[i].push_back(clamp_duration(d));
+            const std::uint32_t d = sample_durations[j];
+            durations[i].push_back(d);
             ctts[i].push_back(static_cast<std::int64_t>(std::clamp<std::int64_t>(
                 rs[j].pts - rs[j].dts, -0x80000000LL, 0x7FFFFFFFLL)));
             if (rs[j].is_key) {

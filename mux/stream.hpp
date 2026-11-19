@@ -38,6 +38,11 @@ struct MuxerOptions {
     std::size_t initial_map_size = 0;       // 0 -> FileSink::kDefaultChunk
     bool fast_start = false;               // reserve/patch moov at the front
     bool try_mmap = true;                  // false -> force buffered fallback
+    // Hold up to this many samples in a bounded dts-ordered queue before
+    // writing.  0 keeps the zero-copy immediate path.  A value such as 16-64
+    // gives the muxer the same small reorder window a live A/V encoder pair
+    // needs; samples are copied into the queue while it is active.
+    std::size_t reorder_window = 0;
     void* ctx = nullptr;
     void (*on_progress)(void*, std::uint64_t /*bytes*/, std::uint64_t /*total*/) = nullptr;
     void (*on_error)(void*, const char* /*message*/) = nullptr;
