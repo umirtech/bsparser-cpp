@@ -488,8 +488,12 @@ namespace detail {
 inline void fillCellsSse2(MvCell* dst, std::size_t count, const MvCell& pattern) noexcept {
     const __m128i value =
             _mm_loadu_si128(reinterpret_cast<const __m128i*>(&pattern));
+    // Precompute the vectorized bound: `i + 4 <= count` can overflow in the
+    // optimizer's inlined form and triggers -Waggressive-loop-optimizations
+    // on some GCC versions.
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + i + 0), value);
         _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + i + 1), value);
         _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + i + 2), value);
@@ -522,8 +526,9 @@ inline void fillRowsSse2(
 }
 
 inline void copyCellsSse2(MvCell* dst, const MvCell* src, std::size_t count) noexcept {
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         const __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + i + 0));
         const __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + i + 1));
         const __m128i c = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + i + 2));
@@ -545,12 +550,13 @@ inline void fillCellsAvx2(MvCell* dst, std::size_t count, const MvCell& pattern)
     const __m128i half =
             _mm_loadu_si128(reinterpret_cast<const __m128i*>(&pattern));
     const __m256i value = _mm256_set_m128i(half, half);
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i + 0), value);
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i + 2), value);
     }
-    if (i + 2 <= count) {
+    if (count - i >= 2) {
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i), value);
         i += 2;
     }
@@ -583,8 +589,9 @@ inline void fillRowsAvx2(
 
 BS_AVC_CELL_SIMD_AVX2_TARGET
 inline void copyCellsAvx2(MvCell* dst, const MvCell* src, std::size_t count) noexcept {
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         const __m256i a =
                 _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + i + 0));
         const __m256i b =
@@ -592,7 +599,7 @@ inline void copyCellsAvx2(MvCell* dst, const MvCell* src, std::size_t count) noe
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i + 0), a);
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i + 2), b);
     }
-    if (i + 2 <= count) {
+    if (count - i >= 2) {
         const __m256i a =
                 _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + i));
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i), a);
@@ -608,8 +615,9 @@ inline void copyCellsAvx2(MvCell* dst, const MvCell* src, std::size_t count) noe
 inline void fillCellsNeon(MvCell* dst, std::size_t count, const MvCell& pattern) noexcept {
     const uint8x16_t value =
             vld1q_u8(reinterpret_cast<const std::uint8_t*>(&pattern));
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         vst1q_u8(reinterpret_cast<std::uint8_t*>(dst + i + 0), value);
         vst1q_u8(reinterpret_cast<std::uint8_t*>(dst + i + 1), value);
         vst1q_u8(reinterpret_cast<std::uint8_t*>(dst + i + 2), value);
@@ -642,8 +650,9 @@ inline void fillRowsNeon(
 }
 
 inline void copyCellsNeon(MvCell* dst, const MvCell* src, std::size_t count) noexcept {
+    const std::size_t limit = count & ~std::size_t{3};
     std::size_t i = 0;
-    for (; i + 4 <= count; i += 4) {
+    for (; i < limit; i += 4) {
         const uint8x16_t a =
                 vld1q_u8(reinterpret_cast<const std::uint8_t*>(src + i + 0));
         const uint8x16_t b =

@@ -11,6 +11,10 @@
 #include <vector>
 
 #if defined(_WIN32)
+// windows.h otherwise defines min()/max() macros that break std::min/max.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <fcntl.h>

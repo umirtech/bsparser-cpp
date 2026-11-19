@@ -14,6 +14,10 @@
 #include <vector>
 
 #if defined(_WIN32)
+// windows.h otherwise defines min()/max() macros that break std::min/max.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <fcntl.h>
 #include <io.h>
 #include <sys/stat.h>
@@ -103,11 +107,19 @@ class FileSink {
         if (path.empty()) {
             return false;
         }
+#if defined(_WIN32)
+        (void)try_mmap; // Windows uses the buffered backend only
+#endif
         path_ = path;
         chunk_ = expected_size != 0u ? align_up(std::max(expected_size, std::size_t{4096}))
                                      : kDefaultChunk;
 
+#if defined(_WIN32)
+        // MSVC deprecates the POSIX spelling; _open is the conformant name.
+        fd_ = ::_open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+#else
         fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+#endif
         if (fd_ < 0) {
             return false;
         }
@@ -131,6 +143,9 @@ class FileSink {
         if (fd < 0) {
             return false;
         }
+#if defined(_WIN32)
+        (void)try_mmap; // Windows uses the buffered backend only
+#endif
         fd_ = fd;
         close_fd_ = close_on_destroy;
         chunk_ = expected_size != 0u ? align_up(std::max(expected_size, std::size_t{4096}))
@@ -346,7 +361,9 @@ class FileSink {
 #endif
 
     void ensure_capacity(std::size_t extra) {
-#if !defined(_WIN32)
+#if defined(_WIN32)
+        (void)extra; // no growable mapping on Windows
+#else
         if (backend_ == Backend::Mapped && map_offset_ + extra > map_size_) {
             (void)grow_map(map_offset_ + extra);
         }

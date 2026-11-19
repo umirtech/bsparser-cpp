@@ -70,6 +70,12 @@ elseif(MSVC)
             /permissive-
     )
 
+    # windows.h defines min()/max() macros that collide with std::min/max.
+    target_compile_definitions(bs
+        INTERFACE
+            NOMINMAX
+    )
+
 endif()
 
 #-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
