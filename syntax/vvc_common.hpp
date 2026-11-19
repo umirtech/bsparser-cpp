@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace bs {
 namespace vvc {
@@ -60,6 +61,23 @@ inline bool is_irap_nal_unit(std::uint8_t type) noexcept {
 inline bool is_idr_nal_unit(std::uint8_t type) noexcept {
     return type == 7 || type == 8;
 }
+
+/*
+ * profile_tier_level() (H.266 7.3.3.1) — the scalar values retained from
+ * DCI / VPS / SPS.  The constraint-info bit pattern is validated but not
+ * stored; see vvc_sps_parser.hpp.
+ */
+struct VvcProfileTierLevel {
+    std::uint8_t general_profile_idc = 0;
+    bool general_tier_flag = false;
+    std::uint8_t general_level_idc = 0;
+    bool ptl_frame_only_constraint_flag = false;
+    bool ptl_multilayer_enabled_flag = false;
+    bool sublayer_level_present[8] = {};
+    std::uint8_t sublayer_level_idc[8] = {};
+    std::uint32_t num_sub_profiles = 0;
+    std::vector<std::uint32_t> sub_profile_ids;
+};
 
 }  // namespace vvc
 }  // namespace bs

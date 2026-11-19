@@ -112,10 +112,41 @@ inline HrdParameters parse_hrd_parameters(RbspBitstreamReader& reader) {
 }
 
 /*
+ * H.264 7.4.2.1.1 inferred defaults for VUI fields whose presence flags are
+ * zero.  Applied up front so absent fields carry their spec-mandated values.
+ */
+inline void apply_vui_defaults(VuiParameters& v, const SequenceParameterSet& sps) {
+    v.aspect_ratio_idc = 0;
+    v.video_format = 5;
+    v.video_full_range_flag = false;
+    v.colour_primaries = 2;
+    v.transfer_characteristics = 2;
+    v.matrix_coefficients = 2;
+    v.chroma_sample_loc_type_top_field = 0;
+    v.chroma_sample_loc_type_bottom_field = 0;
+    v.fixed_frame_rate_flag = false;
+    v.low_delay_hrd_flag = !v.fixed_frame_rate_flag;
+    v.pic_struct_present_flag = false;
+    v.motion_vectors_over_pic_boundaries_flag = true;
+    v.max_bytes_per_pic_denom = 2;
+    v.max_bits_per_mb_denom = 1;
+    v.log2_max_mv_length_horizontal = 15;
+    v.log2_max_mv_length_vertical = 15;
+    const bool constrained = sps.constraint_set_flag[3] &&
+        (sps.profile_idc == 44u || sps.profile_idc == 86u || sps.profile_idc == 100u ||
+         sps.profile_idc == 110u || sps.profile_idc == 122u || sps.profile_idc == 244u);
+    v.max_num_reorder_frames = constrained ? 0u : 16u;
+    v.max_dec_frame_buffering = constrained ? 0u : 16u;
+}
+
+/*
  * AVC vui_parameters() (E.1.1).
  */
-inline VuiParameters parse_vui_parameters(RbspBitstreamReader& reader) {
+inline VuiParameters parse_vui_parameters(
+    RbspBitstreamReader& reader, const SequenceParameterSet& sps
+) {
     VuiParameters vui;
+    apply_vui_defaults(vui, sps);
 
     vui.aspect_ratio_info_present_flag = reader.read_bit();
 
@@ -259,7 +290,9 @@ inline SequenceParameterSet parse_sequence_parameter_set(RbspBitstreamReader& re
         const bool seq_scaling_matrix_present_flag = reader.read_bit();
 
         if (seq_scaling_matrix_present_flag) {
-            for (unsigned i = 0; i < 8; ++i) {
+            // H.264 7.3.2.1.1: 6 4x4 lists plus 2 8x8 lists (6 for 4:4:4).
+            const unsigned list_count = sps.chroma_format_idc != 3u ? 8u : 12u;
+            for (unsigned i = 0; i < list_count; ++i) {
                 const bool present = reader.read_bit();
 
                 if (!present) {
@@ -354,7 +387,9 @@ inline SequenceParameterSet parse_sequence_parameter_set(RbspBitstreamReader& re
     sps.vui_parameters_present_flag = reader.read_bit();
 
     if (sps.vui_parameters_present_flag) {
-        sps.vui = detail::parse_vui_parameters(reader);
+        sps.vui = detail::parse_vui_parameters(reader, sps);
+    } else {
+        detail::apply_vui_defaults(sps.vui, sps);
     }
 
     reader.read_rbsp_trailing_bits();

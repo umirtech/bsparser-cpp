@@ -4,6 +4,7 @@
 #pragma once
 
 #include "vvc_sps.hpp"
+#include "../syntax/vvc_common.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -161,6 +162,41 @@ inline void skip_profile_tier_level(Reader& r, std::uint8_t max_sub_layers_minus
     const std::uint32_t num_sub_profiles = r.read_bits(8);
     for (std::uint32_t i = 0; i < num_sub_profiles; ++i) {
         (void)r.read_bits(32); /* general_sub_profile_idc */
+    }
+}
+
+/*
+ * Parsing variant of skip_profile_tier_level(): identical bit consumption,
+ * but retains the scalar profile/tier/level values in `out`.
+ */
+template <typename Reader>
+inline void parse_profile_tier_level(
+    Reader& r, std::uint8_t max_sub_layers_minus1, VvcProfileTierLevel& out
+) {
+    out.general_profile_idc = static_cast<std::uint8_t>(r.read_bits(7));
+    out.general_tier_flag = r.read_bit();
+    out.general_level_idc = static_cast<std::uint8_t>(r.read_bits(8));
+    out.ptl_frame_only_constraint_flag = r.read_bit();
+    out.ptl_multilayer_enabled_flag = r.read_bit();
+
+    skip_general_constraints_info(r);
+
+    for (int i = max_sub_layers_minus1 - 1; i >= 0; --i) {
+        out.sublayer_level_present[i] = r.read_bit();
+    }
+
+    r.byte_align();
+
+    for (int i = max_sub_layers_minus1 - 1; i >= 0; --i) {
+        if (out.sublayer_level_present[i]) {
+            out.sublayer_level_idc[i] = static_cast<std::uint8_t>(r.read_bits(8));
+        }
+    }
+
+    out.num_sub_profiles = r.read_bits(8);
+    out.sub_profile_ids.reserve(out.num_sub_profiles);
+    for (std::uint32_t i = 0; i < out.num_sub_profiles; ++i) {
+        out.sub_profile_ids.push_back(static_cast<std::uint32_t>(r.read_bits(32)));
     }
 }
 

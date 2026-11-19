@@ -31,8 +31,11 @@ inline Dci parse_dci(Reader& r) {
 
     dci.num_ptls_minus1 = r.read_bits(4);
 
+    dci.ptls.reserve(dci.num_ptls_minus1 + 1u);
     for (std::uint32_t i = 0; i <= dci.num_ptls_minus1; ++i) {
-        detail::skip_profile_tier_level(r, 0);
+        VvcProfileTierLevel ptl;
+        detail::parse_profile_tier_level(r, 0, ptl);
+        dci.ptls.push_back(ptl);
     }
 
     dci.extension_present = r.read_bit(); /* dci_extension_flag */

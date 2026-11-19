@@ -794,15 +794,21 @@ inline FrameHeader parse_frame_header(
 
     if (!frame_is_intra || fh.refresh_frame_flags != all_frames) {
         if (seq.enable_order_hint) {
+            // AV1 5.5.2: the hints are coded explicitly when error-resilient
+            // mode is on or the frame is a key/intra-only frame; otherwise
+            // they are inferred from reference-slot state (zero here).
+            const bool explicit_hints = fh.error_resilient_mode ||
+                fh.frame_type == FrameType::KeyFrame ||
+                fh.frame_type == FrameType::IntraOnly;
             for (int i = 0; i < 8; ++i) {
-                if (fh.error_resilient_mode) {
+                if (explicit_hints) {
                     if (order_hint_bits)
                         fh.ref_order_hint[i] =
                             static_cast<std::uint8_t>(bd.read_literal(order_hint_bits));
                     else
                         fh.ref_order_hint[i] = 0;
                 } else {
-                    fh.ref_order_hint[i] = 0;  // would be from ref, infer 0
+                    fh.ref_order_hint[i] = 0;  // inferred from reference slots
                 }
             }
         }

@@ -5,8 +5,10 @@
 
 #include "vvc_vps.hpp"
 #include "vvc_sps_parser.hpp"
+#include "../logging/log.hpp"
 
 #include <cstdint>
+#include <exception>
 #include <vector>
 
 namespace bs {
@@ -49,6 +51,41 @@ inline void skip_profile_tier_level(Reader& r, bool pt_present, std::uint8_t max
         const std::uint32_t num_sub_profiles = r.read_bits(8);
         for (std::uint32_t i = 0; i < num_sub_profiles; ++i) {
             (void)r.read_bits(32);  // general_sub_profile_idc
+        }
+    }
+}
+
+/* Parsing variant that retains the PTL scalars, with identical bit use. */
+template <typename Reader>
+inline void parse_profile_tier_level(
+    Reader& r, bool pt_present, std::uint8_t max_tid, VvcProfileTierLevel& out
+) {
+    if (pt_present) {
+        out.general_profile_idc = static_cast<std::uint8_t>(r.read_bits(7));
+        out.general_tier_flag = r.read_bit();
+    }
+    out.general_level_idc = static_cast<std::uint8_t>(r.read_bits(8));
+    out.ptl_frame_only_constraint_flag = r.read_bit();
+    out.ptl_multilayer_enabled_flag = r.read_bit();
+    if (pt_present) {
+        skip_general_constraints_info(r);
+    }
+    for (int i = static_cast<int>(max_tid) - 1; i >= 0; --i) {
+        out.sublayer_level_present[i] = r.read_bit();
+    }
+    while (!r.byte_aligned()) {
+        (void)r.read_bit();
+    }
+    for (int i = static_cast<int>(max_tid) - 1; i >= 0; --i) {
+        if (out.sublayer_level_present[i]) {
+            out.sublayer_level_idc[i] = static_cast<std::uint8_t>(r.read_bits(8));
+        }
+    }
+    if (pt_present) {
+        out.num_sub_profiles = r.read_bits(8);
+        out.sub_profile_ids.reserve(out.num_sub_profiles);
+        for (std::uint32_t i = 0; i < out.num_sub_profiles; ++i) {
+            out.sub_profile_ids.push_back(static_cast<std::uint32_t>(r.read_bits(32)));
         }
     }
 }
@@ -227,10 +264,13 @@ inline VideoParameterSet parse_vps(Reader& r) {
     }
 
     // PTL payloads
+    vps.ptls.reserve(num_ptls);
     for (std::uint16_t i = 0; i < num_ptls; ++i) {
         const bool pt_present = vps.pt_present_flag[i] != 0;
         const std::uint8_t max_tid = vps.ptl_max_tid[i];
-        detail::skip_profile_tier_level(r, pt_present, max_tid);
+        VvcProfileTierLevel ptl;
+        detail::parse_profile_tier_level(r, pt_present, max_tid, ptl);
+        vps.ptls.push_back(ptl);
     }
 
     // OLS PTL indices
@@ -374,12 +414,12 @@ inline VideoParameterSet parse_vps(Reader& r) {
                 const bool timing_present = r.read_bit();  // vps_timing_hrd_params_present_flag
                 if (timing_present) {
                     // general_timing_hrd_parameters
-                    std::uint32_t num_units_in_tick = static_cast<std::uint32_t>(r.read_bits(32));
-                    (void)num_units_in_tick;
-                    std::uint32_t time_scale = static_cast<std::uint32_t>(r.read_bits(32));
-                    (void)time_scale;
+                    vps.num_units_in_tick = static_cast<std::uint32_t>(r.read_bits(32));
+                    vps.time_scale = static_cast<std::uint32_t>(r.read_bits(32));
                     const bool nal_present = r.read_bit();
                     const bool vcl_present = r.read_bit();
+                    vps.general_nal_hrd_params_present_flag = nal_present;
+                    vps.general_vcl_hrd_params_present_flag = vcl_present;
                     bool du_present = false;
                     std::uint32_t hrd_cpb_cnt_minus1 = 0;
                     if (nal_present || vcl_present) {
@@ -456,8 +496,10 @@ inline VideoParameterSet parse_vps(Reader& r) {
                     }
                 }
             }
+        } catch (const std::exception& e) {
+            BS_LOG_WARN("VVC VPS HRD parse failed: " << e.what() << '\n');
         } catch (...) {
-            // HRD is optional/simplified; truncated streams should not break VPS parsing.
+            BS_LOG_WARN("VVC VPS HRD parse failed (unknown error)\n");
         }
     }
 
@@ -497,8 +539,10 @@ inline VideoParameterSet parse_vps(Reader& r) {
                 }
             }
         }
+    } catch (const std::exception& e) {
+        BS_LOG_WARN("VVC VPS extension parse failed: " << e.what() << '\n');
     } catch (...) {
-        // ignore trailing errors – VPS leading fields already captured
+        BS_LOG_WARN("VVC VPS extension parse failed (unknown error)\n");
     }
 
     return vps;

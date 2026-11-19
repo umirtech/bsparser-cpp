@@ -22,7 +22,9 @@ namespace avc {
  */
 
 [[nodiscard]]
-inline PictureParameterSet parse_picture_parameter_set(RbspBitstreamReader& reader) {
+inline PictureParameterSet parse_picture_parameter_set(
+    RbspBitstreamReader& reader, unsigned chroma_format_idc = 1u
+) {
     PictureParameterSet pps;
 
     pps.pic_parameter_set_id =
@@ -129,7 +131,12 @@ inline PictureParameterSet parse_picture_parameter_set(RbspBitstreamReader& read
         pps.pic_scaling_matrix_present_flag = reader.read_bit();
 
         if (pps.pic_scaling_matrix_present_flag) {
-            for (unsigned i = 0; i < 8; ++i) {
+            // H.264 7.3.2.2: 6 4x4 lists plus 2 8x8 lists (6 for 4:4:4), and
+            // only when transform_8x8_mode_flag is set.
+            const unsigned extra = pps.transform_8x8_mode_flag
+                ? (chroma_format_idc == 3u ? 6u : 2u) : 0u;
+            const unsigned list_count = 6u + extra;
+            for (unsigned i = 0; i < list_count; ++i) {
                 const bool present = reader.read_bit();
 
                 if (!present) {

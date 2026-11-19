@@ -91,6 +91,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <span>
 #include <vector>
@@ -508,8 +509,11 @@ inline void store_hevc_parameter_set(
                 break;
         }
 
-    } catch (...) {
+    } catch (const std::exception& e) {
+        BS_LOG_WARN("HEVC parameter-set parse failed: " << e.what() << '\n');
         /* leave the manager untouched on parse failure */
+    } catch (...) {
+        BS_LOG_WARN("HEVC parameter-set parse failed (unknown error)\n");
     }
 }
 
@@ -538,6 +542,14 @@ inline void store_avc_parameter_set(
             case avc::NalUnitType::Pps: {
                 RbspBitstreamReader reader(to_byte_span(nal.payload_bytes()));
                 avc::PictureParameterSet pps = avc::parse_picture_parameter_set(reader);
+                // 4:4:4 streams carry six 8x8 scaling lists; reparse with the
+                // referenced SPS's chroma format once the id is known.
+                if (const auto* sps = manager.find_sps(pps.seq_parameter_set_id)) {
+                    if (sps->chroma_format_idc == 3u) {
+                        RbspBitstreamReader r2(to_byte_span(nal.payload_bytes()));
+                        pps = avc::parse_picture_parameter_set(r2, 3u);
+                    }
+                }
                 (void)manager.store_pps(pps);
                 if (ph.pps)
                     ph.pps(pps);
@@ -550,8 +562,11 @@ inline void store_avc_parameter_set(
                 break;
         }
 
-    } catch (...) {
+    } catch (const std::exception& e) {
+        BS_LOG_WARN("AVC parameter-set parse failed: " << e.what() << '\n');
         /* leave the manager untouched on parse failure */
+    } catch (...) {
+        BS_LOG_WARN("AVC parameter-set parse failed (unknown error)\n");
     }
 }
 
@@ -981,7 +996,7 @@ inline std::size_t dispatch_state_av1(
             /* skip a malformed OBU */
         }
 
-        framer.next();
+        framer.next_nothrow();
     }
 
     return parsed_count;

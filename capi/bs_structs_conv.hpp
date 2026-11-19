@@ -578,10 +578,10 @@ inline void bs_conv(const ::bs::avc::ScalingList& src, BsAvcScalingList& dst) {
             dst.list_4x4[_i0][_i1] = (uint8_t)src.list_4x4[_i0][_i1];
         }
     }
-    for (std::size_t _i0 = 0; _i0 < 2; ++_i0) {
+    for (std::size_t _i0 = 0; _i0 < 6; ++_i0) {
         dst.present_8x8[_i0] = (src.present_8x8[_i0] ? 1 : 0);
     }
-    for (std::size_t _i0 = 0; _i0 < 2; ++_i0) {
+    for (std::size_t _i0 = 0; _i0 < 6; ++_i0) {
         for (std::size_t _i1 = 0; _i1 < 64; ++_i1) {
             dst.list_8x8[_i0][_i1] = (uint8_t)src.list_8x8[_i0][_i1];
         }

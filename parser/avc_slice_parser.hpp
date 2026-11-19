@@ -354,6 +354,15 @@ inline SliceHeader parse_slice_header(
 
     header.slice_qp_delta = detail::read_se_bounded(reader, "slice_qp_delta", 52);
 
+    // H.264 7.3.3: SP/SI fields come immediately after slice_qp_delta,
+    // before the deblocking filter and slice-group-cycle fields.
+    if (header.slice_type == SliceType::SP || header.slice_type == SliceType::SI) {
+        if (header.slice_type == SliceType::SP) {
+            header.sp_for_switch_flag = reader.read_bit();
+        }
+        header.slice_qs_delta = detail::read_se_bounded(reader, "slice_qs_delta", 52);
+    }
+
     if (pps.deblocking_filter_control_present_flag) {
         header.disable_deblocking_filter_idc = static_cast<std::uint8_t>(
             detail::read_ue_max(reader, "disable_deblocking_filter_idc", 2)
@@ -374,18 +383,6 @@ inline SliceHeader parse_slice_header(
             detail::ceil_log2(pps.slice_group_map.slice_group_change_rate_minus1 + 1);
 
         header.slice_group_change_cycle = static_cast<std::uint32_t>(reader.read_bits(bits));
-    }
-
-    if (header.slice_type == SliceType::SP || header.slice_type == SliceType::SI) {
-        header.sp_for_switch_flag = reader.read_bit();
-
-        if (header.slice_type == SliceType::SP) {
-            header.slice_qs_delta = detail::read_se_bounded(reader, "slice_qs_delta", 52);
-        }
-
-        if (header.slice_type == SliceType::SI) {
-            header.slice_qs_delta = detail::read_se_bounded(reader, "slice_qs_delta", 52);
-        }
     }
 
     return header;

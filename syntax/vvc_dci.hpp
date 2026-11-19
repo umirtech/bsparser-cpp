@@ -4,6 +4,9 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
+
+#include "syntax/vvc_common.hpp"
 
 namespace bs {
 namespace vvc {
@@ -22,6 +25,9 @@ struct Dci {
      * dci_num_ptls_minus1 u(4).
      */
     std::uint32_t num_ptls_minus1 = 0;
+
+    /* Parsed profile_tier_level() blocks (num_ptls_minus1 + 1 entries). */
+    std::vector<VvcProfileTierLevel> ptls;
 
     /*
      * dci_extension_flag u(1).

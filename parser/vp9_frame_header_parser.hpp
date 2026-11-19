@@ -39,8 +39,10 @@ inline void skip_color_config(PlainBitReader& r, std::uint8_t profile) {
     const std::uint8_t color_space = static_cast<std::uint8_t>(r.read_bits(3));
 
     if (color_space == 7) {
-        (void)r.read_bit(); /* reserved_zero */
-
+        // VP9 6.2.4: reserved_zero is only present for profiles 1 and 3.
+        if (profile == 1 || profile == 3) {
+            (void)r.read_bit(); /* reserved_zero */
+        }
     } else {
         (void)r.read_bit(); /* color_range */
 

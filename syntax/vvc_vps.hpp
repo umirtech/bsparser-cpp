@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "syntax/vvc_common.hpp"
+
 namespace bs {
 namespace vvc {
 
@@ -41,6 +43,15 @@ namespace vvc {
  * leading-fields-only version.
  */
 struct VideoParameterSet {
+    /* Parsed profile_tier_level() blocks signalled in the VPS. */
+    std::vector<VvcProfileTierLevel> ptls;
+
+    /* Timing / HRD values captured from the VPS (zero when absent). */
+    std::uint32_t num_units_in_tick = 0;
+    std::uint32_t time_scale = 0;
+    bool general_nal_hrd_params_present_flag = false;
+    bool general_vcl_hrd_params_present_flag = false;
+
     /*
      * vps_video_parameter_set_id u(4).
      */

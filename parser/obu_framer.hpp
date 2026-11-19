@@ -139,8 +139,19 @@ class ObuFramer {
                 continue;
             }
 
+            // A start-code-delimited OBU may carry trailing zero bytes that
+            // belong to the next start code, not to this OBU's payload.
+            std::size_t end = next;
+            while (end > begin && data_[end - 1] == 0x00) {
+                --end;
+            }
+            if (end <= begin) {
+                current_ = next;
+                continue;
+            }
+
             obu_begin_ = begin;
-            obu_end_ = next;
+            obu_end_ = end;
             current_ = next;
             finished_ = false;
             return;
@@ -172,10 +183,16 @@ class ObuFramer {
         }
 
         if (!has_size_field) {
-            /* Cannot size the OBU; treat the rest as one unit. */
+            // AV1 5.2: low-overhead OBUs must carry a size field; the only
+            // exception is the temporal delimiter, which has no payload.
+            const std::uint8_t type = static_cast<std::uint8_t>(hdr >> 3u);
+            if (type != 2u) { // OBU_TEMPORAL_DELIMITER
+                finished_ = true;
+                return;
+            }
             obu_begin_ = begin;
-            obu_end_ = data_.size();
-            current_ = data_.size();
+            obu_end_ = pos <= data_.size() ? pos : data_.size();
+            current_ = obu_end_;
             finished_ = false;
             return;
         }

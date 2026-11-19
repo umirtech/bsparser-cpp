@@ -376,8 +376,8 @@ typedef struct BsAvcRefPicReorderingOp {
 typedef struct BsAvcScalingList {
     uint8_t present_4x4[6];
     uint8_t list_4x4[6][16];
-    uint8_t present_8x8[2];
-    uint8_t list_8x8[2][64];
+    uint8_t present_8x8[6];
+    uint8_t list_8x8[6][64];
 } BsAvcScalingList;
 
 typedef struct BsAvcSeiMessage {

@@ -78,6 +78,13 @@ inline ParsedSei parse_sei_nal(const NalUnit& nal) {
             std::span<const std::uint8_t>(sei.rbsp_storage.data() + offset, payload_size);
 
         sei.messages.push_back(message);
+
+        // H.264 7.3.2.3: when a payload is not byte-aligned, the encoder
+        // inserts rbsp_trailing_bits() before the next message.  Skip that
+        // alignment so the following payload_type is read from a byte edge.
+        if (!reader.byte_aligned() && reader.more_rbsp_data()) {
+            reader.align_to_byte();
+        }
     }
 
     reader.read_rbsp_trailing_bits();
