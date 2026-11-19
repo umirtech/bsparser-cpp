@@ -68,7 +68,7 @@ inline std::uint64_t wav_padded_size(std::uint64_t n) noexcept {
 
 [[nodiscard]]
 inline bool wav_valid_bits(unsigned bits) noexcept {
-    return bits == 8u || bits == 16u || bits == 24u || bits == 32u;
+    return bits == 8u || bits == 16u || bits == 24u || bits == 32u || bits == 64u;
 }
 
 [[nodiscard]]
@@ -90,13 +90,17 @@ inline std::vector<std::uint8_t> make_wav_fmt(
     std::uint32_t block_align, std::uint32_t byte_rate
 ) {
     const bool extensible = cfg.channels > 2u;
+    const bool is_float = cfg.audio_codec == Codec::PcmFloat32 ||
+                          cfg.audio_codec == Codec::PcmFloat64;
     const std::size_t body = wav_fmt_body_bytes(cfg.channels);
 
     std::vector<std::uint8_t> fmt;
     fmt.reserve(8u + body);
     fmt.insert(fmt.end(), {'f', 'm', 't', ' '});
     wav_push_u32(fmt, static_cast<std::uint32_t>(body));
-    wav_push_u16(fmt, extensible ? 0xFFFEu : 1u); // PCM / EXTENSIBLE
+    // WAVE_FORMAT_PCM (1) for integer samples, WAVE_FORMAT_IEEE_FLOAT (3)
+    // for floating-point samples; EXTENSIBLE carries the sub-format GUID.
+    wav_push_u16(fmt, extensible ? 0xFFFEu : (is_float ? 3u : 1u));
     wav_push_u16(fmt, cfg.channels);
     wav_push_u32(fmt, cfg.sample_rate);
     wav_push_u32(fmt, byte_rate);
@@ -118,7 +122,12 @@ inline std::vector<std::uint8_t> make_wav_fmt(
             0x01u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x10u, 0x00u,
             0x80u, 0x00u, 0x00u, 0xAAu, 0x00u, 0x38u, 0x9Bu, 0x71u
         };
-        fmt.insert(fmt.end(), kPcmSubFormat, kPcmSubFormat + 16u);
+        static constexpr std::uint8_t kFloatSubFormat[16] = {
+            0x03u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x10u, 0x00u,
+            0x80u, 0x00u, 0x00u, 0xAAu, 0x00u, 0x38u, 0x9Bu, 0x71u
+        };
+        const auto* guid = is_float ? kFloatSubFormat : kPcmSubFormat;
+        fmt.insert(fmt.end(), guid, guid + 16u);
     }
     return fmt;
 }

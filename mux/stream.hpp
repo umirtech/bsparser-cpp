@@ -410,10 +410,14 @@ inline const char* mkv_codec_id(Codec codec) noexcept {
     }
 }
 
-/* IVF fourcc for a codec (VP8 / VP9 only). */
+/* IVF fourcc for a codec (VP8 / VP9 / AV1). */
 [[nodiscard]]
 inline const char* ivf_fourcc(Codec codec) noexcept {
-    return codec == Codec::Vp9 ? "VP90" : "VP80";
+    switch (codec) {
+        case Codec::Vp9: return "VP90";
+        case Codec::Av1: return "AV01";
+        default: return "VP80";
+    }
 }
 
 /* Codecs that use Annex-B NAL framing on input. */

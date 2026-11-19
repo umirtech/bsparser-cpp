@@ -437,6 +437,7 @@ struct ParsedTrack {
     bool subtitle = false;
     std::string subtitle_codec;
     std::uint32_t timescale = 0;
+    std::int64_t edit_offset = 0; // first non-empty elst media_time, negated
 };
 
 inline void parse_moov_tracks(
@@ -452,6 +453,43 @@ inline void parse_moov_tracks(
         const std::size_t tkhd = find_child(data, trak_box.data, trak_box.end, "tkhd");
         if (tkhd != data.size()) {
             pt.view.id = read_track_id(data, box_at(data, tkhd));
+        }
+
+        // Edit list: a positive media_time skips that much media time, so
+        // presentation timestamps are shifted backwards by the same amount.
+        const std::size_t edts = find_child(data, trak_box.data, trak_box.end, "edts");
+        if (edts != data.size()) {
+            Box eb = box_at(data, edts);
+            const std::size_t elst = find_child(data, eb.data, eb.end, "elst");
+            if (elst != data.size()) {
+                Box lb = box_at(data, elst);
+                if (lb.data + 8 <= lb.end) {
+                    const std::uint8_t ver = data[lb.data];
+                    std::size_t p = lb.data + 4;
+                    const std::uint32_t count = read_u32(data, p);
+                    p += 4;
+                    for (std::uint32_t i = 0; i < count; ++i) {
+                        std::int64_t media_time = 0;
+                        if (ver == 1u) {
+                            if (p + 16 > lb.end) break;
+                            p += 8; // segment_duration
+                            media_time = static_cast<std::int64_t>(read_u64(data, p));
+                            p += 8;
+                        } else {
+                            if (p + 8 > lb.end) break;
+                            p += 4; // segment_duration
+                            media_time = static_cast<std::int32_t>(read_u32(data, p));
+                            p += 4;
+                        }
+                        if (p + 4 > lb.end) break;
+                        p += 4; // media_rate
+                        if (media_time >= 0) {
+                            pt.edit_offset = -media_time;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         const std::size_t mdia = find_child(data, trak_box.data, trak_box.end, "mdia");
@@ -844,8 +882,9 @@ inline void build_sample_table(
                 SampleEntry e;
                 e.offset = static_cast<std::size_t>(off);
                 e.size = size;
-                e.dts = sample_index < dts_list.size() ? dts_list[sample_index]
-                                                       : static_cast<std::int64_t>(sample_index) * 1000;
+                e.dts = (sample_index < dts_list.size() ? dts_list[sample_index]
+                                                        : static_cast<std::int64_t>(sample_index) * 1000)
+                        + pt.edit_offset;
                 e.duration = sample_index < dur_list.size()
                                  ? dur_list[sample_index]
                                  : 1000;
@@ -1008,6 +1047,16 @@ inline void build_fragment_samples(
                         }
                     }
 
+                    // trun flag 0x000800: version 0 uses a signed composition
+                    // time offset that must be added to DTS for each sample.
+                    std::int32_t composition_offset = 0;
+                    if ((flags & 0x000800u) != 0) {
+                        if (p + 4 <= b.end) {
+                            composition_offset = static_cast<std::int32_t>(read_u32(data, p));
+                            p += 4;
+                        }
+                    }
+
                     std::uint64_t offset = static_cast<std::uint64_t>(base) +
                                            static_cast<std::uint64_t>(data_offset);
                     std::int64_t elapsed = 0;
@@ -1056,7 +1105,7 @@ inline void build_fragment_samples(
                                     break;  // skip out-of-range fragment sample
                                 }
                                 e.dts = static_cast<std::int64_t>(base_decode_time) + elapsed;
-                                e.pts = e.dts;
+                                e.pts = e.dts + composition_offset;
                                 e.duration = duration;
                                 e.is_key = (sample_flags & 0x00010000u) == 0;
                                 e.framing = pt.view.framing;
@@ -2887,6 +2936,9 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
         std::uint16_t channels = 0;
         std::uint16_t bits_per_sample = 0;
         std::uint16_t format_tag = 0;
+        std::uint32_t scale = 0;       // strh.dwScale
+        std::uint32_t rate = 0;        // strh.dwRate
+        std::uint32_t sample_size = 0; // strh.dwSampleSize (audio)
     };
 
     std::vector<Stream> streams;
@@ -2929,6 +2981,14 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
                                     s.fourcc = std::string(
                                         reinterpret_cast<const char*>(data.data() + sub.data + 4), 4
                                     );
+                                    // dwScale @+20, dwRate @+24, dwSampleSize @+36.
+                                    if (sub.data + 28 <= sub.end) {
+                                        s.scale = read_u32(data, sub.data + 20);
+                                        s.rate = read_u32(data, sub.data + 24);
+                                    }
+                                    if (sub.data + 40 <= sub.end) {
+                                        s.sample_size = read_u32(data, sub.data + 36);
+                                    }
                                 }
                             }
 
@@ -3022,7 +3082,8 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
         const Stream& s = streams[i];
         TrackView& v = out.tracks[i];
         v.id = static_cast<std::uint32_t>(i + 1);
-        v.timescale = 1000;
+        // AVI frames advance by dwRate/dwScale ticks per second.
+        v.timescale = s.rate != 0u ? s.rate : 1000u;
         v.mmap_backed = src.mmap_backed();
 
         if (s.is_audio) {
@@ -3076,7 +3137,7 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
     };
 
     std::size_t p2 = movi_pos;
-    std::vector<std::size_t> counters(streams.size(), 0);
+    std::vector<std::int64_t> pts_counters(streams.size(), 0);
 
     while (p2 + 8 <= data.size()) {
         const Chunk c = chunk_at(data, p2);
@@ -3112,12 +3173,20 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
             if (si < streams.size()) {
                 const auto frame = data.subspan(c.data, c.size);
 
+                const Stream& s = streams[si];
                 SampleEntry e;
                 e.offset = c.data;
                 e.size = c.size;
-                e.pts = static_cast<std::int64_t>(counters[si]) * 1000;
+                e.pts = pts_counters[si];
                 e.dts = e.pts;
-                e.duration = 1000;
+                // Video frames last dwScale ticks; audio chunks last as many
+                // ticks as they contain dwSampleSize-sized sample blocks.
+                if (is_audio_chunk && s.sample_size != 0u) {
+                    e.duration = static_cast<std::int64_t>(c.size / s.sample_size);
+                } else {
+                    e.duration = s.scale != 0u ? static_cast<std::int64_t>(s.scale) : 1000;
+                }
+                pts_counters[si] += e.duration;
                 e.is_key = true;
 
                 if (is_audio_chunk) {
@@ -3140,7 +3209,6 @@ inline bool build_avi(FileSource& src, IndexBuildResult& out) {
                 }
 
                 out.samples[si].push_back(e);
-                ++counters[si];
             }
         }
 
@@ -3178,6 +3246,18 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
     const std::uint16_t width = static_cast<std::uint16_t>(data[12] | (data[13] << 8));
     const std::uint16_t height = static_cast<std::uint16_t>(data[14] | (data[15] << 8));
 
+    // IVF header: framerate @16..19, timescale @20..23.  Frame timestamps
+    // advance in units of (timescale / framerate) seconds; expose the frame
+    // rate as the track timescale and fold the denominator into the pts.
+    const auto ivf_u32 = [&](std::size_t at) {
+        return static_cast<std::uint32_t>(data[at]) |
+               (static_cast<std::uint32_t>(data[at + 1]) << 8) |
+               (static_cast<std::uint32_t>(data[at + 2]) << 16) |
+               (static_cast<std::uint32_t>(data[at + 3]) << 24);
+    };
+    const std::uint32_t framerate = ivf_u32(16);
+    const std::uint32_t timebase = ivf_u32(20);
+
     out.tracks.resize(1);
     out.samples.resize(1);
     out.param_sets.resize(1);
@@ -3190,7 +3270,7 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
     v.codec_name = fourcc_is_blank(fourcc) ? std::string(codec_name(codec)) : fourcc;
     v.width = width;
     v.height = height;
-    v.timescale = 1000;
+    v.timescale = framerate != 0u ? framerate : 1000u;
     v.mmap_backed = src.mmap_backed();
     out.tracks[0] = v;
 
@@ -3217,7 +3297,7 @@ inline bool build_ivf(FileSource& src, IndexBuildResult& out) {
         SampleEntry e;
         e.offset = offset;
         e.size = size;
-        e.pts = static_cast<std::int64_t>(ts);
+        e.pts = static_cast<std::int64_t>(timebase > 1u ? ts / timebase : ts);
         e.dts = e.pts;
         e.duration = 0;
         e.is_key = index == 0;
@@ -3606,6 +3686,8 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
     Codec codec = Codec::Unknown;
     bool found_codec = false;
     std::vector<SampleEntry> samples;
+    std::vector<SampleEntry> audio_samples;
+    Codec audio_codec = Codec::Unknown;
 
     while (pos + 4 <= data.size()) {
         if (data[pos] == 0x00 && data[pos + 1] == 0x00 && data[pos + 2] == 0x01) {
@@ -3656,6 +3738,23 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
                     }
                 }
 
+                // PES PTS/DTS (33-bit fields at PES header offsets 9 and 14).
+                std::int64_t pts = 0;
+                std::int64_t dts = 0;
+                bool have_pts = false;
+                if (pes_start + 14 <= pes_end && data[pes_start] == 0x00 &&
+                    data[pes_start + 1] == 0x00 && data[pes_start + 2] == 0x01) {
+                    const std::uint8_t flags = data[pes_start + 7];
+                    if ((flags & 0x80u) != 0) {
+                        pts = ts_index::decode_pes_timestamp(data.data() + pes_start + 9);
+                        dts = pts;
+                        if ((flags & 0x40u) != 0 && pes_start + 19 <= pes_end) {
+                            dts = ts_index::decode_pes_timestamp(data.data() + pes_start + 14);
+                        }
+                        have_pts = true;
+                    }
+                }
+
                 if (payload_off < pes_end) {
                     const auto payload = data.subspan(payload_off, pes_end - payload_off);
 
@@ -3670,9 +3769,9 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
                     SampleEntry e;
                     e.offset = payload_off;
                     e.size = payload.size();
-                    e.pts = static_cast<std::int64_t>(samples.size()) * 1000;
-                    e.dts = e.pts;
-                    e.duration = 1000;
+                    e.pts = have_pts ? pts : static_cast<std::int64_t>(samples.size()) * 1000;
+                    e.dts = have_pts ? dts : e.pts;
+                    e.duration = 0;
                     e.is_key = samples.empty();
                     e.framing = NalFramingMode::AnnexB;
                     samples.push_back(e);
@@ -3680,6 +3779,47 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
 
                 pos = pes_end;
                 continue;
+            }
+
+            if (sid >= 0xC0 && sid <= 0xDF) {
+                // Audio PES: stream ids 0xC0..0xDF (MP3, AC-3, DTS, ...).
+                if (pos + 6 <= data.size()) {
+                    const std::uint16_t len =
+                        static_cast<std::uint16_t>((data[pos + 4] << 8) | data[pos + 5]);
+                    const std::size_t end = (len == 0) ? data.size() : std::min<std::size_t>(
+                        pos + 6 + len, data.size()
+                    );
+                    std::size_t off = pos + 6;
+                    std::int64_t ts = 0;
+                    if (off + 3 <= end && data[off] == 0x00 && data[off+1] == 0x00 &&
+                        data[off+2] == 0x01) {
+                        const std::uint8_t flags = data[off + 7 < end ? off + 7 : off + 2];
+                        if ((flags & 0x80u) != 0 && off + 14 <= end) {
+                            ts = ts_index::decode_pes_timestamp(data.data() + off + 9);
+                        }
+                        const std::uint8_t hlen = data[off + 8 < end ? off + 8 : off + 2];
+                        off += 9u + hlen;
+                    }
+                    if (off < end && audio_codec == Codec::Unknown) {
+                        // MP3 syncword, otherwise leave the codec unidentified.
+                        if (data[off] == 0xFF && (data[off] & 0xE0u) == 0xE0u) {
+                            audio_codec = Codec::Mp3;
+                        }
+                    }
+                    if (off < end) {
+                        SampleEntry e;
+                        e.offset = off;
+                        e.size = end - off;
+                        e.pts = ts;
+                        e.dts = ts;
+                        e.duration = 0;
+                        e.is_key = true;
+                        e.framing = NalFramingMode::RawFrame;
+                        audio_samples.push_back(e);
+                    }
+                    pos = end;
+                    continue;
+                }
             }
 
             if (sid == 0xBC || sid == 0xBD || (sid >= 0xBE && sid <= 0xBF) || sid == 0xB9 ||
@@ -3697,25 +3837,44 @@ inline bool build_ps(FileSource& src, IndexBuildResult& out) {
         ++pos;
     }
 
-    if (samples.empty()) {
+    if (samples.empty() && audio_samples.empty()) {
         return false;
     }
 
-    out.tracks.resize(1);
-    out.samples.resize(1);
-    out.param_sets.resize(1);
+    const std::size_t count = (samples.empty() ? 0u : 1u) +
+                              (audio_samples.empty() ? 0u : 1u);
+    out.tracks.resize(count);
+    out.samples.resize(count);
+    out.param_sets.resize(count);
 
-    TrackView v;
-    v.id = 1;
-    v.is_video = true;
-    v.codec = found_codec ? codec : Codec::Unknown;
-    v.codec_name = codec_name(v.codec);
-    v.framing = NalFramingMode::AnnexB;
-    v.timescale = 90000;
-    v.mmap_backed = src.mmap_backed();
-    out.tracks[0] = v;
-    out.samples[0] = std::move(samples);
-    out.tracks[0].sample_count = out.samples[0].size();
+    std::size_t ti = 0;
+    if (!samples.empty()) {
+        TrackView v;
+        v.id = static_cast<std::uint32_t>(++ti);
+        v.is_video = true;
+        v.codec = found_codec ? codec : Codec::Unknown;
+        v.codec_name = codec_name(v.codec);
+        v.framing = NalFramingMode::AnnexB;
+        v.timescale = 90000;
+        v.mmap_backed = src.mmap_backed();
+        out.tracks[ti - 1] = v;
+        out.samples[ti - 1] = std::move(samples);
+        out.tracks[ti - 1].sample_count = out.samples[ti - 1].size();
+    }
+    if (!audio_samples.empty()) {
+        TrackView a;
+        a.id = static_cast<std::uint32_t>(++ti);
+        a.is_audio = true;
+        a.codec = audio_codec;
+        a.audio_codec = audio_codec;
+        a.codec_name = codec_name(audio_codec);
+        a.framing = NalFramingMode::RawFrame;
+        a.timescale = 90000;
+        a.mmap_backed = src.mmap_backed();
+        out.tracks[ti - 1] = a;
+        out.samples[ti - 1] = std::move(audio_samples);
+        out.tracks[ti - 1].sample_count = out.samples[ti - 1].size();
+    }
 
     return true;
 }

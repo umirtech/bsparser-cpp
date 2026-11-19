@@ -672,6 +672,11 @@ inline std::vector<std::uint8_t> mkv_make_tracks(
                     asc = mkv_make_default_aac_config(track);
                 }
                 mkv_push_element(entry, kMkvCodecPrivate, asc);
+            } else if ((track.audio_codec == Codec::Vorbis ||
+                        track.audio_codec == Codec::Opus) &&
+                       !codec_private.empty()) {
+                // Vorbis/Opus identification headers live in CodecPrivate.
+                mkv_push_element(entry, kMkvCodecPrivate, codec_private);
             }
         } else {
             // Video: always emit numeric PixelWidth / PixelHeight so build_mkv
@@ -715,6 +720,25 @@ inline std::vector<std::uint8_t> mkv_make_tracks(
     std::vector<std::uint8_t> element;
     mkv_push_element(element, kMkvTracks, tracks_payload);
     return element;
+}
+
+/* WebM restricts the codec set to VP8/VP9/AV1 + Vorbis/Opus.  When every
+ * track fits, select the WebM DocType so the file is discoverable as WebM. */
+[[nodiscard]]
+inline bool mkv_is_webm(const std::vector<TrackConfig>& tracks) {
+    if (tracks.empty()) {
+        return false;
+    }
+    for (const auto& t : tracks) {
+        if (t.is_audio && !t.is_video) {
+            if (t.audio_codec != Codec::Vorbis && t.audio_codec != Codec::Opus) {
+                return false;
+            }
+        } else if (t.codec != Codec::Vp8 && t.codec != Codec::Vp9 && t.codec != Codec::Av1) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* Streaming / no-sample callers: no derivation is attempted. */
@@ -848,7 +872,7 @@ inline MkvStreamState start_mkv_stream(FileSink& sink,
                                        const std::vector<TrackConfig>& tracks) {
     MkvStreamState state;
 
-    sink.write(mkv_make_ebml_header());
+    sink.write(mkv_make_ebml_header(mkv_is_webm(tracks)));
 
     // Segment ID + 8-byte unknown-size vint.
     std::vector<std::uint8_t> segment_header;

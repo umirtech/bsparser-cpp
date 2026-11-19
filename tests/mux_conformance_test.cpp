@@ -338,6 +338,73 @@ void test_struct_report_rejects_wrong_codec() {
     CHECK(threw);
 }
 
+/* Phase 3 regressions. */
+
+void test_wav_float_format() {
+    const std::string path = "/tmp/opencode/p3_float.wav";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
+    auto t = m.add_track([] {
+        bs::mux::TrackConfig c; c.is_audio = true; c.is_video = false;
+        c.audio_codec = bs::mux::AudioCodec::PcmFloat32;
+        c.sample_rate = 48000; c.channels = 2; return c;
+    }());
+    const std::vector<std::uint8_t> frame(8, 0);
+    t.add_sample(frame, 0, 0, 1, true, bs::NalFramingMode::RawFrame);
+    CHECK(m.finalize());
+    const auto d = read_file(path);
+    if (d.size() >= 20u) {
+        const auto le16 = [&](std::size_t at) {
+            return static_cast<std::uint16_t>(d[at] | (d[at + 1] << 8));
+        };
+        CHECK(le16(20) == 3u); // WAVE_FORMAT_IEEE_FLOAT
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_mkv_webm_doctype() {
+    const std::string path = "/tmp/opencode/p3.webm";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
+    auto t = m.add_track([] {
+        bs::mux::TrackConfig c; c.codec = bs::Codec::Vp9;
+        c.width = 64; c.height = 64; return c;
+    }());
+    const std::vector<std::uint8_t> frame{0x82, 0x49, 0x83, 0x42, 0x00};
+    t.add_sample(frame, 0, 0, 33, true, bs::NalFramingMode::RawFrame);
+    CHECK(m.finalize());
+    CHECK(contains(read_file(path), "webm"));
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_ivf_timebase_demux() {
+    const std::string path = "/tmp/opencode/p3.ivf";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+    {
+        std::ofstream f(path, std::ios::binary);
+        const unsigned char hdr[32] = {
+            'D','K','I','F',0,2,0,0,'V','P','9','0',64,0,36,0,
+            30,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0
+        };
+        f.write(reinterpret_cast<const char*>(hdr), 32);
+        const unsigned char frame[17] = {5,0,0,0,0,0,0,0,0,0,0,0,0x82,0x49,0x83,0x42,0};
+        f.write(reinterpret_cast<const char*>(frame), 17);
+    }
+    auto d = bs::demux::Demuxer::init(path);
+    CHECK(d.ok());
+    if (d.ok()) {
+        auto t = d.track(0);
+        CHECK(t.timescale == 30u);
+        auto s = t.next();
+        CHECK(s);
+        if (s) CHECK(s.pts == 0);
+    }
+    (void)std::filesystem::remove(path, ec);
+}
+
 }  // namespace
 
 int main() {
@@ -350,6 +417,9 @@ int main() {
     test_mp4_mdhd_timebase();
     test_mkv_multi_cluster_timestamps();
     test_struct_report_rejects_wrong_codec();
+    test_wav_float_format();
+    test_mkv_webm_doctype();
+    test_ivf_timebase_demux();
     if (g_failures != 0) {
         std::cerr << g_failures << " failure(s)\n";
         return 1;
