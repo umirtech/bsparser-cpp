@@ -116,7 +116,9 @@ class FileSink {
 
 #if defined(_WIN32)
         // MSVC deprecates the POSIX spelling; _open is the conformant name.
-        fd_ = ::_open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        // O_BINARY is essential: without it _write translates 0x0A to CRLF
+        // and silently corrupts every container written on Windows.
+        fd_ = ::_open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0644);
 #else
         fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
 #endif
@@ -248,6 +250,20 @@ class FileSink {
             map_size_ = 0;
         } else if (backend_ == Backend::Buffered) {
             ok = flush_buffered();
+        }
+
+        // A finalized path sink is done writing.  Release the OS handle so
+        // the file can be reopened or removed on Windows (which forbids
+        // deleting a file that still has a writer handle).  Caller-owned fd
+        // sinks are left alone.
+        if (ok && close_fd_ && fd_ >= 0) {
+#if defined(_WIN32)
+            (void)::_close(fd_);
+#else
+            (void)::close(fd_);
+#endif
+            fd_ = -1;
+            close_fd_ = false;
         }
         finished_ = true;
         return ok;
@@ -403,8 +419,8 @@ class FileSink {
 
     bool positional_write(std::size_t offset, std::span<const std::uint8_t> bytes) {
         std::size_t off = 0;
-        while (off < bytes.size()) {
 #if defined(_WIN32)
+        while (off < bytes.size()) {
             const DWORD pos = static_cast<DWORD>(offset + off);
             if (::SetFilePointer(reinterpret_cast<HANDLE>(_get_osfhandle(fd_)),
                                  static_cast<LONG>(pos), nullptr, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
@@ -416,7 +432,16 @@ class FileSink {
                 return false;
             }
             off += static_cast<std::size_t>(written);
+        }
+        // SetFilePointer + _write leave the file position at the patched
+        // offset, whereas POSIX pwrite() leaves it untouched.  Restore it to
+        // EOF so later appends (e.g. moov after patching mdat) do not
+        // overwrite data that was already written.
+        if (::_lseek(fd_, 0, SEEK_END) == -1L) {
+            return false;
+        }
 #else
+        while (off < bytes.size()) {
             const ssize_t n = ::pwrite(fd_, bytes.data() + off, bytes.size() - off,
                                        static_cast<off_t>(offset + off));
             if (n < 0) {
@@ -429,8 +454,8 @@ class FileSink {
                 return false;
             }
             off += static_cast<std::size_t>(n);
-#endif
         }
+#endif
         return true;
     }
 

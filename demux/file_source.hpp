@@ -81,9 +81,13 @@ class FileSource {
         close();
 
 #if defined(_WIN32)
+        // Allow other writers: a freshly muxed file is commonly read back
+        // while the muxer's own handle is still open.  FILE_SHARE_READ alone
+        // produces ERROR_SHARING_VIOLATION in that case.
         HANDLE file = CreateFileA(
-            path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL, nullptr
+            path.c_str(), GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr
         );
 
         if (file == INVALID_HANDLE_VALUE) {

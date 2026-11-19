@@ -139,13 +139,16 @@ void test_path_sink() {
     CHECK(muxer.finalize());
     CHECK(std::filesystem::exists(path));
 
-    auto demuxer = bs::demux::Demuxer::init(path);
-    CHECK(demuxer.ok());
-    const auto tracks = demuxer.tracks();
-    CHECK(tracks.size() == 1);
-    CHECK(tracks[0].codec == bs::Codec::Vp9);
-    CHECK(tracks[0].sampleCount() == 1);
-
+    {
+        auto demuxer = bs::demux::Demuxer::init(path);
+        CHECK(demuxer.ok());
+        const auto tracks = demuxer.tracks();
+        CHECK(tracks.size() == 1);
+        CHECK(tracks[0].codec == bs::Codec::Vp9);
+        CHECK(tracks[0].sampleCount() == 1);
+    }
+    // On Windows a live memory-mapped view prevents deleting the file, so
+    // release the demuxer before checking removal.
     (void)std::filesystem::remove(path, ec);
     CHECK(!std::filesystem::exists(path));
 }
