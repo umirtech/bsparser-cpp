@@ -384,8 +384,26 @@ inline const char* mp4_fourcc(Codec codec) noexcept {
             return "vp09";
         case Codec::Vp8:
             return "vp08";
+        case Codec::Mpeg1Video:
+        case Codec::Mpeg2Video:
+            return "mpgv";
+        case Codec::Mpeg4Visual:
+            return "mp4v";
+        case Codec::H263:
+            return "s263";
+        case Codec::Theora:
+            return "theo";
+        case Codec::ProRes:
+            return "apcn";
+        case Codec::DnvHd:
+            return "AVdn";
+        case Codec::Vc1:
+            return "vc-1";
+        case Codec::Avs2:
+            return "avs2";
         default:
-            return "hvc1";
+            // A generic ISO visual entry instead of falsely claiming HEVC.
+            return "mp4v";
     }
 }
 
@@ -405,8 +423,26 @@ inline const char* mkv_codec_id(Codec codec) noexcept {
             return "V_VP9";
         case Codec::Vp8:
             return "V_VP8";
+        case Codec::Mpeg1Video:
+            return "V_MPEG1";
+        case Codec::Mpeg2Video:
+            return "V_MPEG2";
+        case Codec::Mpeg4Visual:
+            return "V_MPEG4/ISO/ASP";
+        case Codec::H263:
+            return "V_SORENSON";
+        case Codec::Theora:
+            return "V_THEORA";
+        case Codec::ProRes:
+            return "V_PRORES";
+        case Codec::Vc1:
+            return "V_VC1";
+        case Codec::Avs2:
+            return "V_AVS2";
         default:
-            return "V_MPEGH/ISO/HEVC";
+            // Never mislabel an unknown codec as HEVC: players would try the
+            // wrong decoder and fail with a confusing start-code error.
+            return "V_UNCOMPRESSED";
     }
 }
 
