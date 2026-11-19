@@ -1916,6 +1916,11 @@ BsStructReport* bs_parse_struct_report(
                 (void)bs::parse(*s, span, cpp_mode, vh, length_size);
                 break;
             }
+
+            default:
+                // Audio, subtitle and container-only codecs have no syntax
+                // parser; return an empty report instead of dispatching.
+                break;
         }
 
         const std::size_t count = g_struct_entries.size();
