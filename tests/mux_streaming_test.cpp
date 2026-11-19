@@ -559,6 +559,106 @@ bool test_find_box(const std::vector<std::uint8_t>& data, std::size_t start,
 }
 
 
+
+void test_ordered_mixed_timescales() {
+    const std::string path =
+            bs_test::temp_dir() + "/mux_streaming_mixed_timescales.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
+    bs::mux::MuxerOptions options;
+    options.reorder_window = 8;
+    m.with_options(options);
+
+    auto video_cfg = avc_cfg(1);
+    video_cfg.timescale = 1000000;
+    video_cfg.max_samples_per_chunk = 1;
+    auto video = m.add_track(video_cfg);
+
+    bs::mux::TrackConfig audio_cfg;
+    audio_cfg.id = 2;
+    audio_cfg.codec = bs::Codec::Aac;
+    audio_cfg.is_video = false;
+    audio_cfg.is_audio = true;
+    audio_cfg.timescale = 48000;
+    audio_cfg.sample_rate = 48000;
+    audio_cfg.channels = 2;
+    audio_cfg.framing = bs::NalFramingMode::RawFrame;
+    audio_cfg.max_samples_per_chunk = 1;
+    auto audio = m.add_track(audio_cfg);
+
+    const std::vector<std::uint8_t> aac{0x21, 0x10, 0x05, 0x60};
+    // Raw dts values are not comparable: video is in microseconds and audio
+    // in 48 kHz samples.  Wall-clock order is V0, A0, V20ms, A21.3ms,
+    // V40ms, A42.7ms.
+    video.add_sample(kAvcNal, 0, 0, 0, true, bs::NalFramingMode::AnnexB);
+    video.add_sample(kAvcNal, 40000, 40000, 0, false,
+                     bs::NalFramingMode::AnnexB);
+    audio.add_sample(aac, 0, 0, 1024, true, bs::NalFramingMode::RawFrame);
+    audio.add_sample(aac, 1024, 1024, 1024, true,
+                     bs::NalFramingMode::RawFrame);
+    audio.add_sample(aac, 2048, 2048, 1024, true,
+                     bs::NalFramingMode::RawFrame);
+    video.add_sample(kAvcNal, 20000, 20000, 0, false,
+                     bs::NalFramingMode::AnnexB);
+    CHECK(m.finalize());
+
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<std::uint8_t> data{
+            std::istreambuf_iterator<char>(in),
+            std::istreambuf_iterator<char>()};
+    CHECK(!data.empty());
+
+    TestBox moov;
+    CHECK(test_find_box(data, 0, data.size(), "moov", moov));
+    std::vector<TestBox> traks;
+    for (const auto& box : test_boxes(data, moov.offset + moov.header,
+                                      moov.offset + moov.size)) {
+        if (box.type == "trak") traks.push_back(box);
+    }
+    CHECK(traks.size() == 2u);
+
+    const auto chunk_offsets = [&data](const TestBox& trak) {
+        std::vector<std::uint32_t> offsets;
+        TestBox mdia;
+        TestBox minf;
+        TestBox stbl;
+        TestBox stco;
+        if (!test_find_box(data, trak.offset + trak.header,
+                           trak.offset + trak.size, "mdia", mdia) ||
+            !test_find_box(data, mdia.offset + mdia.header,
+                           mdia.offset + mdia.size, "minf", minf) ||
+            !test_find_box(data, minf.offset + minf.header,
+                           minf.offset + minf.size, "stbl", stbl) ||
+            !test_find_box(data, stbl.offset + stbl.header,
+                           stbl.offset + stbl.size, "stco", stco)) {
+            return offsets;
+        }
+        const std::uint32_t count =
+                test_be32(data, stco.offset + stco.header + 4u);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            offsets.push_back(test_be32(
+                    data, stco.offset + stco.header + 8u + i * 4u));
+        }
+        return offsets;
+    };
+
+    const auto video_offsets = chunk_offsets(traks[0]);
+    const auto audio_offsets = chunk_offsets(traks[1]);
+    CHECK(video_offsets.size() == 3u);
+    CHECK(audio_offsets.size() == 3u);
+    if (video_offsets.size() == 3u && audio_offsets.size() == 3u) {
+        CHECK(video_offsets[0] < audio_offsets[0]);
+        CHECK(audio_offsets[0] < video_offsets[1]);
+        CHECK(video_offsets[1] < audio_offsets[1]);
+        CHECK(audio_offsets[1] < video_offsets[2]);
+        CHECK(video_offsets[2] < audio_offsets[2]);
+    }
+
+    (void)std::filesystem::remove(path, ec);
+}
+
 void test_mkv_cluster_duration_and_info() {
     const std::string path =
             bs_test::temp_dir() + "/mux_streaming_mkv_clusters.mkv";
@@ -735,6 +835,7 @@ int main() {
     test_growth();
     test_ordered_interleave();
     test_audio_single_sample_chunks();
+    test_ordered_mixed_timescales();
     test_mkv_cluster_duration_and_info();
     test_derived_durations();
     test_interleaved();

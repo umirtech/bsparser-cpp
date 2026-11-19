@@ -158,7 +158,22 @@ class MuxerImpl {
     struct OrderedSample {
         Sample sample{};
         std::vector<std::uint8_t> owned{};
+        // Wall-clock position in microseconds.  Raw dts cannot be compared
+        // across tracks: MP4 video may use a microsecond timescale while
+        // audio uses samples (or 90 kHz), so convert each track's dts through
+        // its own timescale first.
+        long double order = 0.0L;
     };
+
+    [[nodiscard]] long double ordered_time(
+            std::size_t index, std::int64_t dts) const noexcept {
+        const std::uint32_t timescale = tracks_[index].timescale;
+        if (timescale == 0u) {
+            return static_cast<long double>(dts);
+        }
+        return static_cast<long double>(dts) * 1000000.0L /
+               static_cast<long double>(timescale);
+    }
 
     void queue_ordered(std::size_t index, const Sample& sample) {
         OrderedSample entry;
@@ -166,14 +181,12 @@ class MuxerImpl {
         entry.sample = sample;
         entry.sample.data = std::span<const std::uint8_t>(
                 entry.owned.data(), entry.owned.size());
+        entry.order = ordered_time(index, sample.dts > 0 ? sample.dts : sample.pts);
         auto& queue = ordered_samples_[index];
         const auto position = std::upper_bound(
-                queue.begin(), queue.end(), entry,
-                [](const OrderedSample& value, const OrderedSample& element) {
-                    if (value.sample.dts != element.sample.dts) {
-                        return value.sample.dts < element.sample.dts;
-                    }
-                    return value.sample.pts < element.sample.pts;
+                queue.begin(), queue.end(), entry.order,
+                [](long double value, const OrderedSample& element) {
+                    return value < element.order;
                 });
         queue.insert(position, std::move(entry));
         ++ordered_count_;
@@ -184,17 +197,15 @@ class MuxerImpl {
 
     void flush_ordered_min() {
         std::size_t best_index = std::numeric_limits<std::size_t>::max();
-        std::int64_t best_dts = 0;
-        std::int64_t best_pts = 0;
+        long double best_order = 0.0L;
         for (std::size_t i = 0; i < ordered_samples_.size(); ++i) {
             if (ordered_samples_[i].empty()) continue;
-            const Sample& sample = ordered_samples_[i].front().sample;
+            const long double order = ordered_samples_[i].front().order;
             if (best_index == std::numeric_limits<std::size_t>::max() ||
-                sample.dts < best_dts ||
-                (sample.dts == best_dts && sample.pts < best_pts)) {
+                order < best_order ||
+                (order == best_order && i < best_index)) {
                 best_index = i;
-                best_dts = sample.dts;
-                best_pts = sample.pts;
+                best_order = order;
             }
         }
         if (best_index == std::numeric_limits<std::size_t>::max()) {
