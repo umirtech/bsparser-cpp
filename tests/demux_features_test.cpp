@@ -6,10 +6,10 @@
  * seek and interleaved reader.  Uses real corpus samples where available.
  */
 #include <demux/demuxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <cstdio>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -149,11 +149,6 @@ void put32(std::vector<std::uint8_t>& d, std::uint32_t v) {
     }
 }
 
-void write_bytes(const std::string& path, const std::vector<std::uint8_t>& d) {
-    std::ofstream f(path, std::ios::binary);
-    f.write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
-}
-
 std::vector<std::int64_t> collect_pts(bs::demux::Track& t) {
     std::vector<std::int64_t> pts;
     std::vector<std::int64_t> dur;
@@ -167,7 +162,7 @@ std::vector<std::int64_t> collect_pts(bs::demux::Track& t) {
 }
 
 void test_wav_timing_regression() {
-    const std::string path = "/tmp/opencode/p2_wav.wav";
+    const std::string path = bs_test::temp_path("p2_wav", ".wav");
     std::vector<std::uint8_t> d;
     const auto tag = [&](const char* s) { for (int i = 0; i < 4; ++i) d.push_back(s[i]); };
     tag("RIFF"); put32(d, 36 + 8); tag("WAVE");
@@ -175,7 +170,7 @@ void test_wav_timing_regression() {
     put32(d, 8000); put32(d, 16000); put16(d, 2); put16(d, 16);
     tag("data"); put32(d, 8);
     for (int i = 0; i < 8; ++i) d.push_back(0);
-    write_bytes(path, d);
+    CHECK(bs_test::write_bytes(path, d));
 
     auto demux = bs::demux::Demuxer::init(path);
     CHECK(demux.ok());
@@ -188,7 +183,7 @@ void test_wav_timing_regression() {
             CHECK(pts[i] == static_cast<std::int64_t>(i));
         }
     }
-    std::remove(path.c_str());
+    bs_test::remove_file(path);
 }
 
 void ogg_page(
@@ -209,7 +204,7 @@ void ogg_page(
 }
 
 void test_ogg_granule_regression() {
-    const std::string path = "/tmp/opencode/p2.ogg";
+    const std::string path = bs_test::temp_path("p2", ".ogg");
     std::vector<std::uint8_t> d;
     std::vector<std::uint8_t> ident{0x01};
     const char vorbis[] = "vorbis";
@@ -224,7 +219,7 @@ void test_ogg_granule_regression() {
     ogg_page(d, 0x00, 0, 1, 2, {0x05, 's', 'e', 't', 'u', 'p'});      // setup
     ogg_page(d, 0x00, 1024, 1, 3, {1, 2, 3, 4, 5});
     ogg_page(d, 0x00, 2048, 1, 4, {6, 7, 8, 9, 10});
-    write_bytes(path, d);
+    CHECK(bs_test::write_bytes(path, d));
 
     auto demux = bs::demux::Demuxer::init(path);
     CHECK(demux.ok());
@@ -239,11 +234,11 @@ void test_ogg_granule_regression() {
             CHECK(pts[1] == 2048);
         }
     }
-    std::remove(path.c_str());
+    bs_test::remove_file(path);
 }
 
 void test_flv_mixed_codec_regression() {
-    const std::string path = "/tmp/opencode/p2.flv";
+    const std::string path = bs_test::temp_path("p2", ".flv");
     std::vector<std::uint8_t> d;
     d.push_back('F'); d.push_back('L'); d.push_back('V');
     d.push_back(1); d.push_back(5);
@@ -273,7 +268,7 @@ void test_flv_mixed_codec_regression() {
     // VP9: independent frame -> must become a second track.
     tag(9, 80, {0x1B, 0x82, 0x49, 0x83, 0x42}); // keyframe + VP9 codec id 11
 
-    write_bytes(path, d);
+    CHECK(bs_test::write_bytes(path, d));
     auto demux = bs::demux::Demuxer::init(path);
     CHECK(demux.ok());
     if (demux.ok()) {
@@ -283,7 +278,7 @@ void test_flv_mixed_codec_regression() {
             CHECK(demux.track(1).codec == bs::Codec::Vp9);
         }
     }
-    std::remove(path.c_str());
+    bs_test::remove_file(path);
 }
 
 }  // namespace

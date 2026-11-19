@@ -11,6 +11,7 @@
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
 #include <bsparser.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -49,7 +50,7 @@ bool contains(const std::vector<std::uint8_t>& d, const char* s) {
 }
 
 void test_mp4_boxes() {
-    const std::string path = "/tmp/opencode/conf.mp4";
+    const std::string path = bs_test::temp_dir() + "/conf.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
@@ -81,7 +82,7 @@ void test_mp4_boxes() {
 }
 
 void test_mp4_ctts() {
-    const std::string path = "/tmp/opencode/conf_ctts.mp4";
+    const std::string path = bs_test::temp_dir() + "/conf_ctts.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
@@ -102,7 +103,7 @@ void test_mp4_ctts() {
 }
 
 void test_mkv_codec_private_and_lacing() {
-    const std::string path = "/tmp/opencode/conf.mkv";
+    const std::string path = bs_test::temp_dir() + "/conf.mkv";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
@@ -130,7 +131,7 @@ void test_mkv_codec_private_and_lacing() {
 void test_wav_padding_and_extensible() {
     std::error_code ec;
     {   // odd data size -> pad byte, RIFF size includes padding
-        const std::string path = "/tmp/opencode/conf_odd.wav";
+        const std::string path = bs_test::temp_dir() + "/conf_odd.wav";
         (void)std::filesystem::remove(path, ec);
         auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
         auto t = m.add_track([] {
@@ -158,7 +159,7 @@ void test_wav_padding_and_extensible() {
         (void)std::filesystem::remove(path, ec);
     }
     {   // >2 channels -> WAVE_FORMAT_EXTENSIBLE (fmt size 40, tag 0xFFFE)
-        const std::string path = "/tmp/opencode/conf_ext.wav";
+        const std::string path = bs_test::temp_dir() + "/conf_ext.wav";
         (void)std::filesystem::remove(path, ec);
         auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
         auto t = m.add_track([] {
@@ -183,7 +184,7 @@ void test_wav_padding_and_extensible() {
 }
 
 void test_ivf_timebase() {
-    const std::string path = "/tmp/opencode/conf.ivf";
+    const std::string path = bs_test::temp_dir() + "/conf.ivf";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Ivf, path, 4096);
@@ -211,7 +212,7 @@ void test_ivf_timebase() {
 /* Phase 1 regressions. */
 
 void test_mp4_codec_config_honored() {
-    const std::string path = "/tmp/opencode/conf_codec_config.mp4";
+    const std::string path = bs_test::temp_dir() + "/conf_codec_config.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
@@ -242,7 +243,7 @@ void test_mp4_codec_config_honored() {
 }
 
 void test_mp4_mdhd_timebase() {
-    const std::string path = "/tmp/opencode/conf_mdhd.mp4";
+    const std::string path = bs_test::temp_dir() + "/conf_mdhd.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 1u << 16);
@@ -279,7 +280,7 @@ void test_mp4_mdhd_timebase() {
 }
 
 void test_mkv_multi_cluster_timestamps() {
-    const std::string path = "/tmp/opencode/conf_multi.mkv";
+    const std::string path = bs_test::temp_dir() + "/conf_multi.mkv";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
@@ -341,7 +342,7 @@ void test_struct_report_rejects_wrong_codec() {
 /* Phase 3 regressions. */
 
 void test_wav_float_format() {
-    const std::string path = "/tmp/opencode/p3_float.wav";
+    const std::string path = bs_test::temp_dir() + "/p3_float.wav";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
@@ -364,7 +365,7 @@ void test_wav_float_format() {
 }
 
 void test_mkv_webm_doctype() {
-    const std::string path = "/tmp/opencode/p3.webm";
+    const std::string path = bs_test::temp_dir() + "/p3.webm";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
@@ -380,7 +381,7 @@ void test_mkv_webm_doctype() {
 }
 
 void test_ivf_timebase_demux() {
-    const std::string path = "/tmp/opencode/p3.ivf";
+    const std::string path = bs_test::temp_dir() + "/p3.ivf";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     {

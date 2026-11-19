@@ -11,6 +11,7 @@
  */
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -42,22 +43,21 @@ const char* container_name(bs::mux::Container c) noexcept {
 
 /* Unique temp path per invocation so tests never collide. */
 std::string temp_path(const std::string& prefix, bs::mux::Container container) {
-    static int counter = 0;
-    const char* ext = "bin";
+    const char* ext = ".bin";
     switch (container) {
         case bs::mux::Container::Mp4:
-            ext = "mp4";
+            ext = ".mp4";
             break;
         case bs::mux::Container::Mkv:
-            ext = "mkv";
+            ext = ".mkv";
             break;
         case bs::mux::Container::Ivf:
-            ext = "ivf";
+            ext = ".ivf";
             break;
         default:
             break;
     }
-    return "/tmp/opencode/" + prefix + "_" + std::to_string(counter++) + "." + ext;
+    return bs_test::temp_path(prefix, ext);
 }
 
 /* Remove the temp file on every exit path, including early returns. */

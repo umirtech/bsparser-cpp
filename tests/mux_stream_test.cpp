@@ -10,6 +10,7 @@
 #include <mux/muxer.hpp>
 
 #include <demux/demuxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -62,7 +63,7 @@ std::vector<std::uint8_t> read_file_bytes(const std::string& path) {
 
 /* 1. Path sink + round-trip through the demuxer (former in-memory case). */
 void test_in_memory_sink() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     const std::string path = dir + "/mux_stream_1.ivf";
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);
@@ -118,7 +119,7 @@ void test_in_memory_sink() {
 
 /* 2. Path sink: deferred write, then read the file back. */
 void test_path_sink() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     const std::string path = dir + "/mux_stream_test.ivf";
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);
@@ -152,13 +153,13 @@ void test_path_sink() {
 /* 3. fd sink: flush into a POSIX fd then re-read from offset zero. */
 #if !defined(_WIN32)
 void test_fd_sink() {
-    char tmpl[] = "/tmp/opencode/mux_fd_XXXXXX";
-    const int fd = ::mkstemp(tmpl);
+    std::string tmpl = (std::filesystem::path(bs_test::temp_dir()) / "mux_fd_XXXXXX").string();
+    const int fd = tmpl.size() >= 6 ? ::mkstemp(tmpl.data()) : -1;
     CHECK(fd >= 0);
     if (fd < 0) {
         return;
     }
-    (void)::unlink(tmpl);  // the fd stays valid even after the name is gone
+    (void)::unlink(tmpl.c_str());  // the fd stays valid even after the name is gone
 
     auto muxer = bs::mux::Muxer::create(bs::mux::Container::Ivf, fd, /*close_on_destroy=*/false);
     CHECK(muxer.ok());
@@ -192,7 +193,7 @@ void test_fd_sink() {
 
 /* 4. Container inference from the file extension. */
 void test_extension_open() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);
 
@@ -213,7 +214,7 @@ void test_extension_open() {
 
 /* 5. Error handling. */
 void test_errors() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);
     const std::string mp4_path = dir + "/mux_stream_err.mp4";
@@ -252,7 +253,7 @@ void test_errors() {
 
 /* 6. Track-handle and muxer aliases. */
 void test_aliases() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);
     const std::string path = dir + "/mux_stream_aliases.ivf";
@@ -301,7 +302,7 @@ void test_aliases() {
 
 /* 7. Multi-track MKV with an Annex-B AVC sample and a VP9 sample. */
 void test_multi_track_mkv() {
-    const std::string dir = "/tmp/opencode";
+    const std::string dir = bs_test::temp_dir();
     const std::string path = dir + "/mux_stream_multi.mkv";
     std::error_code ec;
     (void)std::filesystem::create_directories(dir, ec);

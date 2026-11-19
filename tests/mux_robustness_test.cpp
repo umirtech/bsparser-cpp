@@ -14,6 +14,7 @@
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
 #include <bsparser.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -43,12 +44,8 @@ const std::vector<std::uint8_t> kSample{
 
 /* Unique temp path per invocation so tests never collide. */
 std::string temp_path(const std::string& prefix, bs::mux::Container container) {
-    static int counter = 0;
-    const char* ext = "mp4";
-    if (container == bs::mux::Container::Mkv) {
-        ext = "mkv";
-    }
-    return "/tmp/opencode/" + prefix + "_" + std::to_string(counter++) + "." + ext;
+    const char* ext = container == bs::mux::Container::Mkv ? ".mkv" : ".mp4";
+    return bs_test::temp_path(prefix, ext);
 }
 
 /* Remove the temp file on every exit path, including early returns. */

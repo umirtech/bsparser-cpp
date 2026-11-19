@@ -14,6 +14,7 @@
  */
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -118,14 +119,8 @@ const char* container_name(bs::mux::Container container) noexcept {
 
 /* Unique output path for a streaming round-trip case. */
 std::string temp_output_path(bs::mux::Container container) {
-    static unsigned long long counter = 0;
     const std::string name = container_name(container);
-    long long pid = 0;
-#if !defined(_WIN32)
-    pid = static_cast<long long>(::getpid());
-#endif
-    return "/tmp/opencode/mux_rt_" + name + "_" + std::to_string(pid) + "_" +
-           std::to_string(counter++) + "." + name;
+    return bs_test::temp_path("mux_rt_" + name, "." + name);
 }
 
 void test_file(const std::string& path) {
@@ -219,7 +214,6 @@ void test_file(const std::string& path) {
 
         const std::string out_path = temp_output_path(container);
         std::error_code ec;
-        (void)std::filesystem::create_directories("/tmp/opencode", ec);
         (void)std::filesystem::remove(out_path, ec);
 
         auto muxer = bs::mux::Muxer::create(container, out_path);

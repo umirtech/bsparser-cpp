@@ -8,6 +8,7 @@
  */
 #include <mux/muxer.hpp>
 #include <demux/demuxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -65,7 +66,7 @@ void verify_mp4(const std::string& path, std::size_t expected_samples) {
 }
 
 void test_mapped_stream() {
-    const std::string path = "/tmp/opencode/mux_streaming_mapped.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_mapped.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -82,7 +83,7 @@ void test_mapped_stream() {
 }
 
 void test_buffered_fallback() {
-    const std::string path = "/tmp/opencode/mux_streaming_buffered.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_buffered.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -101,7 +102,7 @@ void test_buffered_fallback() {
 
 void test_growth() {
     // Tiny initial mapping forces several remaps during the run.
-    const std::string path = "/tmp/opencode/mux_streaming_growth.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_growth.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -121,7 +122,7 @@ void test_growth() {
 
 void test_interleaved() {
     // Caller drives the physical order: track A, B, A, B, ...
-    const std::string path = "/tmp/opencode/mux_streaming_interleaved.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_interleaved.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -158,7 +159,7 @@ void test_interleaved() {
 }
 
 void test_fast_start_and_callbacks() {
-    const std::string path = "/tmp/opencode/mux_streaming_faststart.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_faststart.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -203,7 +204,7 @@ void test_fast_start_and_callbacks() {
 }
 
 void test_audio_track() {
-    const std::string path = "/tmp/opencode/mux_streaming_audio.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_audio.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -240,7 +241,7 @@ void test_interleaved_av_from_corpus() {
         return;
     }
 
-    const std::string path = "/tmp/opencode/mux_streaming_av.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_av.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 
@@ -300,7 +301,7 @@ void test_interleaved_av_from_corpus() {
 
 void test_other_containers_streaming() {
     {   // MKV (video)
-        const std::string path = "/tmp/opencode/mux_stream_other.mkv";
+        const std::string path = bs_test::temp_dir() + "/mux_stream_other.mkv";
         std::error_code ec;
         (void)std::filesystem::remove(path, ec);
         auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 4096);
@@ -326,7 +327,7 @@ void test_other_containers_streaming() {
         (void)std::filesystem::remove(path, ec);
     }
     {   // IVF (VP9)
-        const std::string path = "/tmp/opencode/mux_stream_other.ivf";
+        const std::string path = bs_test::temp_dir() + "/mux_stream_other.ivf";
         std::error_code ec;
         (void)std::filesystem::remove(path, ec);
         auto m = bs::mux::Muxer::create(bs::mux::Container::Ivf, path, 4096);
@@ -362,7 +363,7 @@ void test_other_containers_streaming() {
         (void)std::filesystem::remove(path, ec);
     }
     {   // WAV (PCM) — demuxer has no WAV reader, verify header bytes only.
-        const std::string path = "/tmp/opencode/mux_stream_other.wav";
+        const std::string path = bs_test::temp_dir() + "/mux_stream_other.wav";
         std::error_code ec;
         (void)std::filesystem::remove(path, ec);
         auto m = bs::mux::Muxer::create(bs::mux::Container::Wav, path, 4096);
@@ -407,7 +408,7 @@ void test_remux_from_corpus() {
     }
     auto tracks = demuxer.tracks();
 
-    const std::string path = "/tmp/opencode/mux_streaming_remux.mp4";
+    const std::string path = bs_test::temp_dir() + "/mux_streaming_remux.mp4";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
 

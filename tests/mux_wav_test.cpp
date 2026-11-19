@@ -9,6 +9,7 @@
  * read back from disk for inspection.
  */
 #include <mux/muxer.hpp>
+#include "test_temp.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -53,7 +54,7 @@ bool tag(std::span<const std::uint8_t> d, std::size_t at, std::string_view t) {
 }
 
 void test_basic() {
-    const std::string path = "/tmp/opencode/mux_wav_basic.wav";
+    const std::string path = bs_test::temp_dir() + "/mux_wav_basic.wav";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto muxer = bs::mux::Muxer::create(bs::mux::Container::Wav, path);
@@ -113,7 +114,7 @@ void test_formats() {
     };
     int idx = 0;
     for (const auto& c : cases) {
-        const std::string path = "/tmp/opencode/mux_wav_fmt_" +
+        const std::string path = bs_test::temp_dir() + "/mux_wav_fmt_" +
                                  std::to_string(idx++) + ".wav";
         std::error_code ec;
         (void)std::filesystem::remove(path, ec);
@@ -141,7 +142,7 @@ void test_validation() {
     std::error_code ec;
     int idx = 0;
     const auto make_path = [&idx]() {
-        return "/tmp/opencode/mux_wav_val_" + std::to_string(idx++) + ".wav";
+        return bs_test::temp_dir() + "/mux_wav_val_" + std::to_string(idx++) + ".wav";
     };
     {
         const std::string path = make_path();
@@ -194,7 +195,7 @@ void test_validation() {
 }
 
 void test_extension_and_conversion() {
-    const std::string path = "/tmp/opencode/mux_wav_ext.wav";
+    const std::string path = bs_test::temp_dir() + "/mux_wav_ext.wav";
     std::error_code ec;
     (void)std::filesystem::remove(path, ec);
     auto m = bs::mux::Muxer::open(path);
