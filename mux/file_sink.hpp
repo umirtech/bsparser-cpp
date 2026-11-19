@@ -59,6 +59,9 @@ class FileSink {
 
    public:
     static constexpr std::size_t kDefaultChunk = 4u << 20; // 4 MiB
+    // Buffered-fallback flush size.  256 KiB keeps the userspace buffer
+    // bounded while cutting write() calls by 4x versus 64 KiB.
+    static constexpr std::size_t kBufferedFlush = 256u << 10;
 
     FileSink() = default;
 
@@ -135,7 +138,7 @@ class FileSink {
 #endif
         backend_ = Backend::Buffered;
         buffer_.clear();
-        buffer_.reserve(std::min<std::size_t>(chunk_, 1u << 16));
+        buffer_.reserve(std::min<std::size_t>(chunk_, kBufferedFlush));
         return true;
     }
 
@@ -161,7 +164,7 @@ class FileSink {
 #endif
         backend_ = Backend::Buffered;
         buffer_.clear();
-        buffer_.reserve(std::min<std::size_t>(chunk_, 1u << 16));
+        buffer_.reserve(std::min<std::size_t>(chunk_, kBufferedFlush));
         return true;
     }
 
@@ -182,7 +185,7 @@ class FileSink {
             case Backend::Buffered: {
                 buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
                 total_ += bytes.size();
-                const std::size_t limit = std::min<std::size_t>(chunk_, 1u << 16);
+                const std::size_t limit = std::min<std::size_t>(chunk_, kBufferedFlush);
                 if (buffer_.size() >= limit) {
                     flush_buffered();
                 }
@@ -236,8 +239,12 @@ class FileSink {
                 ok = false;
             }
             if (map_ != nullptr) {
-                if (map_size_ != 0u) {
-                    ::msync(map_, map_size_, MS_ASYNC);
+                // Sync only the bytes actually written; the mapping is
+                // usually larger than the finished file.
+                const std::size_t sync_size =
+                        total_ < map_size_ ? total_ : map_size_;
+                if (sync_size != 0u) {
+                    ::msync(map_, sync_size, MS_ASYNC);
                 }
                 ::munmap(map_, map_size_);
             }
@@ -362,7 +369,9 @@ class FileSink {
         }
 #endif
         // Portable fallback: sync, unmap, remap (file contents are intact).
-        ::msync(map_, map_size_, MS_SYNC);
+        if (total_ != 0u) {
+            ::msync(map_, total_ < map_size_ ? total_ : map_size_, MS_SYNC);
+        }
         ::munmap(map_, map_size_);
         void* q = ::mmap(nullptr, want, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
         if (q == MAP_FAILED) {

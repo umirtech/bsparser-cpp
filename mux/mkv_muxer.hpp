@@ -143,13 +143,18 @@ inline void mkv_push_id(std::vector<std::uint8_t>& out, std::uint64_t id) {
     mkv_push_uint(out, id, bytes);
 }
 
-/* Append an EBML size as the shortest-length vint (marker bit included). */
-inline void mkv_push_size(std::vector<std::uint8_t>& out, std::uint64_t size) {
+/* Smallest vint length that can carry `value` (marker bit excluded). */
+inline unsigned mkv_vint_size(std::uint64_t value) noexcept {
     unsigned bytes = 1;
-    while (bytes < 8u && size > ((std::uint64_t{1} << (7u * bytes)) - 1u)) {
+    while (bytes < 8u && value > ((std::uint64_t{1} << (7u * bytes)) - 1u)) {
         ++bytes;
     }
+    return bytes;
+}
 
+/* Append an EBML size as the shortest-length vint (marker bit included). */
+inline void mkv_push_size(std::vector<std::uint8_t>& out, std::uint64_t size) {
+    const unsigned bytes = mkv_vint_size(size);
     const std::uint64_t marker = std::uint64_t{1} << (7u * bytes);
     mkv_push_uint(out, size | marker, bytes);
 }
@@ -171,11 +176,7 @@ inline void mkv_push_element(
 
 /* Append a vint (with length marker) -- used for SimpleBlock track numbers. */
 inline void mkv_push_vint(std::vector<std::uint8_t>& out, std::uint64_t value) {
-    unsigned bytes = 1;
-    while (bytes < 8u && value > ((std::uint64_t{1} << (7u * bytes)) - 1u)) {
-        ++bytes;
-    }
-
+    const unsigned bytes = mkv_vint_size(value);
     const std::uint64_t marker = std::uint64_t{1} << (7u * bytes);
     mkv_push_uint(out, value | marker, bytes);
 }
@@ -237,18 +238,19 @@ inline bool mkv_track_uses_annex_b(const TrackConfig& track) noexcept {
 }
 
 /*
- * Convert a length-prefixed H.26x frame to Annex-B.  Frames that already
- * start with a start code (or cannot be parsed as a complete length-
- * prefixed stream) are copied verbatim.
+ * Convert a length-prefixed H.26x frame to Annex-B, appending into `out`.
+ * Frames that already start with a start code (or cannot be parsed as a
+ * complete length-prefixed stream) are copied verbatim.  The caller can keep
+ * `out` across samples, so the streaming writer does not allocate per frame.
  */
-[[nodiscard]]
-inline std::vector<std::uint8_t> mkv_to_annex_b(
-    std::span<const std::uint8_t> data, unsigned length_size
+inline void mkv_append_annex_b(
+    std::span<const std::uint8_t> data, unsigned length_size,
+    std::vector<std::uint8_t>& out
 ) {
-    std::vector<std::uint8_t> out;
+    out.clear();
 
     if (data.empty()) {
-        return out;
+        return;
     }
 
     if (length_size == 0u || length_size > 4u) {
@@ -271,10 +273,18 @@ inline std::vector<std::uint8_t> mkv_to_annex_b(
             demux::es::annex_b_nal(out, data.subspan(pos, nal_size));
             pos += nal_size;
         }
-        return out;
+        return;
     }
 
     out.assign(data.begin(), data.end());
+}
+
+[[nodiscard]]
+inline std::vector<std::uint8_t> mkv_to_annex_b(
+    std::span<const std::uint8_t> data, unsigned length_size
+) {
+    std::vector<std::uint8_t> out;
+    mkv_append_annex_b(data, length_size, out);
     return out;
 }
 
@@ -849,6 +859,9 @@ struct MkvStreamState {
     std::uint64_t cluster_duration_ms = 5000;  // 0 = only the int16 limit
     std::int64_t max_pts_ms = 0;
     std::int64_t max_end_ms = 0;
+    std::vector<std::uint8_t> block_scratch;   // reused SimpleBlock header
+    std::vector<std::uint8_t> media_scratch;   // reused Annex-B conversion
+    std::vector<std::span<const std::uint8_t>> nal_scratch; // param-set scan
     std::vector<std::pair<std::uint64_t, std::uint64_t>> cue_points; // (time, position)
 };
 
@@ -959,26 +972,35 @@ inline void append_mkv_stream_sample(FileSink& sink,
     const std::uint64_t number =
         mkv_track_number(track, static_cast<std::size_t>(track_index));
 
-    std::vector<std::uint8_t> block;
-
-    // Vint track number, 2-byte signed relative timestamp, flags.
-    mkv_push_vint(block, number);
-    mkv_push_uint(block, static_cast<std::uint16_t>(timestamp), 2u);
-    block.push_back(sample.is_key ? 0x80u : 0x00u);
-
-    // H.26x frames must reach build_mkv() as Annex-B; other payloads are
-    // copied raw.
-    if (mkv_track_uses_annex_b(track)) {
-        const std::vector<std::uint8_t> annex_b =
-            mkv_to_annex_b(sample.data, track.length_size);
-        block.insert(block.end(), annex_b.begin(), annex_b.end());
-    } else {
-        block.insert(block.end(), sample.data.begin(), sample.data.end());
+    // H.26x frames must reach build_mkv() as Annex-B.  Reuse one scratch
+    // buffer for the conversion instead of allocating per frame; already
+    // Annex-B (and non-H.26x) payloads are written straight from the sample.
+    std::span<const std::uint8_t> payload = sample.data;
+    if (mkv_track_uses_annex_b(track) &&
+        demux::es::fully_length_prefixed(sample.data, track.length_size)) {
+        mkv_append_annex_b(sample.data, track.length_size,
+                           state.media_scratch);
+        payload = std::span<const std::uint8_t>(
+                state.media_scratch.data(), state.media_scratch.size());
     }
 
-    std::vector<std::uint8_t> element;
-    mkv_push_element(element, kMkvSimpleBlock, block);
-    sink.write(element);
+    // Build the SimpleBlock element header in one reused buffer.  The size
+    // vint must precede the payload, so compute the block size first.
+    const std::size_t block_size =
+            static_cast<std::size_t>(mkv_vint_size(number)) + 2u + 1u +
+            payload.size();
+    auto& header = state.block_scratch;
+    header.clear();
+    header.reserve(1u + mkv_vint_size(block_size) +
+                   mkv_vint_size(number) + 3u);
+    mkv_push_id(header, kMkvSimpleBlock);
+    mkv_push_size(header, block_size);
+    mkv_push_vint(header, number);
+    mkv_push_uint(header, static_cast<std::uint16_t>(timestamp), 2u);
+    header.push_back(sample.is_key ? 0x80u : 0x00u);
+
+    sink.write(header);
+    sink.write(payload);
 }
 
 /* Finish a stream: close the last Cluster, append Tags and Cues, then

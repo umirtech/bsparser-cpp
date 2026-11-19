@@ -157,7 +157,8 @@ class MuxerImpl {
 
     struct OrderedSample {
         Sample sample{};
-        std::vector<std::uint8_t> owned{};
+        std::size_t buffer_index = 0;
+        bool owns_buffer = false;
         // Wall-clock position in microseconds.  Raw dts cannot be compared
         // across tracks: MP4 video may use a microsecond timescale while
         // audio uses samples (or 90 kHz), so convert each track's dts through
@@ -177,10 +178,24 @@ class MuxerImpl {
 
     void queue_ordered(std::size_t index, const Sample& sample) {
         OrderedSample entry;
-        entry.owned.assign(sample.data.begin(), sample.data.end());
+        // Reuse the per-slot payload buffers: the window already holds up to
+        // reorder_window samples at once, so a pool keeps peak memory the same
+        // while removing a heap allocation for every frame.
+        std::size_t buffer_index = 0;
+        if (free_ordered_buffers_.empty()) {
+            buffer_index = ordered_buffers_.size();
+            ordered_buffers_.emplace_back();
+        } else {
+            buffer_index = free_ordered_buffers_.back();
+            free_ordered_buffers_.pop_back();
+        }
+        auto& owned = ordered_buffers_[buffer_index];
+        owned.assign(sample.data.begin(), sample.data.end());
         entry.sample = sample;
         entry.sample.data = std::span<const std::uint8_t>(
-                entry.owned.data(), entry.owned.size());
+                owned.data(), owned.size());
+        entry.buffer_index = buffer_index;
+        entry.owns_buffer = true;
         entry.order = ordered_time(index, sample.dts > 0 ? sample.dts : sample.pts);
         auto& queue = ordered_samples_[index];
         const auto position = std::upper_bound(
@@ -216,6 +231,9 @@ class MuxerImpl {
         queue.pop_front();
         --ordered_count_;
         write_sample(best_index, entry.sample);
+        if (entry.owns_buffer) {
+            free_ordered_buffers_.push_back(entry.buffer_index);
+        }
     }
 
     void flush_ordered_all() {
@@ -278,36 +296,72 @@ class MuxerImpl {
                 if (index >= stream_records_.size()) {
                     return;
                 }
-                Mp4Bytes framed = detail::frame_mp4_sample(
-                    tracks_[index].codec, sample, tracks_[index]
-                );
+                const TrackConfig& cfg = tracks_[index];
+                const bool convert =
+                        detail::needs_annexb_conversion(cfg.codec, sample, cfg);
+
                 /* A leading parameter-set pseudo-sample from the demuxer is
                  * not an access unit: fold it into the next sample. */
-                if (detail::is_param_set_only_sample(tracks_[index].codec, sample.data)) {
+                if (detail::is_param_set_only_sample(
+                        cfg.codec, sample.data, mp4_nal_scratch_)) {
                     if (pending_param_sets_.size() <= index) {
                         pending_param_sets_.resize(index + 1u);
                     }
                     auto& pending = pending_param_sets_[index];
-                    pending.insert(pending.end(), framed.begin(), framed.end());
+                    if (convert) {
+                        detail::annexb_to_length_prefixed(
+                            sample.data, mp4_frame_scratch_, mp4_nal_scratch_
+                        );
+                        pending.insert(pending.end(),
+                                       mp4_frame_scratch_.begin(),
+                                       mp4_frame_scratch_.end());
+                    } else {
+                        pending.insert(pending.end(),
+                                       sample.data.begin(), sample.data.end());
+                    }
                     return;
                 }
+
+                /* Zero-copy fast path: raw audio and already-framed video are
+                 * written straight from the caller's span.  Only Annex-B H.26x
+                 * samples use the reusable conversion scratch. */
+                std::span<const std::uint8_t> payload = sample.data;
+                if (convert) {
+                    detail::annexb_to_length_prefixed(
+                        sample.data, mp4_frame_scratch_, mp4_nal_scratch_
+                    );
+                    payload = std::span<const std::uint8_t>(
+                        mp4_frame_scratch_.data(), mp4_frame_scratch_.size()
+                    );
+                }
+
+                std::span<const std::uint8_t> pending{};
                 if (index < pending_param_sets_.size() &&
                     !pending_param_sets_[index].empty()) {
-                    auto& pending = pending_param_sets_[index];
-                    framed.insert(framed.begin(), pending.begin(), pending.end());
-                    pending.clear();
+                    pending = std::span<const std::uint8_t>(
+                        pending_param_sets_[index].data(),
+                        pending_param_sets_[index].size()
+                    );
                 }
-                if (framed.size() > 0xFFFFFFFFull) {
+
+                const std::size_t total = pending.size() + payload.size();
+                if (total > 0xFFFFFFFFull) {
                     return;
                 }
                 SampleRecord rec;
                 rec.offset = sink_.size();
-                rec.size = framed.size();
+                rec.size = total;
                 rec.pts = sample.pts;
                 rec.dts = sample.dts;
                 rec.duration = sample.duration;
                 rec.is_key = sample.is_key;
-                sink_.write(framed);
+                if (!pending.empty()) {
+                    sink_.write(pending);
+                }
+                sink_.write(payload);
+                if (!pending.empty()) {
+                    pending_param_sets_[index].clear();
+                }
                 stream_records_[index].push_back(rec);
                 const std::uint32_t chunk_cap =
                         tracks_[index].max_samples_per_chunk;
@@ -328,12 +382,16 @@ class MuxerImpl {
             case Container::Mkv: {
                 /* A parameter-set-only sample was already written into this
                  * track's CodecPrivate at stream start; skip the duplicate. */
-                if (detail::is_param_set_only_sample(tracks_[index].codec, sample.data) &&
+                if (detail::is_param_set_only_sample(
+                        tracks_[index].codec, sample.data,
+                        mkv_state_.nal_scratch) &&
                     !tracks_[index].codec_config.empty()) {
                     return;
                 }
                 Sample out = sample;
-                if (detail::is_param_set_only_sample(tracks_[index].codec, sample.data)) {
+                if (detail::is_param_set_only_sample(
+                        tracks_[index].codec, sample.data,
+                        mkv_state_.nal_scratch)) {
                     if (pending_mkv_param_.size() <= index) {
                         pending_mkv_param_.resize(index + 1u);
                     }
@@ -485,9 +543,13 @@ class MuxerImpl {
     std::vector<TrackConfig> tracks_{};
     std::vector<std::vector<SampleRecord>> stream_records_{};
     std::vector<Mp4Bytes> pending_param_sets_{};
+    Mp4Bytes mp4_frame_scratch_{};
+    std::vector<std::span<const std::uint8_t>> mp4_nal_scratch_{};
     std::vector<ChunkRecord> chunks_{};
     std::vector<std::vector<std::uint8_t>> pending_mkv_param_{};
     std::vector<std::deque<OrderedSample>> ordered_samples_{};
+    std::vector<Mp4Bytes> ordered_buffers_{};
+    std::vector<std::size_t> free_ordered_buffers_{};
     std::size_t ordered_count_ = 0;
     std::uint32_t stream_frame_count_ = 0;
     std::uint64_t stream_data_bytes_ = 0;

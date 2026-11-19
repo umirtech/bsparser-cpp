@@ -284,8 +284,11 @@ inline Mp4Bytes make_mp4_udta(const Metadata& m, bool file_level = false) {
 }
 
 /* Split an Annex-B byte stream into its NAL units (no start codes). */
-inline std::vector<std::span<const std::uint8_t>> split_annexb(std::span<const std::uint8_t> d) {
-    std::vector<std::span<const std::uint8_t>> nals;
+inline void split_annexb(
+    std::span<const std::uint8_t> d,
+    std::vector<std::span<const std::uint8_t>>& nals
+) {
+    nals.clear();
     const std::size_t n = d.size();
 
     std::size_t start = n;
@@ -319,7 +322,13 @@ inline std::vector<std::span<const std::uint8_t>> split_annexb(std::span<const s
         }
         start = end + 3u;
     }
+}
 
+inline std::vector<std::span<const std::uint8_t>> split_annexb(
+    std::span<const std::uint8_t> d
+) {
+    std::vector<std::span<const std::uint8_t>> nals;
+    split_annexb(d, nals);
     return nals;
 }
 
@@ -327,11 +336,37 @@ inline std::vector<std::span<const std::uint8_t>> split_annexb(std::span<const s
  * Such samples are produced by demux::Demuxer as a leading pseudo-sample and
  * must be folded into the next real access unit, not written standalone. */
 [[nodiscard]]
-inline bool is_param_set_only_sample(Codec codec, std::span<const std::uint8_t> data) {
+inline bool is_param_set_only_sample(
+    Codec codec, std::span<const std::uint8_t> data,
+    std::vector<std::span<const std::uint8_t>>& nals
+) {
     if (!is_h26x(codec) || data.empty()) {
         return false;
     }
-    const auto nals = split_annexb(data);
+
+    // Fast reject: a normal access unit starts with a VCL NAL, so the common
+    // case avoids splitting the whole sample into a temporary vector.
+    std::size_t first_nal = data.size();
+    for (std::size_t i = 0u; i + 2u < data.size(); ++i) {
+        if (data[i] == 0u && data[i + 1u] == 0u && data[i + 2u] == 1u) {
+            first_nal = i + 3u;
+            break;
+        }
+    }
+    if (first_nal >= data.size()) {
+        return false;
+    }
+    const unsigned first_type = codec == Codec::Avc
+            ? (static_cast<unsigned>(data[first_nal]) & 0x1Fu)
+            : ((static_cast<unsigned>(data[first_nal]) >> 1u) & 0x3Fu);
+    const bool first_is_param = codec == Codec::Avc
+            ? (first_type == 7u || first_type == 8u)
+            : (first_type == 32u || first_type == 33u || first_type == 34u);
+    if (!first_is_param) {
+        return false;
+    }
+
+    split_annexb(data, nals);
     if (nals.empty()) {
         return false;
     }
@@ -352,13 +387,23 @@ inline bool is_param_set_only_sample(Codec codec, std::span<const std::uint8_t> 
     return true;
 }
 
+[[nodiscard]]
+inline bool is_param_set_only_sample(Codec codec, std::span<const std::uint8_t> data) {
+    std::vector<std::span<const std::uint8_t>> nals;
+    return is_param_set_only_sample(codec, data, nals);
+}
+
 /*
  * Convert an Annex-B sample to 4-byte-length-prefixed NALs.  If no start
  * code is present the bytes are copied verbatim (already framed).
  */
-inline Mp4Bytes annexb_to_length_prefixed(std::span<const std::uint8_t> d) {
-    Mp4Bytes out;
-    const auto nals = split_annexb(d);
+inline void annexb_to_length_prefixed(
+    std::span<const std::uint8_t> d,
+    Mp4Bytes& out,
+    std::vector<std::span<const std::uint8_t>>& nals
+) {
+    out.clear();
+    split_annexb(d, nals);
 
     for (const auto nal : nals) {
         if (nal.size() > 0xFFFFFFFFull) {
@@ -371,6 +416,12 @@ inline Mp4Bytes annexb_to_length_prefixed(std::span<const std::uint8_t> d) {
     if (out.empty()) {
         put_bytes(out, d);
     }
+}
+
+inline Mp4Bytes annexb_to_length_prefixed(std::span<const std::uint8_t> d) {
+    Mp4Bytes out;
+    std::vector<std::span<const std::uint8_t>> nals;
+    annexb_to_length_prefixed(d, out, nals);
     return out;
 }
 
