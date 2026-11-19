@@ -61,6 +61,7 @@ constexpr std::uint64_t kMkvDocTypeReadVersion = 0x4285ull;
 constexpr std::uint64_t kMkvSegment = 0x18538067ull;
 constexpr std::uint64_t kMkvInfo = 0x1549A966ull;
 constexpr std::uint64_t kMkvTimecodeScale = 0x2AD7B1ull;
+constexpr std::uint64_t kMkvDuration = 0x4489ull;
 constexpr std::uint64_t kMkvMuxingApp = 0x4D80ull;
 constexpr std::uint64_t kMkvWritingApp = 0x5741ull;
 constexpr std::uint64_t kMkvTitle = 0x7BA9ull;
@@ -486,12 +487,23 @@ inline std::vector<std::uint8_t> mkv_make_ebml_header(bool webm = false) {
 
 /* Build the Info element. */
 [[nodiscard]]
-inline std::vector<std::uint8_t> mkv_make_info(const Metadata& metadata) {
+inline std::vector<std::uint8_t> mkv_make_info(
+    const Metadata& metadata,
+    std::size_t* duration_payload_offset = nullptr
+) {
     std::vector<std::uint8_t> info;
 
     std::vector<std::uint8_t> tmp;
     mkv_push_min_uint(tmp, 1'000'000u);  // 1 ms timecode scale
     mkv_push_element(info, kMkvTimecodeScale, tmp);
+
+    // Duration is a float64 in timecode-scale units.  Reserve it now so the
+    // streaming writer can patch the real duration once the last sample is
+    // known; without it players show an unknown length and cannot seek by time.
+    tmp.clear();
+    mkv_push_uint(tmp, 0u, 8u);
+    mkv_push_element(info, kMkvDuration, tmp);
+    const std::size_t duration_offset_in_children = info.size() - 8u;
 
     tmp.clear();
     mkv_push_string(tmp, encoder_signature());
@@ -521,6 +533,11 @@ inline std::vector<std::uint8_t> mkv_make_info(const Metadata& metadata) {
 
     std::vector<std::uint8_t> element;
     mkv_push_element(element, kMkvInfo, info);
+    if (duration_payload_offset != nullptr) {
+        // The caller patches the returned element, so include the Info header.
+        *duration_payload_offset =
+                duration_offset_in_children + (element.size() - info.size());
+    }
     return element;
 }
 
@@ -828,6 +845,10 @@ struct MkvStreamState {
     std::uint64_t cluster_timecode = 0;     // current Cluster Timecode, ms
     std::uint64_t cluster_header_offset = 0;   // absolute offset of Cluster ID
     std::uint64_t cluster_payload_offset = 0;  // absolute offset of Cluster payload
+    std::uint64_t duration_value_offset = 0;   // absolute offset of Info/Duration
+    std::uint64_t cluster_duration_ms = 5000;  // 0 = only the int16 limit
+    std::int64_t max_pts_ms = 0;
+    std::int64_t max_end_ms = 0;
     std::vector<std::pair<std::uint64_t, std::uint64_t>> cue_points; // (time, position)
 };
 
@@ -869,8 +890,10 @@ inline void mkv_open_cluster(FileSink& sink, MkvStreamState& state,
  * and the first Cluster at Timecode 0. */
 inline MkvStreamState start_mkv_stream(FileSink& sink,
                                        const Metadata& metadata,
-                                       const std::vector<TrackConfig>& tracks) {
+                                       const std::vector<TrackConfig>& tracks,
+                                       std::uint64_t cluster_duration_ms = 5000) {
     MkvStreamState state;
+    state.cluster_duration_ms = cluster_duration_ms;
 
     sink.write(mkv_make_ebml_header(mkv_is_webm(tracks)));
 
@@ -885,7 +908,12 @@ inline MkvStreamState start_mkv_stream(FileSink& sink,
 
     state.segment_data_offset = static_cast<std::uint64_t>(sink.size());
 
-    sink.write(mkv_make_info(metadata));
+    std::size_t duration_offset_in_info = 0;
+    const std::vector<std::uint8_t> info =
+            mkv_make_info(metadata, &duration_offset_in_info);
+    const std::uint64_t info_offset = static_cast<std::uint64_t>(sink.size());
+    state.duration_value_offset = info_offset + duration_offset_in_info;
+    sink.write(info);
     // No samples are available yet, so CodecPrivate can only come from a
     // caller-supplied TrackConfig::codec_config.  H.26x streaming callers
     // should fill it in (avcC / hvcC / vvcC) before starting the stream.
@@ -907,8 +935,19 @@ inline void append_mkv_stream_sample(FileSink& sink,
     }
 
     const std::int64_t pts = static_cast<std::int64_t>(sample.pts);
+    const std::int64_t duration = std::max<std::int64_t>(sample.duration, 0);
+    state.max_pts_ms = std::max(state.max_pts_ms, pts);
+    state.max_end_ms = std::max(state.max_end_ms, pts + duration);
+
     std::int64_t rel = pts - static_cast<std::int64_t>(state.cluster_timecode);
-    if (rel < -32768LL || rel > 32767LL) {
+    const bool periodic_cluster =
+            state.cluster_duration_ms != 0u &&
+            track.is_video && sample.is_key &&
+            pts >= static_cast<std::int64_t>(state.cluster_timecode) &&
+            static_cast<std::uint64_t>(
+                    pts - static_cast<std::int64_t>(state.cluster_timecode)) >=
+                    state.cluster_duration_ms;
+    if (rel < -32768LL || rel > 32767LL || periodic_cluster) {
         mkv_close_cluster(sink, state);
         mkv_open_cluster(sink, state, static_cast<std::uint64_t>(std::max<std::int64_t>(pts, 0)));
         rel = pts - static_cast<std::int64_t>(state.cluster_timecode);
@@ -949,6 +988,17 @@ inline bool finish_mkv_stream(FileSink& sink,
                               const Metadata& metadata,
                               const std::vector<TrackConfig>& /*tracks*/,
                               const MkvStreamState& state) {
+    if (state.duration_value_offset != 0u) {
+        const std::int64_t end =
+                state.max_end_ms > 0 ? state.max_end_ms : state.max_pts_ms;
+        const double duration_ms = static_cast<double>(end);
+        std::vector<std::uint8_t> patch;
+        patch.reserve(8u);
+        mkv_push_uint(patch, std::bit_cast<std::uint64_t>(duration_ms), 8u);
+        (void)sink.patch(static_cast<std::size_t>(state.duration_value_offset),
+                         patch);
+    }
+
     mkv_close_cluster(sink, state);
 
     // Tags (segment-level) before the seek index.

@@ -11,6 +11,7 @@
 #include "test_temp.hpp"
 
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -503,6 +504,194 @@ void test_ordered_interleave() {
     (void)std::filesystem::remove(path, ec);
 }
 
+
+struct TestBox {
+    std::string type;
+    std::size_t offset = 0;
+    std::size_t size = 0;
+    std::size_t header = 8;
+};
+
+std::uint32_t test_be32(const std::vector<std::uint8_t>& data, std::size_t pos) {
+    return (static_cast<std::uint32_t>(data[pos]) << 24u) |
+           (static_cast<std::uint32_t>(data[pos + 1u]) << 16u) |
+           (static_cast<std::uint32_t>(data[pos + 2u]) << 8u) |
+           static_cast<std::uint32_t>(data[pos + 3u]);
+}
+
+std::vector<TestBox> test_boxes(const std::vector<std::uint8_t>& data,
+                                std::size_t start, std::size_t end) {
+    std::vector<TestBox> out;
+    std::size_t pos = start;
+    while (pos + 8u <= end) {
+        const std::uint32_t size32 = test_be32(data, pos);
+        TestBox box;
+        box.type.assign(reinterpret_cast<const char*>(data.data() + pos + 4u), 4u);
+        box.offset = pos;
+        box.header = 8u;
+        box.size = size32;
+        if (size32 == 1u) {
+            if (pos + 16u > end) break;
+            const std::uint64_t large =
+                    (static_cast<std::uint64_t>(test_be32(data, pos + 8u)) << 32u) |
+                    test_be32(data, pos + 12u);
+            box.header = 16u;
+            box.size = static_cast<std::size_t>(large);
+        } else if (size32 == 0u) {
+            box.size = end - pos;
+        }
+        if (box.size < box.header || pos + box.size > end) break;
+        out.push_back(box);
+        pos += box.size;
+    }
+    return out;
+}
+
+bool test_find_box(const std::vector<std::uint8_t>& data, std::size_t start,
+                   std::size_t end, const std::string& type, TestBox& out) {
+    for (const auto& box : test_boxes(data, start, end)) {
+        if (box.type == type) {
+            out = box;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+void test_mkv_cluster_duration_and_info() {
+    const std::string path =
+            bs_test::temp_dir() + "/mux_streaming_mkv_clusters.mkv";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mkv, path, 1u << 16);
+    bs::mux::MuxerOptions options;
+    options.cluster_duration_ms = 3000;
+    m.with_options(options);
+    auto t = m.add_track(avc_cfg(1));
+    for (int i = 0; i <= 9; ++i) {
+        const std::int64_t pts = static_cast<std::int64_t>(i) * 1000;
+        t.add_sample(kAvcNal, pts, pts, 1000, true,
+                     bs::NalFramingMode::AnnexB);
+    }
+    CHECK(m.finalize());
+
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<std::uint8_t> data{
+            std::istreambuf_iterator<char>(in),
+            std::istreambuf_iterator<char>()};
+    CHECK(!data.empty());
+
+    // One Cluster ID at 0 ms and one at each 3 s keyframe: 0/3000/6000/9000.
+    std::size_t clusters = 0;
+    for (std::size_t i = 0; i + 4u <= data.size(); ++i) {
+        if (data[i] == 0x1Fu && data[i + 1u] == 0x43u &&
+            data[i + 2u] == 0xB6u && data[i + 3u] == 0x75u) {
+            ++clusters;
+        }
+    }
+    CHECK(clusters == 4u);
+
+    // Info/Duration: ID 0x4489, size 0x88 (8 bytes), big-endian float64 ms.
+    std::size_t duration_at = data.size();
+    for (std::size_t i = 0; i + 11u <= data.size(); ++i) {
+        if (data[i] == 0x44u && data[i + 1u] == 0x89u &&
+            data[i + 2u] == 0x88u) {
+            duration_at = i + 3u;
+            break;
+        }
+    }
+    CHECK(duration_at + 8u <= data.size());
+    if (duration_at + 8u <= data.size()) {
+        std::uint64_t bits = 0;
+        for (unsigned i = 0; i < 8u; ++i) {
+            bits = (bits << 8u) | data[duration_at + i];
+        }
+        double value = 0.0;
+        std::memcpy(&value, &bits, sizeof(value));
+        CHECK(value == 10000.0);
+    }
+
+    (void)std::filesystem::remove(path, ec);
+}
+
+void test_audio_single_sample_chunks() {
+    const std::string path =
+            bs_test::temp_dir() + "/mux_streaming_audio_chunks.mp4";
+    std::error_code ec;
+    (void)std::filesystem::remove(path, ec);
+
+    auto m = bs::mux::Muxer::create(bs::mux::Container::Mp4, path, 4096);
+    auto video = m.add_track(avc_cfg(1));
+
+    bs::mux::TrackConfig audio_cfg;
+    audio_cfg.id = 2;
+    audio_cfg.codec = bs::Codec::Aac;
+    audio_cfg.is_video = false;
+    audio_cfg.is_audio = true;
+    audio_cfg.timescale = 48000;
+    audio_cfg.sample_rate = 48000;
+    audio_cfg.channels = 2;
+    audio_cfg.framing = bs::NalFramingMode::RawFrame;
+    // Force one audio sample per chunk; without this the two consecutive
+    // audio samples below would share a chunk and stsc would carry a run.
+    audio_cfg.max_samples_per_chunk = 1;
+    auto audio = m.add_track(audio_cfg);
+
+    const std::vector<std::uint8_t> aac{0x21, 0x10, 0x05, 0x60};
+    video.add_sample(kAvcNal, 0, 0, 0, true, bs::NalFramingMode::AnnexB);
+    audio.add_sample(aac, 0, 0, 1024, true, bs::NalFramingMode::RawFrame);
+    audio.add_sample(aac, 1024, 1024, 1024, true, bs::NalFramingMode::RawFrame);
+    video.add_sample(kAvcNal, 40000, 40000, 0, false, bs::NalFramingMode::AnnexB);
+    CHECK(m.finalize());
+
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<std::uint8_t> data{
+            std::istreambuf_iterator<char>(in),
+            std::istreambuf_iterator<char>()};
+    CHECK(!data.empty());
+
+    TestBox moov;
+    CHECK(test_find_box(data, 0, data.size(), "moov", moov));
+    const auto top = test_boxes(data, moov.offset + moov.header,
+                                moov.offset + moov.size);
+    std::vector<TestBox> traks;
+    for (const auto& box : top) {
+        if (box.type == "trak") traks.push_back(box);
+    }
+    CHECK(traks.size() == 2u);
+
+    TestBox mdia;
+    TestBox minf;
+    TestBox stbl;
+    TestBox stsc;
+    TestBox stco;
+    const auto& audio_trak = traks[1];
+    CHECK(test_find_box(data, audio_trak.offset + audio_trak.header,
+                        audio_trak.offset + audio_trak.size, "mdia", mdia));
+    CHECK(test_find_box(data, mdia.offset + mdia.header,
+                        mdia.offset + mdia.size, "minf", minf));
+    CHECK(test_find_box(data, minf.offset + minf.header,
+                        minf.offset + minf.size, "stbl", stbl));
+    CHECK(test_find_box(data, stbl.offset + stbl.header,
+                        stbl.offset + stbl.size, "stsc", stsc));
+    CHECK(test_find_box(data, stbl.offset + stbl.header,
+                        stbl.offset + stbl.size, "stco", stco));
+
+    const std::uint32_t stsc_count =
+            test_be32(data, stsc.offset + stsc.header + 4u);
+    const std::uint32_t samples_per_chunk =
+            test_be32(data, stsc.offset + stsc.header + 12u);
+    const std::uint32_t stco_count =
+            test_be32(data, stco.offset + stco.header + 4u);
+    CHECK(stsc_count == 1u);
+    CHECK(samples_per_chunk == 1u);
+    CHECK(stco_count == 2u);
+
+    (void)std::filesystem::remove(path, ec);
+}
+
 void test_derived_durations() {
     const std::string path = bs_test::temp_dir() + "/mux_streaming_durations.mp4";
     std::error_code ec;
@@ -545,6 +734,8 @@ int main() {
     test_buffered_fallback();
     test_growth();
     test_ordered_interleave();
+    test_audio_single_sample_chunks();
+    test_mkv_cluster_duration_and_info();
     test_derived_durations();
     test_interleaved();
     test_fast_start_and_callbacks();

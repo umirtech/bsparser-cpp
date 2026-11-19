@@ -133,7 +133,7 @@ class MuxerImpl {
             }
             case Container::Mkv:
                 mkv_state_ = detail::start_mkv_stream(
-                    sink_, metadata_, tracks_
+                    sink_, metadata_, tracks_, options_.cluster_duration_ms
                 );
                 break;
             case Container::Ivf:
@@ -298,7 +298,11 @@ class MuxerImpl {
                 rec.is_key = sample.is_key;
                 sink_.write(framed);
                 stream_records_[index].push_back(rec);
-                if (chunks_.empty() || chunks_.back().track != index) {
+                const std::uint32_t chunk_cap =
+                        tracks_[index].max_samples_per_chunk;
+                if (chunks_.empty() || chunks_.back().track != index ||
+                    (chunk_cap != 0u &&
+                     chunks_.back().sample_count >= chunk_cap)) {
                     ChunkRecord c;
                     c.track = index;
                     c.first_sample = stream_records_[index].size() - 1u;

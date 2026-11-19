@@ -43,6 +43,11 @@ struct MuxerOptions {
     // gives the muxer the same small reorder window a live A/V encoder pair
     // needs; samples are copied into the queue while it is active.
     std::size_t reorder_window = 0;
+    // MKV only: start a new Cluster at the first video keyframe at least this
+    // many milliseconds after the current Cluster's timecode.  0 disables the
+    // periodic rollover; the int16 relative-timestamp range still forces one
+    // at ~32 s.  Shorter clusters seek better; 5 s is a common compromise.
+    std::uint64_t cluster_duration_ms = 5000;
     void* ctx = nullptr;
     void (*on_progress)(void*, std::uint64_t /*bytes*/, std::uint64_t /*total*/) = nullptr;
     void (*on_error)(void*, const char* /*message*/) = nullptr;
@@ -162,6 +167,13 @@ struct TrackConfig {
     bool is_subtitle = false;
 
     unsigned length_size = 4;
+
+    /* Maximum samples coalesced into one MP4 chunk.  0 keeps the writer's
+     * default (consecutive samples from the same track share a chunk).  Set 1
+     * to give every sample its own chunk: when the A/V interleave makes audio
+     * runs alternate between 1 and 2 samples, stsc would otherwise grow one
+     * 12-byte run per chunk and dwarf the 4-byte stco entries it saves. */
+    std::uint32_t max_samples_per_chunk = 0;
 
     /* Audio configuration (used by the WAV writer). */
     AudioCodec audio_codec = AudioCodec::Pcm16;
